@@ -7,7 +7,7 @@ from py_src import simulation_runtime_parameters, util, internal_names
 logger = logging.getLogger(f"{internal_names.logger_simulator_base_name}.{util.basename_without_extension(__file__)}")
 
 
-def check_consistent_nodes(topology_generation_function, total_tick: int):
+def check_consistent_nodes(topology_generation_function, total_tick: int) -> set[int]:
     previous_nodes = None
     max_edge_count = 0
     initial_edge = None
@@ -30,3 +30,4 @@ def check_consistent_nodes(topology_generation_function, total_tick: int):
                 missing_nodes = previous_nodes - current_nodes
                 logger.critical(f"nodes (count:{len(current_nodes)}) at tick {tick} is different from previous nodes (count:{len(previous_nodes)}). Extra: {extra_nodes}, missing: {missing_nodes}")
     logger.info(f"total nodes: {len(previous_nodes)}, initial edges: {initial_edge}, max edge count: {max_edge_count}")
+    return previous_nodes
