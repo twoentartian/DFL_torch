@@ -135,7 +135,7 @@ class CudaEnv:
             gpu.used_memory_MB = current_nvidia_smi_info['used_memory']
             gpu.free_memory_MB = gpu.total_memory_MB - gpu.used_memory_MB
 
-    def generate_execution_strategy(self, model, config_file, node_count, override_use_model_stat: None | bool = None):
+    def generate_execution_strategy(self, model, config_file, config_ml_setup, node_count, override_use_model_stat: None | bool = None):
         self.__update_gpu_free_memory__()
         if GPU_SINGLE_THREAD_MODE:
             model_capacity_per_gpu = []
@@ -150,15 +150,14 @@ class CudaEnv:
             if use_model_stat:
                 # it's impossible to allocate all model to GPU memory, so we only allocate one model to the first gpu and each node keep model_stat
                 logger.info(f"GPU execution strategy: SHARE_MODEL_ON_GPU -- keep model stat in memory and all nodes share one model on GPU")
+                self.use_model_stat = True
                 gpu = self.cuda_device_list[0]
                 gpu.model = copy.deepcopy(model)
                 gpu.model = gpu.model.to(device=gpu.device)
                 para = RuntimeParameters()
                 para.phase = SimulationPhase.INITIALIZING
-                current_ml_setup = config_file.get_ml_setup()
-                gpu.optimizer = config_file.get_optimizer(None, gpu.model, para, current_ml_setup)
+                gpu.optimizer = config_file.get_optimizer(None, gpu.model, para, config_ml_setup)
                 gpu.nodes_allocated = set(range(node_count))
-                self.use_model_stat = True
             else:
                 # it's possible to allocate all model to GPU memory
                 logger.info(f"GPU execution strategy: DEDICATED_MODEL_ON_GPU each node has their own model on GPU")
@@ -168,6 +167,21 @@ class CudaEnv:
                     gpu.nodes_allocated = set(range(node_allocated, node_allocated + model_capacity_per_gpu[index]))
         else:
             raise NotImplementedError("multiprocess is not implemented yet")
+
+    @staticmethod
+    def __optimizer_to(optim, device):
+        for param in optim.state.values():
+            # Not sure there are any global tensors in the state dict
+            if isinstance(param, torch.Tensor):
+                param.data = param.data.to(device)
+                if param._grad is not None:
+                    param._grad.data = param._grad.data.to(device)
+            elif isinstance(param, dict):
+                for subparam in param.values():
+                    if isinstance(subparam, torch.Tensor):
+                        subparam.data = subparam.data.to(device)
+                        if subparam._grad is not None:
+                            subparam._grad.data = subparam._grad.data.to(device)
 
     def submit_training_jobs(self, training_nodes, criteria: list[torch.nn.CrossEntropyLoss], training_data: list[torch.Tensor], training_label: list[torch.Tensor]):
         assert len(training_nodes) == len(criteria) == len(training_data) == len(training_label)
@@ -194,6 +208,7 @@ class CudaEnv:
                     loss.backward()
                     shared_optimizer_on_gpu.step()
                     target_node.model_status = shared_model_on_gpu.state_dict()
+                    CudaEnv.__optimizer_to(shared_optimizer_on_gpu, torch.device('cpu')) # move optimizer data back to memory
                     target_node.optimizer_status = shared_optimizer_on_gpu.state_dict()
                     output_loss.append(loss.item())
 
