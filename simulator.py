@@ -3,8 +3,10 @@ import os
 import logging
 import shutil
 import sys
+import time
 import torch
 
+from typing import Final
 from datetime import datetime
 from py_src import configuration_file, internal_names, initial_checking, cuda, node, dataset
 from py_src.simulation_runtime_parameters import RuntimeParameters, SimulationPhase
@@ -12,6 +14,7 @@ from py_src.ml_setup import MlSetup
 
 simulator_base_logger = logging.getLogger(internal_names.logger_simulator_base_name)
 
+REPORT_FINISH_TIME_PER_TICK: Final[int] = 100
 
 def set_logging(log_file_path: str):
     class ExitOnExceptionHandler(logging.StreamHandler):
@@ -39,7 +42,18 @@ def set_logging(log_file_path: str):
 
 def begin_simulation(runtime_parameters: RuntimeParameters, config_file: configuration_file, ml_config: MlSetup, current_cuda_env, training_dataset: dataset.DatasetWithFastLabelSelection):
     # begin simulation
+    timer = time.time()
     while runtime_parameters.current_tick <= config_file.max_tick:
+        # report remaining time
+        if runtime_parameters.current_tick % REPORT_FINISH_TIME_PER_TICK == 0 and runtime_parameters.current_tick != 0:
+            time_elapsed = time.time() - timer
+            timer = time.time()
+            remaining = (config_file.max_tick - runtime_parameters.current_tick) // REPORT_FINISH_TIME_PER_TICK
+            time_to_finish = remaining * time_elapsed
+            finish_time = timer + time_to_finish
+            simulator_base_logger.info(f"expected to finish at {datetime.fromtimestamp(finish_time)}")
+
+
         """start of tick"""
         runtime_parameters.phase = SimulationPhase.START_OF_TICK
 
@@ -68,16 +82,13 @@ def begin_simulation(runtime_parameters: RuntimeParameters, config_file: configu
                     training_data.append(data)
                     training_labels.append(label)
                     break
-        # print(runtime_parameters.node_container[0].model_status["conv1.weight"].data[0])
         output_loss = current_cuda_env.submit_training_jobs(training_nodes, criteria, training_data, training_labels)
 
         """update next training tick"""
         for index, node_name in enumerate(training_node_names):
             node_target = runtime_parameters.node_container[node_name]
             node_target.next_training_tick = config_file.get_next_training_time(node_target, runtime_parameters)
-            # print(output_model_stat[index]["conv1.weight"].data[0])
             simulator_base_logger.info(f"training node: {node_target.name}, loss={output_loss[index]:.2f}")
-        # print(runtime_parameters.node_container[0].model_status["conv1.weight"].data[0])
         """after training"""
         runtime_parameters.phase = SimulationPhase.AFTER_TRAINING
 

@@ -7,7 +7,7 @@ from py_src.config_file_util import label_distribution
 
 config_name = "default_config"
 
-max_tick = 10000        # total simulation ticks
+max_tick = 1000        # total simulation ticks
 
 """do you want to put all models in GPU or only keep model stat in memory and share a model in gpu?"""
 """None: let simulator decide"""
@@ -32,7 +32,7 @@ def get_ml_setup():
 """"""""""" Topology related parameters """""""""""
 def get_topology(parameters: RuntimeParameters) -> nx.Graph:
     if parameters.phase == SimulationPhase.INITIALIZING:    # init
-        get_topology.current_topology = nx.complete_graph(1)
+        get_topology.current_topology = nx.complete_graph(10)
         return get_topology.current_topology
     return None
 
@@ -57,10 +57,5 @@ def get_label_distribution(target_node: node.Node, parameters: RuntimeParameters
 def get_optimizer(target_node: node.Node, model: torch.nn.Module, parameters: RuntimeParameters, ml_setup: MlSetup):
     assert model is not None
     if parameters.phase == SimulationPhase.INITIALIZING:    # init
-        import time
-        start = time.time()
-        output = torch.optim.Adam(model.parameters(), lr=0.001)
-        end = time.time()
-        print(end - start)
-        return output
+        return torch.optim.Adam(model.parameters(), lr=0.001)
     return None

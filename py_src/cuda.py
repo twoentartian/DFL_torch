@@ -3,13 +3,11 @@ import copy
 import logging
 import gc
 import subprocess
-import math
-import functools
 
 import torch.multiprocessing as mp
-from torch.utils.data import Dataset, DataLoader
+from torchsummary import summary
+from torch.utils.data import DataLoader
 from typing import List, Final
-from concurrent.futures import ProcessPoolExecutor, as_completed
 from py_src import internal_names, util, ml_setup
 
 logger = logging.getLogger(f"{internal_names.logger_simulator_base_name}.{util.basename_without_extension(__file__)}")
@@ -105,7 +103,7 @@ class CudaEnv:
     def print_gpu_info(self):
         self.__update_gpu_free_memory__()
         for device in self.cuda_device_list:
-            logger.info(f"GPU {device.device_name}, free memory {device.used_memory_MB:.2f}/{device.total_memory_MB}MB")
+            logger.info(f"GPU {device.device_name}, used memory {device.used_memory_MB:.2f}/{device.total_memory_MB}MB")
             if device.executor_size is not None:
                 logger.info(f"GPU {device.device_name} has {device.executor_size} workers")
 
@@ -143,7 +141,7 @@ class CudaEnv:
             if override_use_model_stat is None:
                 # for GPU_SINGLE_THREAD_MODE, can we put all models to GPU memory?
                 for gpu in self.cuda_device_list:
-                    model_capacity_for_this_gpu = int((gpu.total_memory_MB * (1 - GPU_RESERVED_MEMORY_RATIO) - gpu.used_memory_MB) // self.memory_consumption_model_MB)
+                    model_capacity_for_this_gpu = int((gpu.total_memory_MB * (1 - GPU_RESERVED_MEMORY_RATIO) - gpu.used_memory_MB - self.memory_consumption_dataset_MB) // self.memory_consumption_model_MB)
                     model_capacity_per_gpu.append(model_capacity_for_this_gpu)
                 use_model_stat = (sum(model_capacity_per_gpu) < node_count)
             else:
@@ -173,8 +171,8 @@ class CudaEnv:
         if GPU_SINGLE_THREAD_MODE:
             for index, target_node in enumerate(training_nodes):
                 criterion = criteria[index]
-                training_data = training_data[index]
-                training_label = training_label[index]
+                single_batch_data = training_data[index]
+                single_batch_label = training_label[index]
                 if target_node.is_using_model_stat:
                     """use model stat (share model on gpu)"""
                     shared_model_on_gpu = target_node.allocated_gpu.model
@@ -182,7 +180,7 @@ class CudaEnv:
                     optimizer = target_node.optimizer
                     shared_model_on_gpu.load_state_dict(target_node.model_status)
                     shared_model_on_gpu.train()
-                    data, labels = training_data.cuda(device=gpu.device), training_label.cuda(device=gpu.device)
+                    data, labels = single_batch_data.cuda(device=gpu.device), single_batch_label.cuda(device=gpu.device)
                     optimizer.zero_grad()
                     output = shared_model_on_gpu(data)
                     loss = criterion(output, labels)
@@ -195,7 +193,7 @@ class CudaEnv:
                     model = target_node.model
                     gpu = target_node.allocated_gpu
                     optimizer = target_node.optimizer
-                    data, labels = training_data.cuda(device=gpu.device), training_label.cuda(device=gpu.device)
+                    data, labels = single_batch_data.cuda(device=gpu.device), single_batch_label.cuda(device=gpu.device)
                     optimizer.zero_grad()
                     output = model(data)
                     loss = criterion(output, labels)
