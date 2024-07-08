@@ -5,7 +5,6 @@ import gc
 import subprocess
 
 import torch.multiprocessing as mp
-from torchsummary import summary
 from torch.utils.data import DataLoader
 from typing import List, Final
 from py_src import internal_names, util, ml_setup
