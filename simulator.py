@@ -3,10 +3,13 @@ import os
 import logging
 import shutil
 import sys
+import torch
 
 from datetime import datetime
 from py_src import configuration_file, internal_names, initial_checking, cuda, node, dataset
 from py_src.simulation_runtime_parameters import RuntimeParameters, SimulationPhase
+from py_src.ml_setup import MlSetup
+
 simulator_base_logger = logging.getLogger(internal_names.logger_simulator_base_name)
 
 
@@ -34,11 +37,7 @@ def set_logging(log_file_path: str):
     del file, console, formatter
 
 
-def train_single_node(target_node: node.Node, rt_para: RuntimeParameters):
-    pass
-
-
-def begin_simulation(runtime_parameters: RuntimeParameters, config_file: configuration_file, training_dataset: dataset.DatasetWithFastLabelSelection):
+def begin_simulation(runtime_parameters: RuntimeParameters, config_file: configuration_file, ml_config: MlSetup, current_cuda_env, training_dataset: dataset.DatasetWithFastLabelSelection):
     # begin simulation
     while runtime_parameters.current_tick <= config_file.max_tick:
         """start of tick"""
@@ -50,19 +49,35 @@ def begin_simulation(runtime_parameters: RuntimeParameters, config_file: configu
         """training"""
         runtime_parameters.phase = SimulationPhase.TRAINING
 
-        simulator_base_logger.info(f"current tick: {runtime_parameters.current_tick}")
+        simulator_base_logger.info(f"current tick: {runtime_parameters.current_tick}/{runtime_parameters.max_tick}")
         node_target: node.Node
         node_name: str
+
+        training_node_names = []
+        training_nodes = []
+        criteria = []
+        training_data = []
+        training_labels = []
         for node_name, node_target in runtime_parameters.node_container.items():
             if node_target.next_training_tick == runtime_parameters.current_tick:
-                # perform training
+                # add to training buffer
                 for data, label in node_target.train_loader:
-                    loss = cuda.current_env_info.submit_training_job(node_target.model, node_target.optimizer, config_file.ml_setup.criterion, data, label)
-                    simulator_base_logger.info(f"training on node {node_target.name}, loss = {loss:.2f}")
-                    node_target.next_training_tick = config_file.get_next_training_time(node_target, runtime_parameters)
-
+                    training_node_names.append(node_name)
+                    training_nodes.append(node_target)
+                    criteria.append(ml_config.criterion)
+                    training_data.append(data)
+                    training_labels.append(label)
                     break
+        # print(runtime_parameters.node_container[0].model_status["conv1.weight"].data[0])
+        output_loss = current_cuda_env.submit_training_jobs(training_nodes, criteria, training_data, training_labels)
 
+        """update next training tick"""
+        for index, node_name in enumerate(training_node_names):
+            node_target = runtime_parameters.node_container[node_name]
+            node_target.next_training_tick = config_file.get_next_training_time(node_target, runtime_parameters)
+            # print(output_model_stat[index]["conv1.weight"].data[0])
+            simulator_base_logger.info(f"training node: {node_target.name}, loss={output_loss[index]:.2f}")
+        # print(runtime_parameters.node_container[0].model_status["conv1.weight"].data[0])
         """after training"""
         runtime_parameters.phase = SimulationPhase.AFTER_TRAINING
 
@@ -82,6 +97,8 @@ def begin_simulation(runtime_parameters: RuntimeParameters, config_file: configu
 
 
 def main():
+    current_cuda_env = cuda.CudaEnv()
+
     parser = argparse.ArgumentParser(description='DFL simulator (torch version)')
     parser.add_argument('--config', type=str, default="./simulator_config.py", help='path to config file, default: "./simulator_config.py')
     args = parser.parse_args()
@@ -100,31 +117,49 @@ def main():
     config_file = configuration_file.load_configuration(config_file_path)
     shutil.copy2(config_file_path, backup_path)  # backup config file
     simulator_base_logger.info(f"config file path: ({config_file_path}), name: ({config_file.config_name}).")
-
-    # init cuda
-    cuda.current_env_info.measure_memory_consumption_for_performing_ml(config_file.ml_setup)
-    cuda.current_env_info.allocate_executors()
-    cuda.current_env_info.print_ml_info()
-    cuda.current_env_info.print_gpu_info()
+    config_ml_setup = config_file.get_ml_setup()
 
     # set up runtime_parameters
     runtime_parameters = RuntimeParameters()
     runtime_parameters.max_tick = config_file.max_tick
     runtime_parameters.current_tick = 0
-    runtime_parameters.dataset_label = config_file.ml_setup.dataset_label
+    runtime_parameters.dataset_label = config_ml_setup.dataset_label
 
     # check and create topology
     nodes_set = initial_checking.check_consistent_nodes(config_file.get_topology, config_file.max_tick)
     runtime_parameters.topology = config_file.get_topology(runtime_parameters)
 
+    # init cuda
+    current_cuda_env.measure_memory_consumption_for_performing_ml(config_ml_setup)
+    current_cuda_env.generate_execution_strategy(config_ml_setup.model, len(nodes_set), override_use_model_stat=config_file.override_use_model_stat)
+    current_cuda_env.print_ml_info()
+    current_cuda_env.print_gpu_info()
+
     # create dataset
-    training_dataset = dataset.DatasetWithFastLabelSelection(config_file.ml_setup.training_data)
+    training_dataset = dataset.DatasetWithFastLabelSelection(config_ml_setup.training_data)
 
     # create nodes
     runtime_parameters.node_container = {}
     for single_node in nodes_set:
-        temp_node = node.Node(single_node, config_file.ml_setup.model)
-        temp_node.set_ml_setup(config_file.ml_setup)
+        # find allocated gpu
+        allocated_gpu = None
+        for gpu in current_cuda_env.cuda_device_list:
+            if single_node in gpu.nodes_allocated:
+                allocated_gpu = gpu
+                break
+        assert allocated_gpu is not None
+        if current_cuda_env.use_model_stat:
+            temp_node = node.Node(single_node, True, config_ml_setup, allocated_gpu=allocated_gpu)
+        else:
+            temp_node = node.Node(single_node, False, config_ml_setup, allocated_gpu=allocated_gpu)
+        temp_node.set_ml_setup(config_ml_setup)
+        # create optimizer for this node
+        if current_cuda_env.use_model_stat:
+            optimizer = config_file.get_optimizer(temp_node, temp_node.allocated_gpu.model, runtime_parameters, config_ml_setup)
+            temp_node.set_optimizer(optimizer)
+        else:
+            optimizer = config_file.get_optimizer(temp_node, temp_node.model, runtime_parameters, config_ml_setup)
+            temp_node.set_optimizer(optimizer)
         # next training tick
         next_training_time = config_file.get_next_training_time(temp_node, runtime_parameters)
         temp_node.set_next_training_tick(next_training_time)
@@ -132,18 +167,16 @@ def main():
         label_distribution = config_file.get_label_distribution(temp_node, runtime_parameters)
         assert label_distribution is not None
         temp_node.set_label_distribution(label_distribution, training_dataset)
-        # optimizer
-        optimizer = config_file.get_optimizer(temp_node, runtime_parameters)
-        assert optimizer is not None
-        temp_node.set_optimizer(optimizer)
         # add node to container
         runtime_parameters.node_container[single_node] = temp_node
 
     # begin simulation
-    begin_simulation(runtime_parameters, config_file, training_dataset)
+    begin_simulation(runtime_parameters, config_file, config_ml_setup, current_cuda_env, training_dataset)
 
     exit(0)
 
 
 if __name__ == "__main__":
+    # global initialization
+    torch.multiprocessing.set_start_method('spawn')
     main()

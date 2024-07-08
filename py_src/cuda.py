@@ -4,16 +4,20 @@ import logging
 import gc
 import subprocess
 import math
+import functools
 
+import torch.multiprocessing as mp
 from torch.utils.data import Dataset, DataLoader
 from typing import List, Final
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, as_completed
 from py_src import internal_names, util, ml_setup
 
 logger = logging.getLogger(f"{internal_names.logger_simulator_base_name}.{util.basename_without_extension(__file__)}")
 
-GPU_RESERVED_MEMORY_RATIO: Final[float] = 0.2
-GPU_MAX_WORKERS: Final[int] = 4
+GPU_RESERVED_MEMORY_RATIO: Final[float] = 0.1
+GPU_MAX_WORKERS: Final[int] = 1
+GPU_SINGLE_THREAD_MODE: Final[bool] = True
+
 
 class CudaDevice:
     def __init__(self, device_index):
@@ -22,10 +26,54 @@ class CudaDevice:
         self.device = torch.device(self.id)
         self.executor = None
         self.executor_size = None
-        self.executor_busy_count = None
         self.total_memory_MB = None
         self.free_memory_MB = None
         self.used_memory_MB = None
+
+        # parameters for worker on gpu, nodes only have model_stat
+        self.model = None
+        self.nodes_allocated = None
+
+
+def _measure_memory_consumption_for_performing_ml_proc_func(cuda_device_list, setup: ml_setup.MlSetup, shared_namespace):
+    if len(cuda_device_list) == 0:
+        return
+
+    gpu_device = cuda_device_list[0].device
+    # dataset
+    initial_memory = torch.cuda.memory_allocated(device=gpu_device)
+    temp_training_data = copy.deepcopy(setup.training_data)
+    temp_testing_data = copy.deepcopy(setup.testing_data)
+    temp_training_data.data = torch.from_numpy(temp_training_data.data)
+    temp_testing_data.data = torch.from_numpy(temp_testing_data.data)
+    temp_training_data.data = temp_training_data.data.to(device=gpu_device)
+    temp_testing_data.data = temp_testing_data.data.to(device=gpu_device)
+    final_memory = torch.cuda.memory_allocated(device=gpu_device)
+    shared_namespace.memory_consumption_dataset_MB = (final_memory - initial_memory) / 1024 ** 2  # convert to MB
+    del temp_training_data, temp_testing_data
+    # model
+    initial_memory = torch.cuda.memory_allocated(device=gpu_device)
+    temp_model = copy.deepcopy(setup.model)
+    temp_training_data = copy.deepcopy(setup.training_data)
+    temp_model = temp_model.to(device=gpu_device)
+    temp_train_loader = DataLoader(temp_training_data, batch_size=setup.training_batch_size, shuffle=True)
+    criterion = torch.nn.CrossEntropyLoss()
+    optimizer = torch.optim.Adam(temp_model.parameters(), lr=0.001)
+    for data, labels in temp_train_loader:
+        data, labels = data.to(device=gpu_device), labels.to(device=gpu_device)
+        temp_model.train()
+        optimizer.zero_grad()
+        output = temp_model(data)
+        loss = criterion(output, labels)
+        loss.backward()
+        optimizer.step()
+        break
+    final_memory = torch.cuda.memory_allocated(device=gpu_device)
+    shared_namespace.memory_consumption_model_MB = (final_memory - initial_memory) / 1024 ** 2  # convert to MB
+    del temp_model, temp_training_data, temp_train_loader, criterion, optimizer
+
+    gc.collect()
+    torch.cuda.empty_cache()
 
 
 class CudaEnv:
@@ -33,9 +81,12 @@ class CudaEnv:
         self._initialized = False
         self.cuda_available = torch.cuda.is_available()
         self.cuda_device_list: List[CudaDevice] = []
-        self.memory_consumption_dataset = None
-        self.memory_consumption_model = None
+        self.memory_consumption_dataset_MB = None
+        self.memory_consumption_model_MB = None
         self.initialize()
+        self.mp_manager = mp.Manager()
+        self.use_model_stat = None
+        self.global_worker_model = None
 
     def initialize(self):
         if self._initialized:
@@ -46,10 +97,10 @@ class CudaEnv:
 
     def print_ml_info(self):
         logger.info(f"available GPUs: {[device.device_name for device in self.cuda_device_list]}")
-        if self.memory_consumption_model is not None:
-            logger.info(f"memory consumption model: {self.memory_consumption_model:.2f}MB")
-        if self.memory_consumption_dataset is not None:
-            logger.info(f"memory consumption dataset: {self.memory_consumption_dataset:.2f}MB")
+        if self.memory_consumption_model_MB is not None:
+            logger.info(f"memory consumption model: {self.memory_consumption_model_MB:.2f}MB")
+        if self.memory_consumption_dataset_MB is not None:
+            logger.info(f"memory consumption dataset: {self.memory_consumption_dataset_MB:.2f}MB")
 
     def print_gpu_info(self):
         self.__update_gpu_free_memory__()
@@ -58,45 +109,15 @@ class CudaEnv:
             if device.executor_size is not None:
                 logger.info(f"GPU {device.device_name} has {device.executor_size} workers")
 
-    def measure_memory_consumption_for_performing_ml(self, ml_setup: ml_setup.MlSetup):
-        if not self.cuda_available:
-            return
-
-        gpu_device = self.cuda_device_list[0].device
-        # dataset
-        initial_memory = torch.cuda.memory_allocated(device=gpu_device)
-        temp_training_data = copy.deepcopy(ml_setup.training_data)
-        temp_testing_data = copy.deepcopy(ml_setup.testing_data)
-        temp_training_data.data = torch.from_numpy(temp_training_data.data)
-        temp_testing_data.data = torch.from_numpy(temp_testing_data.data)
-        temp_training_data.data = temp_training_data.data.to(device=gpu_device)
-        temp_testing_data.data = temp_testing_data.data.to(device=gpu_device)
-        final_memory = torch.cuda.memory_allocated(device=gpu_device)
-        self.memory_consumption_dataset = (final_memory - initial_memory) / 1024 / 1024  # convert to MB
-        del temp_training_data, temp_testing_data
-        # model
-        initial_memory = torch.cuda.memory_allocated(device=gpu_device)
-        temp_model = copy.deepcopy(ml_setup.model)
-        temp_training_data = copy.deepcopy(ml_setup.training_data)
-        temp_model.cuda(device=gpu_device)
-        temp_train_loader = DataLoader(temp_training_data, batch_size=ml_setup.training_batch_size, shuffle=True)
-        criterion = torch.nn.CrossEntropyLoss()
-        optimizer = torch.optim.Adam(temp_model.parameters(), lr=0.001)
-        for data, labels in temp_train_loader:
-            data, labels = data.to(device=gpu_device), labels.to(device=gpu_device)
-            temp_model.train()
-            optimizer.zero_grad()
-            output = temp_model(data)
-            loss = criterion(output, labels)
-            loss.backward()
-            optimizer.step()
-            break
-        final_memory = torch.cuda.memory_allocated(device=gpu_device)
-        self.memory_consumption_model = (final_memory - initial_memory) / 1024 / 1024  # convert to MB
-        del temp_model, temp_training_data, temp_train_loader
-
-        torch.cuda.empty_cache()
-        gc.collect()
+    def measure_memory_consumption_for_performing_ml(self, setup: ml_setup.MlSetup):
+        ns = self.mp_manager.Namespace()
+        ns.memory_consumption_dataset_MB = 0
+        ns.memory_consumption_model_MB = 0
+        p = mp.Process(target=_measure_memory_consumption_for_performing_ml_proc_func, args=(self.cuda_device_list, setup, ns), )
+        p.start()
+        p.join()
+        self.memory_consumption_dataset_MB = ns.memory_consumption_dataset_MB
+        self.memory_consumption_model_MB = ns.memory_consumption_model_MB
 
     def __update_gpu_free_memory__(self):
         nvidia_smi_result = subprocess.run(['nvidia-smi', '--query-gpu=memory.total,memory.used,memory.free,gpu_name', '--format=csv,nounits,noheader'], stdout=subprocess.PIPE)
@@ -115,34 +136,73 @@ class CudaEnv:
             gpu.used_memory_MB = current_nvidia_smi_info['used_memory']
             gpu.free_memory_MB = gpu.total_memory_MB - gpu.used_memory_MB
 
-    def allocate_executors(self):
+    def generate_execution_strategy(self, model, node_count, override_use_model_stat: None | bool = None):
         self.__update_gpu_free_memory__()
-        for gpu in self.cuda_device_list:
-            available_for_model = gpu.total_memory_MB * (1-GPU_RESERVED_MEMORY_RATIO) - gpu.used_memory_MB - self.memory_consumption_dataset
-            gpu.executor_size = math.floor(available_for_model / self.memory_consumption_model)
-            if gpu.executor_size > GPU_MAX_WORKERS:
-                gpu.executor_size = GPU_MAX_WORKERS
-            gpu.executor = ProcessPoolExecutor(gpu.executor_size, mp_context=torch.multiprocessing)
-            gpu.executor_busy_count = 0
+        if GPU_SINGLE_THREAD_MODE:
+            model_capacity_per_gpu = []
+            if override_use_model_stat is None:
+                # for GPU_SINGLE_THREAD_MODE, can we put all models to GPU memory?
+                for gpu in self.cuda_device_list:
+                    model_capacity_for_this_gpu = int((gpu.total_memory_MB * (1 - GPU_RESERVED_MEMORY_RATIO) - gpu.used_memory_MB) // self.memory_consumption_model_MB)
+                    model_capacity_per_gpu.append(model_capacity_for_this_gpu)
+                use_model_stat = (sum(model_capacity_per_gpu) < node_count)
+            else:
+                use_model_stat = override_use_model_stat
+            if use_model_stat:
+                # it's impossible to allocate all model to GPU memory, so we only allocate one model to the first gpu and each node keep model_stat
+                logger.info(f"GPU execution strategy: SHARE_MODEL_ON_GPU -- keep model stat in memory and all nodes share one model on GPU")
+                gpu = self.cuda_device_list[0]
+                gpu.model = copy.deepcopy(model)
+                gpu.model = gpu.model.to(device=gpu.device)
+                gpu.nodes_allocated = set(range(node_count))
+                self.use_model_stat = True
+            else:
+                # it's possible to allocate all model to GPU memory
+                logger.info(f"GPU execution strategy: DEDICATED_MODEL_ON_GPU each node has their own model on GPU")
+                self.use_model_stat = False
+                node_allocated = 0
+                for index, gpu in enumerate(self.cuda_device_list):
+                    gpu.nodes_allocated = set(range(node_allocated, node_allocated + model_capacity_per_gpu[index]))
+        else:
+            raise NotImplementedError("multiprocess is not implemented yet")
 
-    def select_gpu_with_balance(self) -> CudaDevice:
-        return self.cuda_device_list[0]
+    def submit_training_jobs(self, training_nodes, criteria: list[torch.nn.CrossEntropyLoss], training_data: list[torch.Tensor], training_label: list[torch.Tensor]):
+        assert len(training_nodes) == len(criteria) == len(training_data) == len(training_label)
 
-    def submit_training_job(self, model: torch.nn.Module, optimizer: torch.optim.Optimizer, criterion: torch.nn.CrossEntropyLoss, training_data: torch.Tensor, training_label: torch.Tensor):
-        cuda_device = self.select_gpu_with_balance()
-        model.cuda(device=cuda_device.device)
-        model.train()
-        data, labels = training_data.cuda(device=cuda_device.device), training_label.cuda(device=cuda_device.device)
-        optimizer.zero_grad()
-        output = model(data)
-        loss = criterion(output, labels)
-        loss.backward()
-        optimizer.step()
+        output_loss = []
+        if GPU_SINGLE_THREAD_MODE:
+            for index, target_node in enumerate(training_nodes):
+                criterion = criteria[index]
+                training_data = training_data[index]
+                training_label = training_label[index]
+                if target_node.is_using_model_stat:
+                    """use model stat (share model on gpu)"""
+                    shared_model_on_gpu = target_node.allocated_gpu.model
+                    gpu = target_node.allocated_gpu
+                    optimizer = target_node.optimizer
+                    shared_model_on_gpu.load_state_dict(target_node.model_status)
+                    shared_model_on_gpu.train()
+                    data, labels = training_data.cuda(device=gpu.device), training_label.cuda(device=gpu.device)
+                    optimizer.zero_grad()
+                    output = shared_model_on_gpu(data)
+                    loss = criterion(output, labels)
+                    loss.backward()
+                    optimizer.step()
+                    target_node.model_status = shared_model_on_gpu.state_dict()
+                    output_loss.append(loss.item())
+                else:
+                    """use dedicated model on gpu"""
+                    model = target_node.model
+                    gpu = target_node.allocated_gpu
+                    optimizer = target_node.optimizer
+                    data, labels = training_data.cuda(device=gpu.device), training_label.cuda(device=gpu.device)
+                    optimizer.zero_grad()
+                    output = model(data)
+                    loss = criterion(output, labels)
+                    loss.backward()
+                    optimizer.step()
+                    output_loss.append(loss.item())
+        else:
+            raise NotImplementedError("multiprocess is not implemented yet")
 
-        # clean GPU memory
-        model.cpu()
-        del data, labels
-        return loss.item()
-
-
-current_env_info = CudaEnv()
+        return output_loss
