@@ -196,6 +196,8 @@ class CudaEnv:
                     target_node.model_status = shared_model_on_gpu.state_dict()
                     target_node.optimizer_status = shared_optimizer_on_gpu.state_dict()
                     output_loss.append(loss.item())
+
+                    torch.cuda.empty_cache()
                 else:
                     """use dedicated model on gpu"""
                     model = target_node.model
