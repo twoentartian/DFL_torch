@@ -23,7 +23,11 @@ def re_initialize_model(model):
             layer.reset_parameters()
 
 class Node:
-    def __init__(self, name: int, use_model_stat: bool, ml_setup: MlSetup, allocated_gpu: CudaDevice):
+    def __init__(self, name: int, use_model_stat: bool, ml_setup: MlSetup, allocated_gpu: CudaDevice, optimizer: None | torch.optim.Optimizer = None):
+        """
+        for use_model_stat == True, the optimizer should be an optimizer attached to the model owned by gpu
+        for use_model_stat == False, the optimizer should be set by "set_optimizer", user need to attach the model parameter to the optimizer externally
+        """
         model = ml_setup.model
         self.name = name
         self.is_using_model_stat = use_model_stat
@@ -31,16 +35,18 @@ class Node:
 
         re_initialize_model(model)
         if use_model_stat:
+            assert optimizer is not None
             self.model_status = copy.deepcopy(model.state_dict())
+            self.optimizer_status = copy.deepcopy(optimizer.state_dict())
         else:
             self.model = copy.deepcopy(model)
             self.model = self.model.to(self.allocated_gpu.device)
+            self.optimizer = None
 
         self.next_training_tick = 0
         self.normalized_dataset_label_distribution = None
         self.ml_setup = None
         self.train_loader = None
-        self.optimizer = None
 
         self.__dataset_label_distribution = None
         self.__dataset_with_fast_label = None

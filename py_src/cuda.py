@@ -8,6 +8,7 @@ import torch.multiprocessing as mp
 from torch.utils.data import DataLoader
 from typing import List, Final
 from py_src import internal_names, util, ml_setup
+from py_src.simulation_runtime_parameters import RuntimeParameters, SimulationPhase
 
 logger = logging.getLogger(f"{internal_names.logger_simulator_base_name}.{util.basename_without_extension(__file__)}")
 
@@ -29,6 +30,7 @@ class CudaDevice:
 
         # parameters for worker on gpu, nodes only have model_stat
         self.model = None
+        self.optimizer = None
         self.nodes_allocated = None
 
 
@@ -133,7 +135,7 @@ class CudaEnv:
             gpu.used_memory_MB = current_nvidia_smi_info['used_memory']
             gpu.free_memory_MB = gpu.total_memory_MB - gpu.used_memory_MB
 
-    def generate_execution_strategy(self, model, node_count, override_use_model_stat: None | bool = None):
+    def generate_execution_strategy(self, model, config_file, node_count, override_use_model_stat: None | bool = None):
         self.__update_gpu_free_memory__()
         if GPU_SINGLE_THREAD_MODE:
             model_capacity_per_gpu = []
@@ -151,6 +153,10 @@ class CudaEnv:
                 gpu = self.cuda_device_list[0]
                 gpu.model = copy.deepcopy(model)
                 gpu.model = gpu.model.to(device=gpu.device)
+                para = RuntimeParameters()
+                para.phase = SimulationPhase.INITIALIZING
+                current_ml_setup = config_file.get_ml_setup()
+                gpu.optimizer = config_file.get_optimizer(None, gpu.model, para, current_ml_setup)
                 gpu.nodes_allocated = set(range(node_count))
                 self.use_model_stat = True
             else:
@@ -174,18 +180,21 @@ class CudaEnv:
                 single_batch_label = training_label[index]
                 if target_node.is_using_model_stat:
                     """use model stat (share model on gpu)"""
-                    shared_model_on_gpu = target_node.allocated_gpu.model
                     gpu = target_node.allocated_gpu
-                    optimizer = target_node.optimizer
+                    shared_model_on_gpu = gpu.model
+                    shared_optimizer_on_gpu = gpu.optimizer
                     shared_model_on_gpu.load_state_dict(target_node.model_status)
+                    shared_optimizer_on_gpu.load_state_dict(target_node.optimizer_status)
+
                     shared_model_on_gpu.train()
                     data, labels = single_batch_data.cuda(device=gpu.device), single_batch_label.cuda(device=gpu.device)
-                    optimizer.zero_grad()
+                    shared_optimizer_on_gpu.zero_grad()
                     output = shared_model_on_gpu(data)
                     loss = criterion(output, labels)
                     loss.backward()
-                    optimizer.step()
+                    shared_optimizer_on_gpu.step()
                     target_node.model_status = shared_model_on_gpu.state_dict()
+                    target_node.optimizer_status = shared_optimizer_on_gpu.state_dict()
                     output_loss.append(loss.item())
                 else:
                     """use dedicated model on gpu"""

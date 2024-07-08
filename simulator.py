@@ -142,7 +142,7 @@ def main():
 
     # init cuda
     current_cuda_env.measure_memory_consumption_for_performing_ml(config_ml_setup)
-    current_cuda_env.generate_execution_strategy(config_ml_setup.model, len(nodes_set), override_use_model_stat=config_file.override_use_model_stat)
+    current_cuda_env.generate_execution_strategy(config_ml_setup.model, config_file, len(nodes_set), override_use_model_stat=config_file.override_use_model_stat)
     current_cuda_env.print_ml_info()
     current_cuda_env.print_gpu_info()
 
@@ -160,15 +160,12 @@ def main():
                 break
         assert allocated_gpu is not None
         if current_cuda_env.use_model_stat:
-            temp_node = node.Node(single_node, True, config_ml_setup, allocated_gpu=allocated_gpu)
+            temp_node = node.Node(single_node, True, config_ml_setup, allocated_gpu, optimizer=allocated_gpu.optimizer)
         else:
-            temp_node = node.Node(single_node, False, config_ml_setup, allocated_gpu=allocated_gpu)
+            temp_node = node.Node(single_node, False, config_ml_setup, allocated_gpu)
         temp_node.set_ml_setup(config_ml_setup)
         # create optimizer for this node
-        if current_cuda_env.use_model_stat:
-            optimizer = config_file.get_optimizer(temp_node, temp_node.allocated_gpu.model, runtime_parameters, config_ml_setup)
-            temp_node.set_optimizer(optimizer)
-        else:
+        if not current_cuda_env.use_model_stat:
             optimizer = config_file.get_optimizer(temp_node, temp_node.model, runtime_parameters, config_ml_setup)
             temp_node.set_optimizer(optimizer)
         # next training tick
