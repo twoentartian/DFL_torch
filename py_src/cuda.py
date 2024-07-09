@@ -202,7 +202,7 @@ class CudaEnv:
 
                     shared_model_on_gpu.train()
                     data, labels = single_batch_data.cuda(device=gpu.device), single_batch_label.cuda(device=gpu.device)
-                    shared_optimizer_on_gpu.zero_grad()
+                    shared_optimizer_on_gpu.zero_grad(set_to_none=True)
                     output = shared_model_on_gpu(data)
                     loss = criterion(output, labels)
                     loss.backward()
@@ -219,7 +219,7 @@ class CudaEnv:
                     gpu = target_node.allocated_gpu
                     optimizer = target_node.optimizer
                     data, labels = single_batch_data.cuda(device=gpu.device), single_batch_label.cuda(device=gpu.device)
-                    optimizer.zero_grad()
+                    optimizer.zero_grad(set_to_none=True)
                     output = model(data)
                     loss = criterion(output, labels)
                     loss.backward()
