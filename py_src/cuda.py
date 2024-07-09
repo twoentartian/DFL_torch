@@ -97,7 +97,7 @@ class CudaEnv:
     def print_ml_info(self):
         logger.info(f"available GPUs: {[device.device_name for device in self.cuda_device_list]}")
         if self.memory_consumption_model_MB is not None:
-            logger.info(f"memory consumption model: {self.memory_consumption_model_MB:.2f}MB")
+            logger.info(f"memory consumption model and optimizer: {self.memory_consumption_model_MB:.2f}MB")
         if self.memory_consumption_dataset_MB is not None:
             logger.info(f"memory consumption dataset: {self.memory_consumption_dataset_MB:.2f}MB")
 
