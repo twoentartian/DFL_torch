@@ -173,15 +173,16 @@ class CudaEnv:
         for param in optim.state.values():
             # Not sure there are any global tensors in the state dict
             if isinstance(param, torch.Tensor):
-                param.data = param.data.to(device)
+                param.data = param.data.to(device, non_blocking=True)
                 if param._grad is not None:
-                    param._grad.data = param._grad.data.to(device)
+                    param._grad.data = param._grad.data.to(device, non_blocking=True)
             elif isinstance(param, dict):
                 for subparam in param.values():
                     if isinstance(subparam, torch.Tensor):
-                        subparam.data = subparam.data.to(device)
+                        subparam.data = subparam.data.to(device, non_blocking=True)
                         if subparam._grad is not None:
-                            subparam._grad.data = subparam._grad.data.to(device)
+                            subparam._grad.data = subparam._grad.data.to(device, non_blocking=True)
+
 
     def submit_training_jobs(self, training_nodes, criteria: list[torch.nn.CrossEntropyLoss], training_data: list[torch.Tensor], training_label: list[torch.Tensor]):
         assert len(training_nodes) == len(criteria) == len(training_data) == len(training_label)
@@ -211,8 +212,6 @@ class CudaEnv:
                     CudaEnv.__optimizer_to(shared_optimizer_on_gpu, torch.device('cpu')) # move optimizer data back to memory
                     target_node.optimizer_status = shared_optimizer_on_gpu.state_dict()
                     output_loss.append(loss.item())
-
-                    torch.cuda.empty_cache()
                 else:
                     """use dedicated model on gpu"""
                     model = target_node.model

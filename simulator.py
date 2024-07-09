@@ -51,7 +51,7 @@ def begin_simulation(runtime_parameters: RuntimeParameters, config_file: configu
             remaining = (config_file.max_tick - runtime_parameters.current_tick) // REPORT_FINISH_TIME_PER_TICK
             time_to_finish = remaining * time_elapsed
             finish_time = timer + time_to_finish
-            simulator_base_logger.info(f"expected to finish at {datetime.fromtimestamp(finish_time)}")
+            simulator_base_logger.info(f"time taken for {REPORT_FINISH_TIME_PER_TICK} ticks: {time_elapsed:.2f}s ,expected to finish at {datetime.fromtimestamp(finish_time)}")
 
 
         """start of tick"""
