@@ -127,6 +127,8 @@ def begin_simulation(runtime_parameters: RuntimeParameters, config_file, ml_conf
             if node_target.is_training_this_tick:
                 # get model stat
                 model_stat = node_target.get_model_stat()
+                for k, v in model_stat.items():
+                    model_stat[k] = v.cpu()
                 # send model to peers
                 neighbors = list(runtime_parameters.topology.neighbors(node_target.name))
                 for neighbor in neighbors:

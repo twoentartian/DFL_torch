@@ -34,7 +34,6 @@ class StandardModelAverager(ModelAverager):
     def add_model(self, model_stat):
         if self.model_buffer is None:
             self.model_buffer = copy.deepcopy(model_stat)
-            self.model_buffer = self.model_buffer.cpu()
         else:
             self.model_buffer = ModelAverager._iadd_two_model(self.model_buffer, model_stat)
         self.model_counter += 1
