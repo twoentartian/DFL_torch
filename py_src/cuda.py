@@ -3,6 +3,7 @@ import copy
 import logging
 import gc
 import subprocess
+import numpy as np
 
 import torch.multiprocessing as mp
 from torch.utils.data import DataLoader
@@ -43,8 +44,11 @@ def _measure_memory_consumption_for_performing_ml_proc_func(cuda_device_list, se
     initial_memory = torch.cuda.memory_allocated(device=gpu_device)
     temp_training_data = copy.deepcopy(setup.training_data)
     temp_testing_data = copy.deepcopy(setup.testing_data)
-    temp_training_data.data = torch.from_numpy(temp_training_data.data)
-    temp_testing_data.data = torch.from_numpy(temp_testing_data.data)
+    # we don't use data loader here, so we should take care of whether they are tensor or ndarray
+    if isinstance(temp_training_data.data, np.ndarray):
+        temp_training_data.data = torch.from_numpy(temp_training_data.data)
+    if isinstance(temp_testing_data.data, np.ndarray):
+        temp_testing_data.data = torch.from_numpy(temp_testing_data.data)
     temp_training_data.data = temp_training_data.data.to(device=gpu_device)
     temp_testing_data.data = temp_testing_data.data.to(device=gpu_device)
     final_memory = torch.cuda.memory_allocated(device=gpu_device)
@@ -140,6 +144,8 @@ class CudaEnv:
         if GPU_SINGLE_THREAD_MODE:
             model_capacity_per_gpu = []
             if override_use_model_stat is None:
+                override_use_model_stat = False
+            if not override_use_model_stat:
                 # for GPU_SINGLE_THREAD_MODE, can we put all models to GPU memory?
                 for gpu in self.cuda_device_list:
                     model_capacity_for_this_gpu = int((gpu.total_memory_MB * (1 - GPU_RESERVED_MEMORY_RATIO) - gpu.used_memory_MB - self.memory_consumption_dataset_MB) // self.memory_consumption_model_MB)

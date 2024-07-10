@@ -16,6 +16,9 @@ def check_consistent_nodes(topology_generation_function, total_tick: int) -> set
     parameters.phase = simulation_runtime_parameters.SimulationPhase.INITIALIZING
     topology = topology_generation_function(parameters)
     previous_nodes = set(topology.nodes())
+    edges = topology.edges()
+    initial_edge = len(edges)
+    max_edge_count = initial_edge
     # during simulation phase
     for tick in range(total_tick+1):
         parameters.phase = simulation_runtime_parameters.SimulationPhase.START_OF_TICK
@@ -27,8 +30,6 @@ def check_consistent_nodes(topology_generation_function, total_tick: int) -> set
         edges = topology.edges()
         if len(edges) > max_edge_count:
             max_edge_count = len(edges)
-        if initial_edge is None:
-            initial_edge = len(edges)
         if previous_nodes != current_nodes:
             extra_nodes = current_nodes - previous_nodes
             missing_nodes = previous_nodes - current_nodes

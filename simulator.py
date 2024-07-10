@@ -40,7 +40,25 @@ def set_logging(log_file_path: str):
     del file, console, formatter
 
 
-def begin_simulation(runtime_parameters: RuntimeParameters, config_file: configuration_file, ml_config: MlSetup, current_cuda_env, training_dataset: dataset.DatasetWithFastLabelSelection):
+def submit_training_jobs_cpu(training_nodes, criteria: list[torch.nn.CrossEntropyLoss], training_data: list[torch.Tensor], training_label: list[torch.Tensor]):
+    assert len(training_nodes) == len(criteria) == len(training_data) == len(training_label)
+    output_loss = []
+    for index, target_node in enumerate(training_nodes):
+        criterion = criteria[index]
+        data = training_data[index]
+        labels = training_label[index]
+        model = target_node.model
+        optimizer = target_node.optimizer
+        optimizer.zero_grad(set_to_none=True)
+        output = model(data)
+        loss = criterion(output, labels)
+        loss.backward()
+        optimizer.step()
+        output_loss.append(loss.item())
+    return output_loss
+
+
+def begin_simulation(runtime_parameters: RuntimeParameters, config_file, ml_config: MlSetup, current_cuda_env):
     # begin simulation
     timer = time.time()
     while runtime_parameters.current_tick <= config_file.max_tick:
@@ -53,9 +71,12 @@ def begin_simulation(runtime_parameters: RuntimeParameters, config_file: configu
             finish_time = timer + time_to_finish
             simulator_base_logger.info(f"time taken for {REPORT_FINISH_TIME_PER_TICK} ticks: {time_elapsed:.2f}s ,expected to finish at {datetime.fromtimestamp(finish_time)}")
 
-
         """start of tick"""
         runtime_parameters.phase = SimulationPhase.START_OF_TICK
+
+        # reset all status flags
+        for node_name, node_target in runtime_parameters.node_container.items():
+            node_target.reset_statu_flags()
 
         """before training"""
         runtime_parameters.phase = SimulationPhase.BEFORE_TRAINING
@@ -74,6 +95,7 @@ def begin_simulation(runtime_parameters: RuntimeParameters, config_file: configu
         training_labels = []
         for node_name, node_target in runtime_parameters.node_container.items():
             if node_target.next_training_tick == runtime_parameters.current_tick:
+                node_target.is_training_this_tick = True
                 # add to training buffer
                 for data, label in node_target.train_loader:
                     training_node_names.append(node_name)
@@ -82,7 +104,10 @@ def begin_simulation(runtime_parameters: RuntimeParameters, config_file: configu
                     training_data.append(data)
                     training_labels.append(label)
                     break
-        output_loss = current_cuda_env.submit_training_jobs(training_nodes, criteria, training_data, training_labels)
+        if config_file.force_use_cpu:
+            output_loss = submit_training_jobs_cpu(training_nodes, criteria, training_data, training_labels)
+        else:
+            output_loss = current_cuda_env.submit_training_jobs(training_nodes, criteria, training_data, training_labels)
 
         """update next training tick"""
         for index, node_name in enumerate(training_node_names):
@@ -97,6 +122,21 @@ def begin_simulation(runtime_parameters: RuntimeParameters, config_file: configu
 
         """averaging"""
         runtime_parameters.phase = SimulationPhase.AVERAGING
+
+        for node_name, node_target in runtime_parameters.node_container.items():
+            if node_target.is_training_this_tick:
+                # get model stat
+                model_stat = node_target.get_model_stat()
+                # send model to peers
+                neighbors = list(runtime_parameters.topology.neighbors(node_target.name))
+                for neighbor in neighbors:
+                    neighbor_node: node.Node = runtime_parameters.node_container[neighbor]
+                    neighbor_node.model_averager.add_model(model_stat)
+                    if neighbor_node.model_buffer_size <= neighbor_node.model_averager.get_model_count():
+                        # performing average!
+                        averaged_model = neighbor_node.model_averager.get_model(self_model=neighbor_node.get_model_stat())
+                        neighbor_node.set_model_stat(averaged_model)
+                        neighbor_node.is_averaging_this_tick = True
 
         """after averaging"""
         runtime_parameters.phase = SimulationPhase.AFTER_AVERAGING
@@ -129,6 +169,7 @@ def main():
     shutil.copy2(config_file_path, backup_path)  # backup config file
     simulator_base_logger.info(f"config file path: ({config_file_path}), name: ({config_file.config_name}).")
     config_ml_setup = config_file.get_ml_setup()
+    config_ml_setup.self_validate()
 
     # set up runtime_parameters
     runtime_parameters = RuntimeParameters()
@@ -141,10 +182,11 @@ def main():
     runtime_parameters.topology = config_file.get_topology(runtime_parameters)
 
     # init cuda
-    current_cuda_env.measure_memory_consumption_for_performing_ml(config_ml_setup)
-    current_cuda_env.generate_execution_strategy(config_ml_setup.model, config_file, config_ml_setup, len(nodes_set), override_use_model_stat=config_file.override_use_model_stat)
-    current_cuda_env.print_ml_info()
-    current_cuda_env.print_gpu_info()
+    if not config_file.force_use_cpu:
+        current_cuda_env.measure_memory_consumption_for_performing_ml(config_ml_setup)
+        current_cuda_env.generate_execution_strategy(config_ml_setup.model, config_file, config_ml_setup, len(nodes_set), override_use_model_stat=config_file.override_use_model_stat)
+        current_cuda_env.print_ml_info()
+        current_cuda_env.print_gpu_info()
 
     # create dataset
     training_dataset = dataset.DatasetWithFastLabelSelection(config_ml_setup.training_data)
@@ -152,25 +194,38 @@ def main():
     # create nodes
     runtime_parameters.node_container = {}
     for single_node in nodes_set:
-        # find allocated gpu
-        allocated_gpu = None
-        for gpu in current_cuda_env.cuda_device_list:
-            if single_node in gpu.nodes_allocated:
-                allocated_gpu = gpu
-                break
-        assert allocated_gpu is not None
-        if current_cuda_env.use_model_stat:
-            temp_node = node.Node(single_node, True, config_ml_setup, allocated_gpu, optimizer=allocated_gpu.optimizer)
-        else:
-            temp_node = node.Node(single_node, False, config_ml_setup, allocated_gpu)
-        temp_node.set_ml_setup(config_ml_setup)
-        # create optimizer for this node
-        if not current_cuda_env.use_model_stat:
+        if config_file.force_use_cpu:
+            temp_node = node.Node(single_node, config_ml_setup, use_cpu=True)
+            # create optimizer for this node if using cpu
             optimizer = config_file.get_optimizer(temp_node, temp_node.model, runtime_parameters, config_ml_setup)
             temp_node.set_optimizer(optimizer)
+        else:
+            # find allocated gpu
+            allocated_gpu = None
+            for gpu in current_cuda_env.cuda_device_list:
+                if single_node in gpu.nodes_allocated:
+                    allocated_gpu = gpu
+                    break
+            assert allocated_gpu is not None
+            if current_cuda_env.use_model_stat:
+                temp_node = node.Node(single_node, config_ml_setup, use_model_stat=True, allocated_gpu=allocated_gpu, optimizer=allocated_gpu.optimizer)
+            else:
+                temp_node = node.Node(single_node, config_ml_setup, use_model_stat=False, allocated_gpu=allocated_gpu)
+                # create optimizer for this node if using model stat
+                optimizer = config_file.get_optimizer(temp_node, temp_node.model, runtime_parameters, config_ml_setup)
+                temp_node.set_optimizer(optimizer)
+        # setup ml config(dataset label distribution, etc)
+        temp_node.set_ml_setup(config_ml_setup)
+
         # next training tick
         next_training_time = config_file.get_next_training_time(temp_node, runtime_parameters)
         temp_node.set_next_training_tick(next_training_time)
+        # average_algorithm
+        average_algorithm = config_file.get_average_algorithm(temp_node, runtime_parameters)
+        temp_node.set_average_algorithm(average_algorithm)
+        # average buffer size
+        average_buffer_size = config_file.get_average_buffer_size(temp_node, runtime_parameters)
+        temp_node.set_average_buffer_size(average_buffer_size)
         # label distribution
         label_distribution = config_file.get_label_distribution(temp_node, runtime_parameters)
         assert label_distribution is not None
@@ -179,7 +234,7 @@ def main():
         runtime_parameters.node_container[single_node] = temp_node
 
     # begin simulation
-    begin_simulation(runtime_parameters, config_file, config_ml_setup, current_cuda_env, training_dataset)
+    begin_simulation(runtime_parameters, config_file, config_ml_setup, current_cuda_env)
 
     exit(0)
 
