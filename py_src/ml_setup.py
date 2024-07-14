@@ -5,6 +5,12 @@ import numpy as np
 from torchvision import transforms, models, datasets
 
 
+def weights_init_xavier(m):
+    if isinstance(m, nn.Conv2d):
+        torch.nn.init.xavier_uniform_(m.weight.data)
+    if isinstance(m, nn.Linear):
+        torch.nn.init.xavier_uniform_(m.weight.data)
+
 class MlSetup:
     def __init__(self):
         self.model = None
@@ -14,10 +20,10 @@ class MlSetup:
         self.training_batch_size = None
         self.learning_rate = None
         self.dataset_label = None
+        self.weights_init_func = None
 
     def self_validate(self):
         pass  # do nothing for now
-
 
 """ CIFAR10 """
 def dataset_cifar10():
@@ -80,6 +86,7 @@ def mnist_lenet5():
     mnist_lenet5.criterion = torch.nn.CrossEntropyLoss()
     mnist_lenet5.training_batch_size = 64
     mnist_lenet5.learning_rate = 0.001
+    mnist_lenet5.weights_init_func = weights_init_xavier
     return mnist_lenet5
 
 
