@@ -1,9 +1,9 @@
 import copy
-
+from py_src.model_variance_correct import VarianceCorrectionType, VarianceCorrector
 
 class ModelAverager():
-    def __init__(self):
-        pass
+    def __init__(self, variance_corrector=None, *args, **kwargs):
+        self.variance_corrector = variance_corrector
 
     def add_model(self, model_stat):
         raise NotImplementedError
@@ -26,8 +26,11 @@ class ModelAverager():
 
 
 class StandardModelAverager(ModelAverager):
-    def __init__(self):
-        super().__init__()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.variance_corrector is not None:
+            vc_type = self.variance_corrector.variance_correction_type
+            assert (vc_type == VarianceCorrectionType.FollowOthers), "standard model averager only average models from others, thus only VarianceCorrectionType.FollowOthers is supported"
         self.model_buffer = None
         self.model_counter = 0
 
@@ -37,6 +40,9 @@ class StandardModelAverager(ModelAverager):
         else:
             self.model_buffer = ModelAverager._iadd_two_model(self.model_buffer, model_stat)
         self.model_counter += 1
+        # variance correction
+        if self.variance_corrector is not None:
+            self.variance_corrector.add_variance(model_stat)
 
     def get_model(self, *args, **kwargs):
         for layer_name, layer_weights in self.model_buffer.items():
@@ -44,6 +50,11 @@ class StandardModelAverager(ModelAverager):
                 continue
             layer_weights /= self.model_counter
         output = self.model_buffer
+        # variance correction
+        if self.variance_corrector is not None:
+            target_variance = self.variance_corrector.get_variance()
+            for layer_name, single_layer_variance in target_variance.items():
+                output[layer_name] = VarianceCorrector.scale_model_stat_to_variance(output[layer_name], single_layer_variance)
         self.model_buffer = None
         self.model_counter = 0
         return output
@@ -53,8 +64,8 @@ class StandardModelAverager(ModelAverager):
 
 
 class ConservativeModelAverager(ModelAverager):
-    def __init__(self, conservative: float):
-        super().__init__()
+    def __init__(self, conservative: float, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         assert (conservative >= 0) and (conservative <= 1)
         self.model_buffer = None
         self.model_counter = 0
@@ -66,12 +77,21 @@ class ConservativeModelAverager(ModelAverager):
         else:
             self.model_buffer = ModelAverager._iadd_two_model(self.model_buffer, model_stat)
         self.model_counter += 1
+        # variance correction
+        if self.variance_corrector is not None:
+            self.variance_corrector.add_variance(model_stat)
+
 
     def get_model(self, self_model, *args, **kwargs):
         for layer_name, layer_weights in self.model_buffer.items():
             layer_weights /= self.model_counter
         output = self.model_buffer
         output = ModelAverager._iadd_two_model(output, self_model, weight_src=self.conservative, weight_addition=1 - self.conservative)
+        # variance correction
+        if self.variance_corrector is not None:
+            target_variance = self.variance_corrector.get_variance(self_model, self.conservative)
+            for layer_name, single_layer_variance in target_variance:
+                output[layer_name] = VarianceCorrector.scale_model_stat_to_variance(output[layer_name], single_layer_variance)
         self.model_buffer = None
         self.model_counter = 0
         return output

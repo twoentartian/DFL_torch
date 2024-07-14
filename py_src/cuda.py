@@ -250,9 +250,9 @@ class CudaEnv:
             loss = criterion(output, labels)
             loss.backward()
             shared_optimizer_on_gpu.step()
-            training_node.model_status = shared_model_on_gpu.state_dict()
+            training_node.set_model_stat(shared_model_on_gpu.state_dict())
             CudaEnv.__optimizer_to(shared_optimizer_on_gpu, torch.device('cpu'))  # move optimizer data back to memory
-            training_node.optimizer_status = shared_optimizer_on_gpu.state_dict()
+            training_node.set_optimizer_stat(shared_optimizer_on_gpu.state_dict())
         else:
             """use dedicated model on gpu"""
             model = training_node.model

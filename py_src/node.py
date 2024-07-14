@@ -124,14 +124,24 @@ class Node:
         self.train_loader = dataset_with_fast_label.get_train_loader_by_label_prob(self.normalized_dataset_label_distribution, self.ml_setup.training_batch_size)
 
     def set_model_stat(self, model_stat):
-        """warning: model_stat is shallow copied"""
+        """warning: model_stat is shallow copied for dedicated GPU and CPU"""
         if self.use_cpu:
             self.model.load_state_dict(model_stat)
         else:
             if self.is_using_model_stat:
-                self.model_status = model_stat
+                self.model_status = copy.deepcopy(model_stat)
             else:
                 self.model.load_state_dict(model_stat)
+
+    def set_optimizer_stat(self, optimizer_stat):
+        """warning: model_stat is shallow copied for dedicated GPU and CPU"""
+        if self.use_cpu:
+            self.optimizer.load_state_dict(optimizer_stat)
+        else:
+            if self.is_using_model_stat:
+                self.optimizer_status = copy.deepcopy(optimizer_stat)
+            else:
+                self.optimizer.load_state_dict(optimizer_stat)
 
     def get_dataset_label_distribution(self):
         return self.normalized_dataset_label_distribution
