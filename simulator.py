@@ -123,6 +123,7 @@ def begin_simulation(runtime_parameters: RuntimeParameters, config_file, ml_conf
         for service_name, service_inst in runtime_parameters.service_container.items():
             service_inst.trigger(runtime_parameters)
 
+        nodes_averaged = set()
         for node_name, node_target in runtime_parameters.node_container.items():
             if node_target.is_training_this_tick:
                 send_model = node_target.is_sending_model()
@@ -143,7 +144,9 @@ def begin_simulation(runtime_parameters: RuntimeParameters, config_file, ml_conf
                         averaged_model = neighbor_node.model_averager.get_model(self_model=neighbor_node.get_model_stat())
                         neighbor_node.set_model_stat(averaged_model)
                         neighbor_node.is_averaging_this_tick = True
-                        simulator_base_logger.info(f"tick: {runtime_parameters.current_tick}, averaging on node: {neighbor_node.name}")
+                        nodes_averaged.add(neighbor_node.name)
+        if len(nodes_averaged) > 0:
+            simulator_base_logger.info(f"tick: {runtime_parameters.current_tick}, averaging on {len(nodes_averaged)} nodes: {nodes_averaged}")
 
         """"""""" after averaging """""""""
         runtime_parameters.phase = SimulationPhase.AFTER_AVERAGING
