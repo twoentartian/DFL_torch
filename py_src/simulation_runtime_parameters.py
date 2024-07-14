@@ -23,5 +23,4 @@ class RuntimeParameters:
         self.phase = SimulationPhase.INITIALIZING
         self.topology = None
 
-
-
+        self.service_container = {}

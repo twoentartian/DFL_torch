@@ -16,7 +16,7 @@ class MlSetup:
         self.dataset_label = None
 
     def self_validate(self):
-        pass # do nothing for now
+        pass  # do nothing for now
 
 
 """ CIFAR10 """

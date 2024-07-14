@@ -33,6 +33,7 @@ class Node:
     model_averager: model_average.ModelAverager
     model_buffer_size: int
     use_cpu: bool
+    send_model_after_P_training: int
 
     def __init__(self, name: int, ml_setup: MlSetup, use_model_stat: bool|None=None, allocated_gpu: CudaDevice=None, optimizer: None | torch.optim.Optimizer=None, use_cpu: bool=False):
         """
@@ -75,6 +76,19 @@ class Node:
         """status"""
         self.is_training_this_tick = False
         self.is_averaging_this_tick = False
+
+        """initial state"""
+        self.send_model_after_P_training = 1
+        self._send_model_counter = 0
+        self.most_recent_loss = 0
+
+    def is_sending_model(self) -> bool:
+        self._send_model_counter += 1
+        if self._send_model_counter >= self.send_model_after_P_training:
+            self._send_model_counter = 0
+            return True
+        else:
+            return False
 
     def reset_statu_flags(self):
         self.is_training_this_tick = False

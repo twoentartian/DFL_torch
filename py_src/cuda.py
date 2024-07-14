@@ -189,7 +189,7 @@ class CudaEnv:
                         if subparam._grad is not None:
                             subparam._grad.data = subparam._grad.data.to(device, non_blocking=True)
 
-    def submit_training_jobs(self, training_nodes, criteria: list[torch.nn.CrossEntropyLoss], training_data: list[torch.Tensor], training_label: list[torch.Tensor]):
+    def submit_training_jobs(self, training_nodes, criteria, training_data: list[torch.Tensor], training_label: list[torch.Tensor]):
         assert len(training_nodes) == len(criteria) == len(training_data) == len(training_label)
 
         output_loss = []
@@ -233,3 +233,35 @@ class CudaEnv:
             raise NotImplementedError("multiprocess is not implemented yet")
 
         return output_loss
+
+    def submit_training_job(self, training_node, criterion, training_data: torch.Tensor, training_label: torch.Tensor):
+        if training_node.is_using_model_stat:
+            """use model stat (share model on gpu)"""
+            gpu = training_node.allocated_gpu
+            shared_model_on_gpu = gpu.model
+            shared_optimizer_on_gpu = gpu.optimizer
+            shared_model_on_gpu.load_state_dict(training_node.model_status)
+            shared_optimizer_on_gpu.load_state_dict(training_node.optimizer_status)
+
+            shared_model_on_gpu.train()
+            data, labels = training_data.cuda(device=gpu.device), training_label.cuda(device=gpu.device)
+            shared_optimizer_on_gpu.zero_grad(set_to_none=True)
+            output = shared_model_on_gpu(data)
+            loss = criterion(output, labels)
+            loss.backward()
+            shared_optimizer_on_gpu.step()
+            training_node.model_status = shared_model_on_gpu.state_dict()
+            CudaEnv.__optimizer_to(shared_optimizer_on_gpu, torch.device('cpu'))  # move optimizer data back to memory
+            training_node.optimizer_status = shared_optimizer_on_gpu.state_dict()
+        else:
+            """use dedicated model on gpu"""
+            model = training_node.model
+            gpu = training_node.allocated_gpu
+            optimizer = training_node.optimizer
+            data, labels = training_data.cuda(device=gpu.device), training_label.cuda(device=gpu.device)
+            optimizer.zero_grad(set_to_none=True)
+            output = model(data)
+            loss = criterion(output, labels)
+            loss.backward()
+            optimizer.step()
+        return loss.item()
