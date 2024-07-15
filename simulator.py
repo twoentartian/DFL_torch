@@ -8,7 +8,7 @@ import torch
 
 from typing import Final
 from datetime import datetime
-from py_src import configuration_file, internal_names, initial_checking, cuda, node, dataset
+from py_src import configuration_file, internal_names, initial_checking, cuda, node, dataset, cpu
 from py_src.simulation_runtime_parameters import RuntimeParameters, SimulationPhase
 from py_src.ml_setup import MlSetup
 
@@ -38,17 +38,6 @@ def set_logging(log_file_path: str):
     simulator_base_logger.info("logging setup complete")
 
     del file, console, formatter
-
-
-def submit_training_job_cpu(training_node, criterion: torch.nn.CrossEntropyLoss, training_data: torch.Tensor, training_label: torch.Tensor):
-    model = training_node.model
-    optimizer = training_node.optimizer
-    optimizer.zero_grad(set_to_none=True)
-    output = model(training_data)
-    loss = criterion(output, training_label)
-    loss.backward()
-    optimizer.step()
-    return loss
 
 
 def begin_simulation(runtime_parameters: RuntimeParameters, config_file, ml_config: MlSetup, current_cuda_env):
@@ -94,7 +83,7 @@ def begin_simulation(runtime_parameters: RuntimeParameters, config_file, ml_conf
                 training_node_names.append(node_name)
                 for data, label in node_target.train_loader:
                     if config_file.force_use_cpu:
-                        loss = submit_training_job_cpu(node_target, ml_config.criterion, data, label)
+                        loss = cpu.submit_training_job_cpu(node_target, ml_config.criterion, data, label)
                         node_target.most_recent_loss = loss
                         simulator_base_logger.info(f"tick: {runtime_parameters.current_tick}, training node: {node_target.name}, loss={node_target.most_recent_loss:.2f}")
                     else:
