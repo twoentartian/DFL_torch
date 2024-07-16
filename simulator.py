@@ -8,7 +8,7 @@ import torch
 
 from typing import Final
 from datetime import datetime
-from py_src import configuration_file, internal_names, initial_checking, cuda, node, dataset, cpu
+from py_src import configuration_file, internal_names, initial_checking, cuda, node, dataset, cpu, dfl_logging
 from py_src.simulation_runtime_parameters import RuntimeParameters, SimulationPhase
 from py_src.ml_setup import MlSetup
 
@@ -16,28 +16,7 @@ simulator_base_logger = logging.getLogger(internal_names.logger_simulator_base_n
 
 REPORT_FINISH_TIME_PER_TICK: Final[int] = 100
 
-def set_logging(log_file_path: str):
-    class ExitOnExceptionHandler(logging.StreamHandler):
-        def emit(self, record):
-            if record.levelno == logging.CRITICAL:
-                raise SystemExit(-1)
 
-    formatter = logging.Formatter("[%(asctime)s] [%(levelname)8s] [%(name)s] --- %(message)s (%(filename)s:%(lineno)s)")
-
-    file = logging.FileHandler(log_file_path)
-    file.setLevel(logging.DEBUG)
-    file.setFormatter(formatter)
-    console = logging.StreamHandler(sys.stdout)
-    console.setLevel(logging.INFO)
-    console.setFormatter(formatter)
-
-    simulator_base_logger.setLevel(logging.DEBUG)
-    simulator_base_logger.addHandler(file)
-    simulator_base_logger.addHandler(console)
-    simulator_base_logger.addHandler(ExitOnExceptionHandler())
-    simulator_base_logger.info("logging setup complete")
-
-    del file, console, formatter
 
 
 def begin_simulation(runtime_parameters: RuntimeParameters, config_file, ml_config: MlSetup, current_cuda_env):
@@ -164,7 +143,7 @@ def main():
     os.mkdir(backup_path)
 
     # init logging
-    set_logging(os.path.join(output_folder_path, internal_names.log_file_name))
+    dfl_logging.set_logging(os.path.join(output_folder_path, internal_names.log_file_name), simulator_base_logger)
 
     # init config file
     config_file_path = args.config
