@@ -23,8 +23,6 @@ class CudaDevice:
         self.device_name = torch.cuda.get_device_name(device_index)
         self.id = f"cuda:{device_index}"
         self.device = torch.device(self.id)
-        self.executor = None
-        self.executor_size = None
         self.total_memory_MB = None
         self.free_memory_MB = None
         self.used_memory_MB = None
@@ -62,7 +60,7 @@ def _measure_memory_consumption_for_performing_ml_proc_func(cuda_device_list, se
     temp_train_loader = DataLoader(temp_training_data, batch_size=setup.training_batch_size, shuffle=True)
     criterion = torch.nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(temp_model.parameters(), lr=0.001)
-    for data, labels in temp_train_loader:
+    for index, (data, labels) in enumerate(temp_train_loader):
         data, labels = data.to(device=gpu_device), labels.to(device=gpu_device)
         temp_model.train()
         optimizer.zero_grad()
@@ -70,7 +68,8 @@ def _measure_memory_consumption_for_performing_ml_proc_func(cuda_device_list, se
         loss = criterion(output, labels)
         loss.backward()
         optimizer.step()
-        break
+        if index > 10:
+            break
     final_memory = torch.cuda.memory_allocated(device=gpu_device)
     shared_namespace.memory_consumption_model_MB = (final_memory - initial_memory) / 1024 ** 2  # convert to MB
     del temp_model, temp_training_data, temp_train_loader, criterion, optimizer
@@ -87,7 +86,7 @@ class CudaEnv:
         self.memory_consumption_dataset_MB = None
         self.memory_consumption_model_MB = None
         self.initialize()
-        self.mp_manager = mp.Manager()
+        self.mp_manager = None
         self.use_model_stat = None
         self.global_worker_model = None
 
@@ -109,16 +108,20 @@ class CudaEnv:
         self.__update_gpu_free_memory__()
         for device in self.cuda_device_list:
             logger.info(f"GPU {device.device_name}, used memory {device.used_memory_MB:.2f}/{device.total_memory_MB}MB")
-            if device.executor_size is not None:
-                logger.info(f"GPU {device.device_name} has {device.executor_size} workers")
 
     def measure_memory_consumption_for_performing_ml(self, setup: ml_setup.MlSetup):
+        if self.mp_manager is None:
+            self.mp_manager = mp.Manager()
         ns = self.mp_manager.Namespace()
         ns.memory_consumption_dataset_MB = 0
         ns.memory_consumption_model_MB = 0
+        """start a new process to measure GPU memory consumption"""
         p = mp.Process(target=_measure_memory_consumption_for_performing_ml_proc_func, args=(self.cuda_device_list, setup, ns), )
         p.start()
         p.join()
+        """run in current process"""
+        # _measure_memory_consumption_for_performing_ml_proc_func(self.cuda_device_list, setup, ns)
+
         self.memory_consumption_dataset_MB = ns.memory_consumption_dataset_MB
         self.memory_consumption_model_MB = ns.memory_consumption_model_MB
 

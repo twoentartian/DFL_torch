@@ -17,8 +17,6 @@ simulator_base_logger = logging.getLogger(internal_names.logger_simulator_base_n
 REPORT_FINISH_TIME_PER_TICK: Final[int] = 100
 
 
-
-
 def begin_simulation(runtime_parameters: RuntimeParameters, config_file, ml_config: MlSetup, current_cuda_env):
     # begin simulation
     timer = time.time()
@@ -129,12 +127,8 @@ def begin_simulation(runtime_parameters: RuntimeParameters, config_file, ml_conf
         runtime_parameters.current_tick += 1
 
 
-def main():
+def main(config_file_path):
     current_cuda_env = cuda.CudaEnv()
-
-    parser = argparse.ArgumentParser(description='DFL simulator (torch version)')
-    parser.add_argument('--config', type=str, default="./simulator_config.py", help='path to config file, default: "./simulator_config.py')
-    args = parser.parse_args()
 
     # create output dir
     output_folder_path = os.path.join(os.curdir, datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f"))
@@ -146,7 +140,6 @@ def main():
     dfl_logging.set_logging(os.path.join(output_folder_path, internal_names.log_file_name), simulator_base_logger)
 
     # init config file
-    config_file_path = args.config
     config_file = configuration_file.load_configuration(config_file_path)
     shutil.copy2(config_file_path, backup_path)  # backup config file
     simulator_base_logger.info(f"config file path: ({config_file_path}), name: ({config_file.config_name}).")
@@ -232,6 +225,10 @@ def main():
 
 
 if __name__ == "__main__":
-    # global initialization
     torch.multiprocessing.set_start_method('spawn')
-    main()
+
+    parser = argparse.ArgumentParser(description='DFL simulator (torch version)')
+    parser.add_argument('--config', type=str, default="./simulator_config.py", help='path to config file, default: "./simulator_config.py')
+    args = parser.parse_args()
+
+    main(args.config)
