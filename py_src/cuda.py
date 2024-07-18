@@ -4,8 +4,8 @@ import logging
 import gc
 import subprocess
 import numpy as np
-
-import torch.multiprocessing as mp
+import multiprocessing as python_mp
+import torch.multiprocessing as pytorch_mp
 from torch.utils.data import DataLoader
 from typing import List, Final
 from py_src import internal_names, util, ml_setup
@@ -16,6 +16,7 @@ logger = logging.getLogger(f"{internal_names.logger_simulator_base_name}.{util.b
 GPU_RESERVED_MEMORY_RATIO: Final[float] = 0.1
 GPU_MAX_WORKERS: Final[int] = 1
 GPU_SINGLE_THREAD_MODE: Final[bool] = True
+MEASURE_MODEL_MEMORY_CONSUMPTION_IN_A_NEW_PROCESS: Final[bool] = True
 
 
 class CudaDevice:
@@ -33,7 +34,7 @@ class CudaDevice:
         self.nodes_allocated = None
 
 
-def _measure_memory_consumption_for_performing_ml_proc_func(cuda_device_list, setup: ml_setup.MlSetup, shared_namespace):
+def _measure_memory_consumption_for_performing_ml_proc_func(cuda_device_list, setup: ml_setup.MlSetup, return_queue=None):
     if len(cuda_device_list) == 0:
         return
 
@@ -50,7 +51,8 @@ def _measure_memory_consumption_for_performing_ml_proc_func(cuda_device_list, se
     temp_training_data.data = temp_training_data.data.to(device=gpu_device)
     temp_testing_data.data = temp_testing_data.data.to(device=gpu_device)
     final_memory = torch.cuda.memory_allocated(device=gpu_device)
-    shared_namespace.memory_consumption_dataset_MB = (final_memory - initial_memory) / 1024 ** 2  # convert to MB
+    memory_consumption_dataset_MB = (final_memory - initial_memory) / 1024 ** 2  # convert to MB
+    del temp_training_data.data, temp_testing_data.data
     del temp_training_data, temp_testing_data
     # model
     initial_memory = torch.cuda.memory_allocated(device=gpu_device)
@@ -58,7 +60,7 @@ def _measure_memory_consumption_for_performing_ml_proc_func(cuda_device_list, se
     temp_training_data = copy.deepcopy(setup.training_data)
     temp_model = temp_model.to(device=gpu_device)
     temp_train_loader = DataLoader(temp_training_data, batch_size=setup.training_batch_size, shuffle=True)
-    criterion = torch.nn.CrossEntropyLoss()
+    criterion = copy.deepcopy(setup.criterion)
     optimizer = torch.optim.Adam(temp_model.parameters(), lr=0.001)
     for index, (data, labels) in enumerate(temp_train_loader):
         data, labels = data.to(device=gpu_device), labels.to(device=gpu_device)
@@ -71,12 +73,17 @@ def _measure_memory_consumption_for_performing_ml_proc_func(cuda_device_list, se
         if index > 10:
             break
     final_memory = torch.cuda.memory_allocated(device=gpu_device)
-    shared_namespace.memory_consumption_model_MB = (final_memory - initial_memory) / 1024 ** 2  # convert to MB
+    memory_consumption_model_MB = (final_memory - initial_memory) / 1024 ** 2  # convert to MB
     del temp_model, temp_training_data, temp_train_loader, criterion, optimizer
 
-    gc.collect()
     torch.cuda.empty_cache()
+    torch.cuda.ipc_collect()
+    gc.collect()
 
+    if return_queue is not None:
+        return_queue.put((memory_consumption_dataset_MB, memory_consumption_model_MB))
+    else:
+        return memory_consumption_dataset_MB, memory_consumption_model_MB
 
 class CudaEnv:
     def __init__(self):
@@ -86,7 +93,6 @@ class CudaEnv:
         self.memory_consumption_dataset_MB = None
         self.memory_consumption_model_MB = None
         self.initialize()
-        self.mp_manager = None
         self.use_model_stat = None
         self.global_worker_model = None
 
@@ -109,23 +115,24 @@ class CudaEnv:
         for device in self.cuda_device_list:
             logger.info(f"GPU {device.device_name}, used memory {device.used_memory_MB:.2f}/{device.total_memory_MB}MB")
 
-    def measure_memory_consumption_for_performing_ml(self, setup: ml_setup.MlSetup):
-        if self.mp_manager is None:
-            self.mp_manager = mp.Manager()
-        ns = self.mp_manager.Namespace()
-        ns.memory_consumption_dataset_MB = 0
-        ns.memory_consumption_model_MB = 0
-        """start a new process to measure GPU memory consumption"""
-        p = mp.Process(target=_measure_memory_consumption_for_performing_ml_proc_func, args=(self.cuda_device_list, setup, ns), )
-        p.start()
-        p.join()
-        """run in current process"""
-        # _measure_memory_consumption_for_performing_ml_proc_func(self.cuda_device_list, setup, ns)
+    def measure_memory_consumption_for_performing_ml(self, setup: ml_setup.MlSetup, measure_in_new_process=MEASURE_MODEL_MEMORY_CONSUMPTION_IN_A_NEW_PROCESS):
+        if measure_in_new_process:
+            """start a new process to measure GPU memory consumption"""
+            queue = python_mp.Queue()
+            p = pytorch_mp.Process(target=_measure_memory_consumption_for_performing_ml_proc_func, args=(self.cuda_device_list, setup, queue), )
+            p.start()
+            p.join()
+            (dataset_memory_MB, model_memory_MB) = queue.get()
+            self.memory_consumption_dataset_MB = dataset_memory_MB
+            self.memory_consumption_model_MB = model_memory_MB
+        else:
+            """run in current process"""
+            dataset_memory_MB, model_memory_MB = _measure_memory_consumption_for_performing_ml_proc_func(self.cuda_device_list, setup)
+            self.memory_consumption_dataset_MB = dataset_memory_MB
+            self.memory_consumption_model_MB = model_memory_MB
 
-        self.memory_consumption_dataset_MB = ns.memory_consumption_dataset_MB
-        self.memory_consumption_model_MB = ns.memory_consumption_model_MB
-
-    def __update_gpu_free_memory__(self):
+    @staticmethod
+    def get_gpu_memory_info():
         nvidia_smi_result = subprocess.run(['nvidia-smi', '--query-gpu=memory.total,memory.used,memory.free,gpu_name', '--format=csv,nounits,noheader'], stdout=subprocess.PIPE)
         output = nvidia_smi_result.stdout.decode('utf-8').strip().split('\n')
         nvidia_smi_gpu_info = []
@@ -134,13 +141,26 @@ class CudaEnv:
             total_memory, used_memory, free_memory = map(int, [total_memory, used_memory, free_memory])
             nvidia_smi_gpu_info.append({'gpu_id': i, 'total_memory': total_memory, 'used_memory': used_memory, 'free_memory': free_memory, 'gpu_name': gpu_name})
 
-        assert len(self.cuda_device_list) == len(nvidia_smi_gpu_info)
-        for index, gpu in enumerate(self.cuda_device_list):
+        output_list = []
+        for index, gpu in enumerate(nvidia_smi_gpu_info):
             current_nvidia_smi_info = nvidia_smi_gpu_info[index]
-            assert gpu.device_name == current_nvidia_smi_info['gpu_name']
-            gpu.total_memory_MB = current_nvidia_smi_info['total_memory']
-            gpu.used_memory_MB = current_nvidia_smi_info['used_memory']
-            gpu.free_memory_MB = gpu.total_memory_MB - gpu.used_memory_MB
+            device_name = current_nvidia_smi_info['gpu_name']
+            total_memory_MB = current_nvidia_smi_info['total_memory']
+            used_memory_MB = current_nvidia_smi_info['used_memory']
+            free_memory_MB = total_memory_MB - used_memory_MB
+            output_list.append((device_name, total_memory_MB, used_memory_MB, free_memory_MB))
+        return output_list
+
+    def __update_gpu_free_memory__(self):
+        gpu_infos = self.get_gpu_memory_info()
+        assert len(gpu_infos) == len(self.cuda_device_list)
+        for index, gpu_info in enumerate(gpu_infos):
+            pytorch_gpu_info = self.cuda_device_list[index]
+            (gpu_name, total_memory_MB, used_memory_MB, free_memory_MB) = gpu_info
+            assert pytorch_gpu_info.device_name == gpu_name
+            pytorch_gpu_info.free_memory_MB = free_memory_MB
+            pytorch_gpu_info.used_memory_MB = used_memory_MB
+            pytorch_gpu_info.total_memory_MB = total_memory_MB
 
     def generate_execution_strategy(self, model, config_file, config_ml_setup, node_count, override_use_model_stat: None | bool = None):
         self.__update_gpu_free_memory__()

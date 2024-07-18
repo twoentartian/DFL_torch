@@ -9,7 +9,7 @@ from datetime import datetime
 
 from mpi4py import MPI
 
-from py_src import internal_names, configuration_file, dfl_logging, nx_lib, initial_checking, cuda
+from py_src import internal_names, configuration_file, dfl_logging, nx_lib, initial_checking, cuda, mpi_util
 from py_src.simulation_runtime_parameters import RuntimeParameters, SimulationPhase
 
 simulator_base_logger = logging.getLogger(internal_names.logger_simulator_base_name)
@@ -57,13 +57,9 @@ def main(config_file_path):
         communities = None
     communities = MPI_comm.bcast(communities, root=0)
     nodes_map = {}
-    self_nodes = None
     for temp_rank in range(MPI_size):
-        if temp_rank == MPI_rank:
-            self_nodes = communities[temp_rank]
-        else:
-            nodes_map[temp_rank] = communities[temp_rank]
-    simulator_base_logger.info(f"MPI RANK {MPI_rank} has {len(self_nodes)} nodes: {self_nodes}")
+        nodes_map[temp_rank] = communities[temp_rank]
+    self_nodes = nodes_map[MPI_rank]
 
     # set up runtime_parameters
     runtime_parameters = RuntimeParameters()
@@ -86,8 +82,38 @@ def main(config_file_path):
     # cuda
     current_cuda_env = cuda.CudaEnv()
     if MPI_rank == 0:
-        current_cuda_env.measure_memory_consumption_for_performing_ml(config_ml_setup)
-        current_cuda_env.generate_execution_strategy(config_ml_setup.model, config_file, config_ml_setup, len(nodes_set), override_use_model_stat=config_file.override_use_model_stat)
+        current_cuda_env.measure_memory_consumption_for_performing_ml(config_ml_setup, measure_in_new_process=False)
+        current_cuda_env.print_ml_info()
+    MPI_comm.barrier()
+    cuda_info = mpi_util.collect_sys_cuda_info()
+    all_mpi_info = MPI_comm.gather(cuda_info, root=0)
+    mpi_world = mpi_util.MpiWorld()
+    if MPI_rank == 0:
+        for mpi_process_rank, cuda_info in enumerate(all_mpi_info):
+            hostname, gpus = cuda_info
+            if hostname not in mpi_world.all_hosts:
+                temp_host = mpi_util.MpiHost(hostname)
+                for gpu_index, gpu in enumerate(gpus):
+                    gpu_name, total_mem, used_mem, free_mem = gpu
+                    temp_host.add_gpu(gpu_index, gpu_name, total_mem, free_mem)
+                mpi_world.add_mpi_host(temp_host)
+            else:
+                # check gpu names match
+                assert len(gpus) == len(mpi_world.all_hosts[hostname].gpus)
+                for index, gpu in mpi_world.all_hosts[hostname].gpus.items():
+                    gpu_name, total_mem, used_mem, free_mem = gpus[index]
+                    assert gpu.name == gpu_name
+            mpi_world.all_hosts[hostname].add_mpi_process_rank(mpi_process_rank, nodes_map[mpi_process_rank])
+
+        # print all MPI host info
+        mpi_world.print_info()
+    if MPI_rank == 0:
+        mpi_world.determine_mem_strategy(current_cuda_env.memory_consumption_model_MB, current_cuda_env.memory_consumption_dataset_MB, override_use_model_stat=config_file.override_use_model_stat)
+        strategy = mpi_world.gpu_mem_strategy
+    else:
+        strategy = None
+    strategy = MPI_comm.bcast(strategy, root=0)
+
 
 
 
