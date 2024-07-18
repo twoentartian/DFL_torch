@@ -162,20 +162,25 @@ class CudaEnv:
             pytorch_gpu_info.used_memory_MB = used_memory_MB
             pytorch_gpu_info.total_memory_MB = total_memory_MB
 
-    def generate_execution_strategy(self, model, config_file, config_ml_setup, node_count, override_use_model_stat: None | bool = None):
+    def generate_execution_strategy(self, model, config_file, config_ml_setup, node_count, override_use_model_stat: None | bool = None, override_allocate_all_models: None | bool = None):
         self.__update_gpu_free_memory__()
         if GPU_SINGLE_THREAD_MODE:
             model_capacity_per_gpu = []
             if override_use_model_stat is None:
                 override_use_model_stat = False
-            if not override_use_model_stat:
-                # for GPU_SINGLE_THREAD_MODE, can we put all models to GPU memory?
-                for gpu in self.cuda_device_list:
-                    model_capacity_for_this_gpu = int((gpu.total_memory_MB * (1 - GPU_RESERVED_MEMORY_RATIO) - gpu.used_memory_MB - self.memory_consumption_dataset_MB) // self.memory_consumption_model_MB)
-                    model_capacity_per_gpu.append(model_capacity_for_this_gpu)
-                use_model_stat = (sum(model_capacity_per_gpu) < node_count)
+            if override_allocate_all_models is None:
+                override_allocate_all_models = False
+            if override_use_model_stat:
+                use_model_stat = True
             else:
-                use_model_stat = override_use_model_stat
+                if not override_use_model_stat:
+                    # for GPU_SINGLE_THREAD_MODE, can we put all models to GPU memory?
+                    for gpu in self.cuda_device_list:
+                        model_capacity_for_this_gpu = int((gpu.total_memory_MB * (1 - GPU_RESERVED_MEMORY_RATIO) - gpu.used_memory_MB - self.memory_consumption_dataset_MB) // self.memory_consumption_model_MB)
+                        model_capacity_per_gpu.append(model_capacity_for_this_gpu)
+                    use_model_stat = (sum(model_capacity_per_gpu) < node_count)
+                else:
+                    use_model_stat = override_use_model_stat
             if use_model_stat:
                 # it's impossible to allocate all model to GPU memory, so we only allocate one model to the first gpu and each node keep model_stat
                 logger.info(f"GPU execution strategy: SHARE_MODEL_ON_GPU -- keep model stat in memory and all nodes share one model on GPU")

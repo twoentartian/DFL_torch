@@ -160,7 +160,10 @@ def main(config_file_path):
     # init cuda
     if not config_file.force_use_cpu:
         current_cuda_env.measure_memory_consumption_for_performing_ml(config_ml_setup)
-        current_cuda_env.generate_execution_strategy(config_ml_setup.model, config_file, config_ml_setup, len(nodes_set), override_use_model_stat=config_file.override_use_model_stat)
+        current_cuda_env.measure_memory_consumption_for_performing_ml(config_ml_setup)
+        current_cuda_env.generate_execution_strategy(config_ml_setup.model, config_file, config_ml_setup, len(nodes_set),
+                                                     override_use_model_stat=config_file.override_use_model_stat,
+                                                     override_allocate_all_models=config_file.override_allocate_all_models)
         current_cuda_env.print_ml_info()
         current_cuda_env.print_gpu_info()
 

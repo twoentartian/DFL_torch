@@ -69,25 +69,30 @@ class MpiWorld(object):
         for _, host in self.all_hosts.items():
             host.print_info()
 
-    def determine_mem_strategy(self, model_size, dataset_size, override_use_model_stat):
+    def determine_mem_strategy(self, model_size, dataset_size, override_use_model_stat: None | bool = None, override_allocate_all_models: None | bool = None):
         if override_use_model_stat is None:
             override_use_model_stat = False
-        if not override_use_model_stat:
-            allocate_all_models = True
-            for host in self.all_hosts.values():
-                total_gpu_free_mem = 0
-                for gpu in host.gpus.values():
-                    total_gpu_free_mem += gpu.free_mem
-                total_nodes = 0
-                for mpi_process in host.mpi_process.values():
-                    total_nodes += len(mpi_process.nodes)
-                allocate_all_model_require_memory = total_nodes * model_size + dataset_size
-                if total_gpu_free_mem*(1-cuda.GPU_RESERVED_MEMORY_RATIO) <= allocate_all_model_require_memory:
-                    allocate_all_models = False
-            if allocate_all_models:
-                self.gpu_mem_strategy = MpiGpuMemStrategy.AllocateAllModels
+        if override_allocate_all_models is None:
+            override_allocate_all_models = False
+        if override_allocate_all_models:
+            self.gpu_mem_strategy = MpiGpuMemStrategy.AllocateAllModels
+        else:
+            if not override_use_model_stat:
+                allocate_all_models = True
+                for host in self.all_hosts.values():
+                    total_gpu_free_mem = 0
+                    for gpu in host.gpus.values():
+                        total_gpu_free_mem += gpu.free_mem
+                    total_nodes = 0
+                    for mpi_process in host.mpi_process.values():
+                        total_nodes += len(mpi_process.nodes)
+                    allocate_all_model_require_memory = total_nodes * model_size + dataset_size
+                    if total_gpu_free_mem*(1-cuda.GPU_RESERVED_MEMORY_RATIO) <= allocate_all_model_require_memory:
+                        allocate_all_models = False
+                if allocate_all_models:
+                    self.gpu_mem_strategy = MpiGpuMemStrategy.AllocateAllModels
+                else:
+                    self.gpu_mem_strategy = MpiGpuMemStrategy.ShareSingleModel
             else:
                 self.gpu_mem_strategy = MpiGpuMemStrategy.ShareSingleModel
-        else:
-            self.gpu_mem_strategy = MpiGpuMemStrategy.ShareSingleModel
         logger.info(f"GPU memory strategy: {self.gpu_mem_strategy.name}. Total memory required: {allocate_all_model_require_memory:.2f}MB, available: {total_gpu_free_mem}MB.")

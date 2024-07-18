@@ -18,6 +18,7 @@ force_use_cpu = False
 """do you want to put all models in GPU or only keep model stat in memory and share a model in gpu?"""
 """None | False: let simulator decide"""
 override_use_model_stat = None
+override_allocate_all_models = True
 
 """"""""" Global Machine learning related parameters """""""""""
 """ predefined: """
