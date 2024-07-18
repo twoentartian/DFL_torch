@@ -1,22 +1,139 @@
 import argparse
 import logging
 import os
-import sys
 import shutil
-import networkx as nx
+import time
 import torch
-from datetime import datetime
 
+from typing import Final
+from datetime import datetime
 from mpi4py import MPI
 
-from py_src import internal_names, configuration_file, dfl_logging, nx_lib, initial_checking, cuda, mpi_util
+from py_src import internal_names, configuration_file, dfl_logging, nx_lib, initial_checking, cuda, mpi_util, dataset, node, cpu
 from py_src.simulation_runtime_parameters import RuntimeParameters, SimulationPhase
+from py_src.ml_setup import MlSetup
 
 simulator_base_logger = logging.getLogger(internal_names.logger_simulator_base_name)
+
+REPORT_FINISH_TIME_PER_TICK: Final[int] = 100
 
 MPI_comm = MPI.COMM_WORLD
 MPI_rank = MPI_comm.Get_rank()
 MPI_size = MPI_comm.Get_size()
+
+def begin_simulation(runtime_parameters: RuntimeParameters, config_file, ml_config: MlSetup, current_cuda_env, mpi_world: mpi_util.MpiWorld):
+    # begin simulation
+    timer = time.time()
+    while runtime_parameters.current_tick <= config_file.max_tick:
+        # report remaining time
+        if runtime_parameters.current_tick % REPORT_FINISH_TIME_PER_TICK == 0 and runtime_parameters.current_tick != 0:
+            time_elapsed = time.time() - timer
+            timer = time.time()
+            remaining = (config_file.max_tick - runtime_parameters.current_tick) // REPORT_FINISH_TIME_PER_TICK
+            time_to_finish = remaining * time_elapsed
+            finish_time = timer + time_to_finish
+            simulator_base_logger.info(f"time taken for {REPORT_FINISH_TIME_PER_TICK} ticks: {time_elapsed:.2f}s ,expected to finish at {datetime.fromtimestamp(finish_time)}")
+
+        """"""""" start of tick """""""""
+        runtime_parameters.phase = SimulationPhase.START_OF_TICK
+        for service_name, service_inst in runtime_parameters.service_container.items():
+            service_inst.trigger(runtime_parameters)
+
+        # reset all status flags
+        for node_name, node_target in runtime_parameters.node_container.items():
+            node_target.reset_statu_flags()
+
+        """"""""" before training """""""""
+        runtime_parameters.phase = SimulationPhase.BEFORE_TRAINING
+        for service_name, service_inst in runtime_parameters.service_container.items():
+            service_inst.trigger(runtime_parameters)
+
+        """"""""" training """""""""
+        runtime_parameters.phase = SimulationPhase.TRAINING
+        for service_name, service_inst in runtime_parameters.service_container.items():
+            service_inst.trigger(runtime_parameters)
+
+        simulator_base_logger.info(f"current tick: {runtime_parameters.current_tick}/{runtime_parameters.max_tick}")
+        node_target: node.Node
+        node_name: str
+
+        training_node_names = []
+        for node_name, node_target in runtime_parameters.node_container.items():
+            if node_target.next_training_tick == runtime_parameters.current_tick:
+                node_target.is_training_this_tick = True
+                training_node_names.append(node_name)
+                for data, label in node_target.train_loader:
+                    if config_file.force_use_cpu:
+                        loss = cpu.submit_training_job_cpu(node_target, ml_config.criterion, data, label)
+                        node_target.most_recent_loss = loss
+                        simulator_base_logger.info(f"tick: {runtime_parameters.current_tick}, training node: {node_target.name}, loss={node_target.most_recent_loss:.2f}")
+                    else:
+                        loss = current_cuda_env.submit_training_job(node_target, ml_config.criterion, data, label)
+                        node_target.most_recent_loss = loss
+                        simulator_base_logger.info(f"tick: {runtime_parameters.current_tick}, training node: {node_target.name}, loss={node_target.most_recent_loss:.2f}")
+                    break
+
+        """update next training tick"""
+        for index, node_name in enumerate(training_node_names):
+            node_target = runtime_parameters.node_container[node_name]
+            node_target.next_training_tick = config_file.get_next_training_time(node_target, runtime_parameters)
+
+        """"""""" after training """""""""
+        runtime_parameters.phase = SimulationPhase.AFTER_TRAINING
+        for service_name, service_inst in runtime_parameters.service_container.items():
+            service_inst.trigger(runtime_parameters)
+
+        MPI_comm.barrier()
+
+        """"""""" before averaging """""""""
+        runtime_parameters.phase = SimulationPhase.BEFORE_AVERAGING
+        for service_name, service_inst in runtime_parameters.service_container.items():
+            service_inst.trigger(runtime_parameters)
+
+        """"""""" averaging """""""""
+        runtime_parameters.phase = SimulationPhase.AVERAGING
+        for service_name, service_inst in runtime_parameters.service_container.items():
+            service_inst.trigger(runtime_parameters)
+
+        nodes_averaged = set()
+        for node_name, node_target in runtime_parameters.node_container.items():
+            if node_target.is_training_this_tick:
+                send_model = node_target.is_sending_model()
+                if not send_model:
+                    continue
+
+                # get model stat
+                model_stat = node_target.get_model_stat()
+                for k, v in model_stat.items():
+                    model_stat[k] = v.cpu()
+                # send model to peers
+                neighbors = list(runtime_parameters.topology.neighbors(node_target.name))
+                for neighbor in neighbors:
+                    neighbor_node: node.Node = runtime_parameters.node_container[neighbor]
+                    neighbor_node.model_averager.add_model(model_stat)
+                    if neighbor_node.model_buffer_size <= neighbor_node.model_averager.get_model_count():
+                        # performing average!
+                        averaged_model = neighbor_node.model_averager.get_model(self_model=neighbor_node.get_model_stat())
+                        neighbor_node.set_model_stat(averaged_model)
+                        neighbor_node.is_averaging_this_tick = True
+                        nodes_averaged.add(neighbor_node.name)
+
+
+        if len(nodes_averaged) > 0:
+            simulator_base_logger.info(f"tick: {runtime_parameters.current_tick}, averaging on {len(nodes_averaged)} nodes: {nodes_averaged}")
+
+        """"""""" after averaging """""""""
+        runtime_parameters.phase = SimulationPhase.AFTER_AVERAGING
+        for service_name, service_inst in runtime_parameters.service_container.items():
+            service_inst.trigger(runtime_parameters)
+
+        """"""""" end of tick """""""""
+        runtime_parameters.phase = SimulationPhase.END_OF_TICK
+        for service_name, service_inst in runtime_parameters.service_container.items():
+            service_inst.trigger(runtime_parameters)
+
+        runtime_parameters.current_tick += 1
+
 
 def main(config_file_path):
     # create output dir
@@ -33,7 +150,6 @@ def main(config_file_path):
 
     output_folder_path = os.path.join(output_folder_path, f"rank_{MPI_rank}")
     os.mkdir(output_folder_path)
-
 
     # init logging
     dfl_logging.set_logging(os.path.join(output_folder_path, internal_names.log_file_name), simulator_base_logger)
@@ -85,12 +201,13 @@ def main(config_file_path):
         current_cuda_env.measure_memory_consumption_for_performing_ml(config_ml_setup, measure_in_new_process=False)
         current_cuda_env.print_ml_info()
     MPI_comm.barrier()
-    cuda_info = mpi_util.collect_sys_cuda_info()
-    all_mpi_info = MPI_comm.gather(cuda_info, root=0)
+    sys_cuda_info = mpi_util.collect_sys_cuda_info()
+
+    all_mpi_info = MPI_comm.gather(sys_cuda_info, root=0)
     mpi_world = mpi_util.MpiWorld()
     if MPI_rank == 0:
-        for mpi_process_rank, cuda_info in enumerate(all_mpi_info):
-            hostname, gpus = cuda_info
+        for mpi_process_rank, sys_cuda_info in enumerate(all_mpi_info):
+            hostname, gpus = sys_cuda_info
             if hostname not in mpi_world.all_hosts:
                 temp_host = mpi_util.MpiHost(hostname)
                 for gpu_index, gpu in enumerate(gpus):
@@ -104,18 +221,88 @@ def main(config_file_path):
                     gpu_name, total_mem, used_mem, free_mem = gpus[index]
                     assert gpu.name == gpu_name
             mpi_world.all_hosts[hostname].add_mpi_process_rank(mpi_process_rank, nodes_map[mpi_process_rank])
-
+        mpi_world.allocate_nodes_to_gpu()
         # print all MPI host info
         mpi_world.print_info()
+
     if MPI_rank == 0:
         mpi_world.determine_mem_strategy(current_cuda_env.memory_consumption_model_MB, current_cuda_env.memory_consumption_dataset_MB, override_use_model_stat=config_file.override_use_model_stat)
         strategy = mpi_world.gpu_mem_strategy
     else:
         strategy = None
+    mpi_world = MPI_comm.bcast(mpi_world, root=0)
     strategy = MPI_comm.bcast(strategy, root=0)
 
+    # self information
+    self_hostname, _ = sys_cuda_info
+    self_host = mpi_world.all_hosts[self_hostname]
+    self_mpi_process = self_host.mpi_process[MPI_rank]
+    self_gpu = self_mpi_process.allocated_gpu
+    self_nodes = self_mpi_process.nodes
 
+    # allocate model memory
+    if strategy == mpi_util.MpiGpuMemStrategy.AllocateAllModels:
+        current_cuda_env.use_model_stat = False
+    elif strategy == mpi_util.MpiGpuMemStrategy.ShareSingleModel:
+        current_cuda_env.use_model_stat = True
+    else:
+        raise NotImplementedError
+    simulator_base_logger.info(f"MPI Process {self_mpi_process.rank} allocates {len(self_nodes)} nodes on GPU {self_gpu.gpu_index} of HOST {self_hostname} ({self_gpu.name})")
+    current_cuda_env.mpi_prepare_gpu_memory(config_ml_setup.model, config_file, config_ml_setup, self_nodes, self_mpi_process.allocated_gpu.gpu_index)
 
+    # create dataset
+    training_dataset = dataset.DatasetWithFastLabelSelection(config_ml_setup.training_data)
+
+    # create nodes
+    runtime_parameters.node_container = {}
+    for single_node in self_nodes:
+        if config_file.force_use_cpu:
+            temp_node = node.Node(single_node, config_ml_setup, use_cpu=True)
+            # create optimizer for this node if using cpu
+            optimizer = config_file.get_optimizer(temp_node, temp_node.model, runtime_parameters, config_ml_setup)
+            temp_node.set_optimizer(optimizer)
+        else:
+            gpu = current_cuda_env.cuda_device_list[self_gpu.gpu_index]
+            if current_cuda_env.use_model_stat:
+                temp_node = node.Node(single_node, config_ml_setup, use_model_stat=True, allocated_gpu=gpu, optimizer=gpu.optimizer)
+            else:
+                temp_node = node.Node(single_node, config_ml_setup, use_model_stat=False, allocated_gpu=gpu)
+                # create optimizer for this node if using model stat
+                optimizer = config_file.get_optimizer(temp_node, temp_node.model, runtime_parameters, config_ml_setup)
+                temp_node.set_optimizer(optimizer)
+        # setup ml config(dataset label distribution, etc)
+        temp_node.set_ml_setup(config_ml_setup)
+
+        # next training tick
+        next_training_time = config_file.get_next_training_time(temp_node, runtime_parameters)
+        temp_node.set_next_training_tick(next_training_time)
+        # average_algorithm
+        average_algorithm = config_file.get_average_algorithm(temp_node, runtime_parameters)
+        temp_node.set_average_algorithm(average_algorithm)
+        # average buffer size
+        average_buffer_size = config_file.get_average_buffer_size(temp_node, runtime_parameters)
+        temp_node.set_average_buffer_size(average_buffer_size)
+        # label distribution
+        label_distribution = config_file.get_label_distribution(temp_node, runtime_parameters)
+        assert label_distribution is not None
+        temp_node.set_label_distribution(label_distribution, training_dataset)
+        # add node to container
+        runtime_parameters.node_container[single_node] = temp_node
+
+    # init nodes
+    config_file.node_behavior_control(runtime_parameters)
+
+    # init service
+    service_list = config_file.get_service_list()
+    for service_inst in service_list:
+        service_inst.initialize(runtime_parameters, output_folder_path, config_file=config_file, ml_setup=config_ml_setup, cuda_env=current_cuda_env)
+        runtime_parameters.service_container[service_inst.get_service_name()] = service_inst
+
+    # begin simulation
+    runtime_parameters.mpi_enabled = True
+    begin_simulation(runtime_parameters, config_file, config_ml_setup, current_cuda_env, mpi_world)
+
+    exit(0)
 
 def distribut_computing_workload(config_file_path, num_of_communities):
     config_file = configuration_file.load_configuration(config_file_path)

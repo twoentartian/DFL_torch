@@ -2,7 +2,6 @@ import argparse
 import os
 import logging
 import shutil
-import sys
 import time
 import torch
 
@@ -161,9 +160,10 @@ def main(config_file_path):
     if not config_file.force_use_cpu:
         current_cuda_env.measure_memory_consumption_for_performing_ml(config_ml_setup)
         current_cuda_env.measure_memory_consumption_for_performing_ml(config_ml_setup)
-        current_cuda_env.generate_execution_strategy(config_ml_setup.model, config_file, config_ml_setup, len(nodes_set),
+        current_cuda_env.generate_execution_strategy(len(nodes_set),
                                                      override_use_model_stat=config_file.override_use_model_stat,
                                                      override_allocate_all_models=config_file.override_allocate_all_models)
+        current_cuda_env.prepare_gpu_memory(config_ml_setup.model, config_file, config_ml_setup, len(nodes_set))
         current_cuda_env.print_ml_info()
         current_cuda_env.print_gpu_info()
 
@@ -222,6 +222,7 @@ def main(config_file_path):
         runtime_parameters.service_container[service_inst.get_service_name()] = service_inst
 
     # begin simulation
+    runtime_parameters.mpi_enabled = False
     begin_simulation(runtime_parameters, config_file, config_ml_setup, current_cuda_env)
 
     exit(0)

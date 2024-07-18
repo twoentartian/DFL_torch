@@ -95,6 +95,7 @@ class CudaEnv:
         self.initialize()
         self.use_model_stat = None
         self.global_worker_model = None
+        self.model_capacity_per_gpu = None
 
     def initialize(self):
         if self._initialized:
@@ -162,7 +163,7 @@ class CudaEnv:
             pytorch_gpu_info.used_memory_MB = used_memory_MB
             pytorch_gpu_info.total_memory_MB = total_memory_MB
 
-    def generate_execution_strategy(self, model, config_file, config_ml_setup, node_count, override_use_model_stat: None | bool = None, override_allocate_all_models: None | bool = None):
+    def generate_execution_strategy(self, node_count, override_use_model_stat: None | bool = None, override_allocate_all_models: None | bool = None):
         self.__update_gpu_free_memory__()
         if GPU_SINGLE_THREAD_MODE:
             model_capacity_per_gpu = []
@@ -170,7 +171,7 @@ class CudaEnv:
                 override_use_model_stat = False
             if override_allocate_all_models is None:
                 override_allocate_all_models = False
-            if override_use_model_stat:
+            if override_allocate_all_models:
                 use_model_stat = True
             else:
                 if not override_use_model_stat:
@@ -181,10 +182,18 @@ class CudaEnv:
                     use_model_stat = (sum(model_capacity_per_gpu) < node_count)
                 else:
                     use_model_stat = override_use_model_stat
-            if use_model_stat:
+            self.use_model_stat = use_model_stat
+            self.model_capacity_per_gpu = model_capacity_per_gpu
+        else:
+            raise NotImplementedError("multiprocess is not implemented yet")
+
+    def prepare_gpu_memory(self, model, config_file, config_ml_setup, node_count):
+        assert self.use_model_stat is not None
+        if GPU_SINGLE_THREAD_MODE:
+            if self.use_model_stat:
                 # it's impossible to allocate all model to GPU memory, so we only allocate one model to the first gpu and each node keep model_stat
                 logger.info(f"GPU execution strategy: SHARE_MODEL_ON_GPU -- keep model stat in memory and all nodes share one model on GPU")
-                self.use_model_stat = True
+
                 gpu = self.cuda_device_list[0]
                 gpu.model = copy.deepcopy(model)
                 gpu.model = gpu.model.to(device=gpu.device)
@@ -193,14 +202,26 @@ class CudaEnv:
                 gpu.optimizer = config_file.get_optimizer(None, gpu.model, para, config_ml_setup)
                 gpu.nodes_allocated = set(range(node_count))
             else:
+                assert self.model_capacity_per_gpu is not None
                 # it's possible to allocate all model to GPU memory
                 logger.info(f"GPU execution strategy: DEDICATED_MODEL_ON_GPU each node has their own model on GPU")
-                self.use_model_stat = False
                 node_allocated = 0
                 for index, gpu in enumerate(self.cuda_device_list):
-                    gpu.nodes_allocated = set(range(node_allocated, node_allocated + model_capacity_per_gpu[index]))
+                    gpu.nodes_allocated = set(range(node_allocated, node_allocated + self.model_capacity_per_gpu[index]))
         else:
             raise NotImplementedError("multiprocess is not implemented yet")
+
+    def mpi_prepare_gpu_memory(self, model, config_file, config_ml_setup, nodes, gpu_index):
+        assert self.use_model_stat is not None
+        gpu = self.cuda_device_list[gpu_index]
+        gpu.nodes_allocated = set(nodes)
+        if self.use_model_stat:
+            gpu.model = copy.deepcopy(model)
+            gpu.model = gpu.model.to(device=gpu.device)
+            para = RuntimeParameters()
+            para.phase = SimulationPhase.INITIALIZING
+            gpu.optimizer = config_file.get_optimizer(None, gpu.model, para, config_ml_setup)
+
 
     @staticmethod
     def __optimizer_to(optim, device):

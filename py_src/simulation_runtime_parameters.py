@@ -24,3 +24,4 @@ class RuntimeParameters:
         self.topology = None
 
         self.service_container = {}
+        self.mpi_enabled = None

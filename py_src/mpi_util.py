@@ -24,11 +24,13 @@ class MpiGpu(object):
         self.total_mem = None
         self.free_mem = None
         self.used_mem = None
+        self.gpu_index = None
 
 class MpiProcess(object):
     def __init__(self, rank):
         self.rank = rank
         self.nodes = None
+        self.allocated_gpu = None
 
 class MpiHost(object):
     def __init__(self, hostname):
@@ -55,7 +57,7 @@ class MpiHost(object):
         for gpu_index, gpu in self.gpus.items():
             logger.info(f"GPU {gpu_index}: {gpu.name} total mem: {gpu.total_mem} free mem: {gpu.free_mem}")
         for mpi_process_rank, mpi_process in self.mpi_process.items():
-            logger.info(f"MPI Process {mpi_process.rank}: {mpi_process.nodes}")
+            logger.info(f"MPI Process {mpi_process.rank} on {mpi_process.allocated_gpu.name}: {mpi_process.nodes}")
 
 class MpiWorld(object):
     def __init__(self):
@@ -96,3 +98,13 @@ class MpiWorld(object):
             else:
                 self.gpu_mem_strategy = MpiGpuMemStrategy.ShareSingleModel
         logger.info(f"GPU memory strategy: {self.gpu_mem_strategy.name}. Total memory required: {allocate_all_model_require_memory:.2f}MB, available: {total_gpu_free_mem}MB.")
+
+    def allocate_nodes_to_gpu(self):
+        for host in self.all_hosts.values():
+            gpu_index = 0
+            total_gpu_count = len(host.gpus)
+            for single_mpi_process in host.mpi_process.values():
+                single_mpi_process.allocated_gpu = host.gpus[gpu_index]
+                gpu_index += 1
+                if gpu_index == total_gpu_count:
+                    gpu_index = 0
