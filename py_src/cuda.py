@@ -172,7 +172,7 @@ class CudaEnv:
             if override_allocate_all_models is None:
                 override_allocate_all_models = False
             if override_allocate_all_models:
-                use_model_stat = True
+                use_model_stat = False
             else:
                 if not override_use_model_stat:
                     # for GPU_SINGLE_THREAD_MODE, can we put all models to GPU memory?
@@ -181,7 +181,7 @@ class CudaEnv:
                         model_capacity_per_gpu.append(model_capacity_for_this_gpu)
                     use_model_stat = (sum(model_capacity_per_gpu) < node_count)
                 else:
-                    use_model_stat = override_use_model_stat
+                    use_model_stat = True
             self.use_model_stat = use_model_stat
             self.model_capacity_per_gpu = model_capacity_per_gpu
         else:

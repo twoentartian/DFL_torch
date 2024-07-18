@@ -5,9 +5,13 @@ from py_src import cuda, internal_names, util
 
 logger = logging.getLogger(f"{internal_names.logger_simulator_base_name}.{util.basename_without_extension(__file__)}")
 
-def collect_sys_cuda_info():
+
+def collect_netbios_name():
+    return platform.node()
+
+def collect_netbios_cuda_info():
     # collect netbios name
-    netbios_name = platform.node()
+    netbios_name = collect_netbios_name()
     # collect free GPU memory
     gpu_infos = cuda.CudaEnv.get_gpu_memory_info()
     return netbios_name, gpu_infos
@@ -53,11 +57,11 @@ class MpiHost(object):
         self.mpi_process[rank] = temp_process
 
     def print_info(self):
-        logger.info(f"Host: {self.hostname} contains {len(self.gpus)} GPUs and {len(self.mpi_process)} MPI processes({set(self.mpi_process.keys())}).")
+        logger.info(f"Host: '{self.hostname}' contains {len(self.gpus)} GPUs and {len(self.mpi_process)} MPI processes({set(self.mpi_process.keys())}).")
         for gpu_index, gpu in self.gpus.items():
-            logger.info(f"GPU {gpu_index}: {gpu.name} total mem: {gpu.total_mem} free mem: {gpu.free_mem}")
+            logger.info(f"GPU '{gpu_index}': {gpu.name} total mem: {gpu.total_mem} free mem: {gpu.free_mem}")
         for mpi_process_rank, mpi_process in self.mpi_process.items():
-            logger.info(f"MPI Process {mpi_process.rank} on {mpi_process.allocated_gpu.name}: {mpi_process.nodes}")
+            logger.info(f"MPI Process {mpi_process.rank} on '{mpi_process.allocated_gpu.name}': {mpi_process.nodes}")
 
 class MpiWorld(object):
     def __init__(self):
@@ -91,13 +95,15 @@ class MpiWorld(object):
                     allocate_all_model_require_memory = total_nodes * model_size + dataset_size
                     if total_gpu_free_mem*(1-cuda.GPU_RESERVED_MEMORY_RATIO) <= allocate_all_model_require_memory:
                         allocate_all_models = False
+                    logger.info(f"For host: '{host.hostname}'. Total memory required: {allocate_all_model_require_memory:.2f}MB, available: {total_gpu_free_mem}MB.")
                 if allocate_all_models:
                     self.gpu_mem_strategy = MpiGpuMemStrategy.AllocateAllModels
                 else:
                     self.gpu_mem_strategy = MpiGpuMemStrategy.ShareSingleModel
+                logger.info(f"GPU memory strategy: {self.gpu_mem_strategy.name}.")
             else:
                 self.gpu_mem_strategy = MpiGpuMemStrategy.ShareSingleModel
-        logger.info(f"GPU memory strategy: {self.gpu_mem_strategy.name}. Total memory required: {allocate_all_model_require_memory:.2f}MB, available: {total_gpu_free_mem}MB.")
+
 
     def allocate_nodes_to_gpu(self):
         for host in self.all_hosts.values():

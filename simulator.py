@@ -7,7 +7,7 @@ import torch
 
 from typing import Final
 from datetime import datetime
-from py_src import configuration_file, internal_names, initial_checking, cuda, node, dataset, cpu, dfl_logging
+from py_src import configuration_file, internal_names, initial_checking, cuda, node, dataset, cpu, dfl_logging, simulator_common
 from py_src.simulation_runtime_parameters import RuntimeParameters, SimulationPhase
 from py_src.ml_setup import MlSetup
 
@@ -102,14 +102,9 @@ def begin_simulation(runtime_parameters: RuntimeParameters, config_file, ml_conf
                 # send model to peers
                 neighbors = list(runtime_parameters.topology.neighbors(node_target.name))
                 for neighbor in neighbors:
-                    neighbor_node: node.Node = runtime_parameters.node_container[neighbor]
-                    neighbor_node.model_averager.add_model(model_stat)
-                    if neighbor_node.model_buffer_size <= neighbor_node.model_averager.get_model_count():
-                        # performing average!
-                        averaged_model = neighbor_node.model_averager.get_model(self_model=neighbor_node.get_model_stat())
-                        neighbor_node.set_model_stat(averaged_model)
-                        neighbor_node.is_averaging_this_tick = True
-                        nodes_averaged.add(neighbor_node.name)
+                    averaged = simulator_common.send_model_stat_to_receiver(runtime_parameters, neighbor, model_stat)
+                    if averaged:
+                        nodes_averaged.add(neighbor)
         if len(nodes_averaged) > 0:
             simulator_base_logger.info(f"tick: {runtime_parameters.current_tick}, averaging on {len(nodes_averaged)} nodes: {nodes_averaged}")
 
