@@ -33,7 +33,7 @@ class CudaDevice:
         self.optimizer = None
         self.nodes_allocated = None
 
-
+"""torch.cuda.mem_get_info()"""
 def _measure_memory_consumption_for_performing_ml_proc_func(cuda_device_list, setup: ml_setup.MlSetup, return_queue=None):
     if len(cuda_device_list) == 0:
         return
@@ -241,6 +241,11 @@ class CudaEnv:
                         if subparam._grad is not None:
                             subparam._grad.data = subparam._grad.data.to(device, non_blocking=True)
 
+    @staticmethod
+    def __model_state_dict_to(stat_dict, device):
+        for k, v in stat_dict.items():
+            stat_dict[k] = v.to(device, non_blocking=True)
+
     def submit_training_jobs(self, training_nodes, criteria, training_data: list[torch.Tensor], training_label: list[torch.Tensor]):
         assert len(training_nodes) == len(criteria) == len(training_data) == len(training_label)
 
@@ -265,7 +270,9 @@ class CudaEnv:
                     loss = criterion(output, labels)
                     loss.backward()
                     shared_optimizer_on_gpu.step()
-                    target_node.model_status = shared_model_on_gpu.state_dict()
+                    stat_dict = shared_model_on_gpu.state_dict()
+                    CudaEnv.__model_state_dict_to(stat_dict, torch.device('cpu'))
+                    target_node.model_status = stat_dict
                     CudaEnv.__optimizer_to(shared_optimizer_on_gpu, torch.device('cpu')) # move optimizer data back to memory
                     target_node.optimizer_status = shared_optimizer_on_gpu.state_dict()
                     output_loss.append(loss.item())
@@ -302,7 +309,9 @@ class CudaEnv:
             loss = criterion(output, labels)
             loss.backward()
             shared_optimizer_on_gpu.step()
-            training_node.set_model_stat(shared_model_on_gpu.state_dict())
+            stat_dict = shared_model_on_gpu.state_dict()
+            CudaEnv.__model_state_dict_to(stat_dict, torch.device('cpu'))
+            training_node.set_model_stat(stat_dict)
             CudaEnv.__optimizer_to(shared_optimizer_on_gpu, torch.device('cpu'))  # move optimizer data back to memory
             training_node.set_optimizer_stat(shared_optimizer_on_gpu.state_dict())
         else:
@@ -316,4 +325,5 @@ class CudaEnv:
             loss = criterion(output, labels)
             loss.backward()
             optimizer.step()
-        return loss.item()
+        loss_val = float(loss.item())
+        return loss_val
