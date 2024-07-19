@@ -54,6 +54,8 @@ class StandardModelAverager(ModelAverager):
         if self.variance_corrector is not None:
             target_variance = self.variance_corrector.get_variance()
             for layer_name, single_layer_variance in target_variance.items():
+                if "num_batches_tracked" in layer_name:  # skip "num_batches_tracked"
+                    continue
                 output[layer_name] = VarianceCorrector.scale_model_stat_to_variance(output[layer_name], single_layer_variance)
         self.model_buffer = None
         self.model_counter = 0
@@ -84,6 +86,8 @@ class ConservativeModelAverager(ModelAverager):
 
     def get_model(self, self_model, *args, **kwargs):
         for layer_name, layer_weights in self.model_buffer.items():
+            if "num_batches_tracked" in layer_name:  # skip "num_batches_tracked"
+                continue
             layer_weights /= self.model_counter
         output = self.model_buffer
         output = ModelAverager._iadd_two_model(output, self_model, weight_src=self.conservative, weight_addition=1 - self.conservative)
@@ -91,6 +95,8 @@ class ConservativeModelAverager(ModelAverager):
         if self.variance_corrector is not None:
             target_variance = self.variance_corrector.get_variance(self_model, self.conservative)
             for layer_name, single_layer_variance in target_variance:
+                if "num_batches_tracked" in layer_name:  # skip "num_batches_tracked"
+                    continue
                 output[layer_name] = VarianceCorrector.scale_model_stat_to_variance(output[layer_name], single_layer_variance)
         self.model_buffer = None
         self.model_counter = 0

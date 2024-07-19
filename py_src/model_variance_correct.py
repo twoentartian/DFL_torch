@@ -20,6 +20,8 @@ class VarianceCorrector():
                 for name, param in model_stat.items():
                     self.variance_record[name] = 0.0
             for name, param in model_stat.items():
+                if "num_batches_tracked" in name:
+                    continue  # skip "num_batches_tracked"
                 variance = torch.var(param).item()
                 self.variance_record[name] += variance
             self.model_counter += 1
