@@ -274,7 +274,8 @@ def main(config_file_path):
         mpi_world.print_info()
 
     if MPI_rank == 0:
-        mpi_world.determine_mem_strategy(current_cuda_env.memory_consumption_model_MB, current_cuda_env.memory_consumption_dataset_MB, override_use_model_stat=config_file.override_use_model_stat)
+        mpi_world.determine_mem_strategy(current_cuda_env.memory_consumption_model_MB, current_cuda_env.memory_consumption_dataset_MB,
+                                         override_use_model_stat=config_file.override_use_model_stat, override_allocate_all_models=config_file.override_allocate_all_models)
         strategy = mpi_world.gpu_mem_strategy
     else:
         strategy = None

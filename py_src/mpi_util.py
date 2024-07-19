@@ -100,9 +100,9 @@ class MpiWorld(object):
                     self.gpu_mem_strategy = MpiGpuMemStrategy.AllocateAllModels
                 else:
                     self.gpu_mem_strategy = MpiGpuMemStrategy.ShareSingleModel
-                logger.info(f"GPU memory strategy: {self.gpu_mem_strategy.name}.")
             else:
                 self.gpu_mem_strategy = MpiGpuMemStrategy.ShareSingleModel
+        logger.info(f"GPU memory strategy: {self.gpu_mem_strategy.name}.")
 
 
     def allocate_nodes_to_gpu(self):

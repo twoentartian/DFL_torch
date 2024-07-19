@@ -172,6 +172,9 @@ class CudaEnv:
             if override_allocate_all_models is None:
                 override_allocate_all_models = False
             if override_allocate_all_models:
+                for gpu in self.cuda_device_list:
+                    model_capacity_for_this_gpu = int((gpu.total_memory_MB * (1 - GPU_RESERVED_MEMORY_RATIO) - gpu.used_memory_MB - self.memory_consumption_dataset_MB) // self.memory_consumption_model_MB)
+                    model_capacity_per_gpu.append(model_capacity_for_this_gpu)
                 use_model_stat = False
             else:
                 if not override_use_model_stat:
