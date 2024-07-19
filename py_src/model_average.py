@@ -83,7 +83,6 @@ class ConservativeModelAverager(ModelAverager):
         if self.variance_corrector is not None:
             self.variance_corrector.add_variance(model_stat)
 
-
     def get_model(self, self_model, *args, **kwargs):
         for layer_name, layer_weights in self.model_buffer.items():
             if "num_batches_tracked" in layer_name:  # skip "num_batches_tracked"
