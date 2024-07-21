@@ -5,12 +5,13 @@ import sys
 import random
 import numpy as np
 from datetime import datetime
-from multiprocessing import Pool
+import concurrent.futures
 from torch.utils.data import DataLoader, TensorDataset
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from py_src import ml_setup
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 class PredefinedCompleteMlSetup:
     def __init__(self, arg_ml_setup, optimizer, epochs):
@@ -47,7 +48,6 @@ def re_initialize_model(model, ml_setup):
 
 def training_model(output_folder, index, complete_ml_setup: PredefinedCompleteMlSetup):
     model = complete_ml_setup.ml_setup.model
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
     model.to(device)
     dataset = complete_ml_setup.ml_setup.training_data
     batch_size = complete_ml_setup.ml_setup.training_batch_size
@@ -65,8 +65,7 @@ def training_model(output_folder, index, complete_ml_setup: PredefinedCompleteMl
         train_loss = 0
         count = 0
         for data, label in dataloader:
-            if torch.cuda.is_available():
-                data, label = data.to(device), label.to(device)
+            data, label = data.to(device), label.to(device)
             optimizer.zero_grad()
             outputs = model(data)
             loss = criterion(outputs, label)
@@ -81,6 +80,8 @@ def training_model(output_folder, index, complete_ml_setup: PredefinedCompleteMl
 
 
 if __name__ == "__main__":
+    torch.multiprocessing.set_start_method('spawn')
+
     parser = argparse.ArgumentParser(description='Generate some high accuracy models')
     parser.add_argument("-n", "--number_of_models", type=int, default=1)
     parser.add_argument("-c", '--cores', type=int, default=os.cpu_count(), help='specify how many models to train in parallel')
@@ -109,7 +110,7 @@ if __name__ == "__main__":
     if worker_count > number_of_models:
         worker_count = number_of_models
     args = [(output_folder_path, i, complete_ml_setup) for i in range(number_of_models)]
-    with Pool(processes=worker_count) as pool:
-        pool.starmap(training_model, args)
-
-
+    with concurrent.futures.ProcessPoolExecutor() as executor:
+        futures = [executor.submit(training_model, *arg) for arg in args]
+        for future in concurrent.futures.as_completed(futures):
+            result = future.result()
