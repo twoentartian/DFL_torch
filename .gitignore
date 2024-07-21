@@ -162,4 +162,5 @@ cython_debug/
 .idea/
 /simulator_config.py
 /202*/
+/tool/202*/
 /data
