@@ -46,7 +46,8 @@ def re_initialize_model(model, ml_setup):
         model.apply(ml_setup.weights_init_func)
 
 
-def training_model(output_folder, index, complete_ml_setup: PredefinedCompleteMlSetup):
+def training_model(output_folder, index, number_of_models, complete_ml_setup: PredefinedCompleteMlSetup):
+    digit_number_of_models = len(str(number_of_models))
     model = complete_ml_setup.ml_setup.model
     model.to(device)
     dataset = complete_ml_setup.ml_setup.training_data
@@ -76,7 +77,7 @@ def training_model(output_folder, index, complete_ml_setup: PredefinedCompleteMl
         print(f"INDEX[{index}] epoch[{epoch}] loss={train_loss/count}")
     print(f"INDEX[{index}] finish training")
 
-    torch.save(model.state_dict(), os.path.join(output_folder, f"{index}.pt"))
+    torch.save(model.state_dict(), os.path.join(output_folder, f"{str(index).zfill(digit_number_of_models)}.pt"))
 
 
 if __name__ == "__main__":
@@ -109,7 +110,7 @@ if __name__ == "__main__":
     # training
     if worker_count > number_of_models:
         worker_count = number_of_models
-    args = [(output_folder_path, i, complete_ml_setup) for i in range(number_of_models)]
+    args = [(output_folder_path, i, number_of_models, complete_ml_setup) for i in range(number_of_models)]
     with concurrent.futures.ProcessPoolExecutor() as executor:
         futures = [executor.submit(training_model, *arg) for arg in args]
         for future in concurrent.futures.as_completed(futures):
