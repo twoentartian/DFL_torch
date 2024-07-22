@@ -113,7 +113,7 @@ if __name__ == "__main__":
     if worker_count > number_of_models:
         worker_count = number_of_models
     args = [(output_folder_path, i, number_of_models, complete_ml_setup) for i in range(number_of_models)]
-    with concurrent.futures.ProcessPoolExecutor() as executor:
+    with concurrent.futures.ProcessPoolExecutor(max_workers=worker_count) as executor:
         futures = [executor.submit(training_model, *arg) for arg in args]
         for future in concurrent.futures.as_completed(futures):
             result = future.result()
