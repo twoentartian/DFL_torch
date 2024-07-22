@@ -78,6 +78,8 @@ def training_model(output_folder, index, number_of_models, complete_ml_setup: Pr
     print(f"INDEX[{index}] finish training")
 
     torch.save(model.state_dict(), os.path.join(output_folder, f"{str(index).zfill(digit_number_of_models)}.pt"))
+    del model, dataset, dataloader, criterion, optimizer
+    torch.cuda.empty_cache()
 
 
 if __name__ == "__main__":
