@@ -2,155 +2,20 @@ import argparse
 import logging
 import os
 import shutil
-import time
 import torch
 
-from typing import Final
 from datetime import datetime
 from mpi4py import MPI
-from mpi4py.util import pkl5
 
-from py_src import internal_names, configuration_file, dfl_logging, nx_lib, initial_checking, cuda, mpi_util, dataset, node, cpu, mpi_data_payload, simulator_common
+from py_src import internal_names, configuration_file, dfl_logging, nx_lib, initial_checking, cuda, mpi_util, dataset, node, simulator_common
 from py_src.simulation_runtime_parameters import RuntimeParameters, SimulationPhase
-from py_src.ml_setup import MlSetup
 
 simulator_base_logger = logging.getLogger(internal_names.logger_simulator_base_name)
 
-REPORT_FINISH_TIME_PER_TICK: Final[int] = 100
 
 MPI_comm = MPI.COMM_WORLD
 MPI_rank = MPI_comm.Get_rank()
 MPI_size = MPI_comm.Get_size()
-
-
-
-
-def begin_simulation(runtime_parameters: RuntimeParameters, config_file, ml_config: MlSetup, current_cuda_env, mpi_world: mpi_util.MpiWorld):
-    large_comm = pkl5.Intracomm(MPI.COMM_WORLD)
-
-    # self information
-    self_hostname = mpi_util.collect_netbios_name()
-    self_host = mpi_world.all_hosts[self_hostname]
-    self_mpi_process = self_host.mpi_process[MPI_rank]
-    self_gpu = self_mpi_process.allocated_gpu
-    self_nodes = self_mpi_process.nodes
-    nodes_map_to_rank = {}
-    for host in mpi_world.all_hosts.values():
-        for mpi_process in host.mpi_process.values():
-            for single_node in mpi_process.nodes:
-                nodes_map_to_rank[single_node] = mpi_process.rank
-
-
-
-    # begin simulation
-    timer = time.time()
-    while runtime_parameters.current_tick <= config_file.max_tick:
-        # report remaining time
-        if runtime_parameters.current_tick % REPORT_FINISH_TIME_PER_TICK == 0 and runtime_parameters.current_tick != 0:
-            time_elapsed = time.time() - timer
-            timer = time.time()
-            remaining = (config_file.max_tick - runtime_parameters.current_tick) // REPORT_FINISH_TIME_PER_TICK
-            time_to_finish = remaining * time_elapsed
-            finish_time = timer + time_to_finish
-            simulator_base_logger.info(f"time taken for {REPORT_FINISH_TIME_PER_TICK} ticks: {time_elapsed:.2f}s ,expected to finish at {datetime.fromtimestamp(finish_time)}")
-
-        """"""""" start of tick """""""""
-        simulator_common.simulation_phase_start_of_tick(runtime_parameters, simulator_base_logger)
-
-        """"""""" before training """""""""
-        simulator_common.simulation_phase_before_training(runtime_parameters, simulator_base_logger)
-
-        """"""""" training """""""""
-        simulator_common.simulation_phase_training(runtime_parameters, simulator_base_logger, config_file, ml_config, current_cuda_env)
-
-        """"""""" after training """""""""
-        runtime_parameters.phase = SimulationPhase.AFTER_TRAINING
-        for service_name, service_inst in runtime_parameters.service_container.items():
-            service_inst.trigger(runtime_parameters)
-
-        """"""""" before averaging """""""""
-        runtime_parameters.phase = SimulationPhase.BEFORE_AVERAGING
-        for service_name, service_inst in runtime_parameters.service_container.items():
-            service_inst.trigger(runtime_parameters)
-
-        """"""""" averaging """""""""
-        runtime_parameters.phase = SimulationPhase.AVERAGING
-        for service_name, service_inst in runtime_parameters.service_container.items():
-            service_inst.trigger(runtime_parameters)
-
-        nodes_averaged = set()
-        mpi_data_pack_and_dst = {}
-        for dst_mpi_rank in range(MPI_size):
-            if dst_mpi_rank != MPI_rank:
-                mpi_data_pack_and_dst[dst_mpi_rank] = mpi_data_payload.MpiDataPack(MPI_rank)
-        for node_name, node_target in runtime_parameters.node_container.items():
-            if node_target.is_training_this_tick:
-                send_model = node_target.is_sending_model()
-                if not send_model:
-                    continue
-
-                # get model stat
-                model_stat = node_target.get_model_stat()
-                for k, v in model_stat.items():
-                    model_stat[k] = v.cpu()
-                # send model to peers
-                neighbors = list(runtime_parameters.topology.neighbors(node_target.name))
-
-                for neighbor in neighbors:
-                    if neighbor in self_nodes:
-                        # the target node is in my MPI process
-                        averaged = simulator_common.send_model_stat_to_receiver(runtime_parameters, neighbor, model_stat)
-                        if averaged:
-                            nodes_averaged.add(neighbor)
-                    else:
-                        # the target node is other MPI processes
-                        dst_mpi_rank = nodes_map_to_rank[neighbor]
-                        mpi_data_pack_and_dst[dst_mpi_rank].add_mpi_data(node_name, model_stat, neighbor)
-
-        MPI_comm.barrier()
-
-        # share models in MPI world
-        assert len(mpi_data_pack_and_dst.keys()) == (MPI_size - 1)
-        send_reqs = []
-        for dst_mpi_rank, mpi_data_pack in mpi_data_pack_and_dst.items():
-            all_sent_models = mpi_data_pack.get_mpi_data()
-            req = large_comm.isend(mpi_data_pack, dst_mpi_rank, tag=mpi_data_payload.MpiMessageTag.ModelStateData.value)
-            send_reqs.append(req)
-
-        received_data = {}
-        while len(received_data.keys()) < (MPI_size - 1):
-            status = MPI.Status()
-            rmsg = large_comm.mprobe(status=status)
-            tag = status.Get_tag()
-            sender = status.Get_source()
-            assert tag == mpi_data_payload.MpiMessageTag.ModelStateData.value
-            rreq = rmsg.irecv()
-            robj = rreq.wait()
-            received_data[sender] = robj
-
-        # add models from MPI to average buffer
-        for sender_mpi_rank, mpi_data_pack in received_data.items():
-            model_stat_list = mpi_data_pack.get_mpi_data()
-            for (src_node, model_stat, dst_node) in model_stat_list:
-                averaged = simulator_common.send_model_stat_to_receiver(runtime_parameters, dst_node, model_stat)
-                if averaged:
-                    nodes_averaged.add(dst_node)
-
-        if len(nodes_averaged) > 0:
-            simulator_base_logger.info(f"tick: {runtime_parameters.current_tick}, averaging on {len(nodes_averaged)} nodes: {nodes_averaged}")
-
-
-        """"""""" after averaging """""""""
-        runtime_parameters.phase = SimulationPhase.AFTER_AVERAGING
-        for service_name, service_inst in runtime_parameters.service_container.items():
-            service_inst.trigger(runtime_parameters)
-
-        """"""""" end of tick """""""""
-        runtime_parameters.phase = SimulationPhase.END_OF_TICK
-        for service_name, service_inst in runtime_parameters.service_container.items():
-            service_inst.trigger(runtime_parameters)
-
-        runtime_parameters.current_tick += 1
 
 
 def main(config_file_path):
@@ -314,7 +179,7 @@ def main(config_file_path):
 
     # begin simulation
     runtime_parameters.mpi_enabled = True
-    begin_simulation(runtime_parameters, config_file, config_ml_setup, current_cuda_env, mpi_world)
+    simulator_common.begin_simulation(runtime_parameters, config_file, config_ml_setup, current_cuda_env, simulator_base_logger, mpi_world)
 
     exit(0)
 

@@ -2,88 +2,14 @@ import argparse
 import os
 import logging
 import shutil
-import time
 import torch
 
-from typing import Final
 from datetime import datetime
 from py_src import configuration_file, internal_names, initial_checking, cuda, node, dataset, cpu, dfl_logging, simulator_common
 from py_src.simulation_runtime_parameters import RuntimeParameters, SimulationPhase
 from py_src.ml_setup import MlSetup
 
 simulator_base_logger = logging.getLogger(internal_names.logger_simulator_base_name)
-
-REPORT_FINISH_TIME_PER_TICK: Final[int] = 100
-
-
-def begin_simulation(runtime_parameters: RuntimeParameters, config_file, ml_config: MlSetup, current_cuda_env):
-    # begin simulation
-    timer = time.time()
-    while runtime_parameters.current_tick <= config_file.max_tick:
-        # report remaining time
-        if runtime_parameters.current_tick % REPORT_FINISH_TIME_PER_TICK == 0 and runtime_parameters.current_tick != 0:
-            time_elapsed = time.time() - timer
-            timer = time.time()
-            remaining = (config_file.max_tick - runtime_parameters.current_tick) // REPORT_FINISH_TIME_PER_TICK
-            time_to_finish = remaining * time_elapsed
-            finish_time = timer + time_to_finish
-            simulator_base_logger.info(f"time taken for {REPORT_FINISH_TIME_PER_TICK} ticks: {time_elapsed:.2f}s ,expected to finish at {datetime.fromtimestamp(finish_time)}")
-
-        """"""""" start of tick """""""""
-        simulator_common.simulation_phase_start_of_tick(runtime_parameters, simulator_base_logger)
-
-        """"""""" before training """""""""
-        simulator_common.simulation_phase_before_training(runtime_parameters, simulator_base_logger)
-
-        """"""""" training """""""""
-        simulator_common.simulation_phase_training(runtime_parameters, simulator_base_logger, config_file, ml_config, current_cuda_env)
-
-        """"""""" after training """""""""
-        runtime_parameters.phase = SimulationPhase.AFTER_TRAINING
-        for service_name, service_inst in runtime_parameters.service_container.items():
-            service_inst.trigger(runtime_parameters)
-
-        """"""""" before averaging """""""""
-        runtime_parameters.phase = SimulationPhase.BEFORE_AVERAGING
-        for service_name, service_inst in runtime_parameters.service_container.items():
-            service_inst.trigger(runtime_parameters)
-
-        """"""""" averaging """""""""
-        runtime_parameters.phase = SimulationPhase.AVERAGING
-        for service_name, service_inst in runtime_parameters.service_container.items():
-            service_inst.trigger(runtime_parameters)
-
-        nodes_averaged = set()
-        for node_name, node_target in runtime_parameters.node_container.items():
-            if node_target.is_training_this_tick:
-                send_model = node_target.is_sending_model()
-                if not send_model:
-                    continue
-
-                # get model stat
-                model_stat = node_target.get_model_stat()
-                for k, v in model_stat.items():
-                    model_stat[k] = v.cpu()
-                # send model to peers
-                neighbors = list(runtime_parameters.topology.neighbors(node_target.name))
-                for neighbor in neighbors:
-                    averaged = simulator_common.send_model_stat_to_receiver(runtime_parameters, neighbor, model_stat)
-                    if averaged:
-                        nodes_averaged.add(neighbor)
-        if len(nodes_averaged) > 0:
-            simulator_base_logger.info(f"tick: {runtime_parameters.current_tick}, averaging on {len(nodes_averaged)} nodes: {nodes_averaged}")
-
-        """"""""" after averaging """""""""
-        runtime_parameters.phase = SimulationPhase.AFTER_AVERAGING
-        for service_name, service_inst in runtime_parameters.service_container.items():
-            service_inst.trigger(runtime_parameters)
-
-        """"""""" end of tick """""""""
-        runtime_parameters.phase = SimulationPhase.END_OF_TICK
-        for service_name, service_inst in runtime_parameters.service_container.items():
-            service_inst.trigger(runtime_parameters)
-
-        runtime_parameters.current_tick += 1
 
 
 def main(config_file_path):
@@ -183,7 +109,7 @@ def main(config_file_path):
 
     # begin simulation
     runtime_parameters.mpi_enabled = False
-    begin_simulation(runtime_parameters, config_file, config_ml_setup, current_cuda_env)
+    simulator_common.begin_simulation(runtime_parameters, config_file, config_ml_setup, current_cuda_env, simulator_base_logger)
 
     exit(0)
 
