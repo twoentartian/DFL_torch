@@ -55,48 +55,13 @@ def begin_simulation(runtime_parameters: RuntimeParameters, config_file, ml_conf
             simulator_base_logger.info(f"time taken for {REPORT_FINISH_TIME_PER_TICK} ticks: {time_elapsed:.2f}s ,expected to finish at {datetime.fromtimestamp(finish_time)}")
 
         """"""""" start of tick """""""""
-        runtime_parameters.phase = SimulationPhase.START_OF_TICK
-        for service_name, service_inst in runtime_parameters.service_container.items():
-            service_inst.trigger(runtime_parameters)
-
-        # reset all status flags
-        for node_name, node_target in runtime_parameters.node_container.items():
-            node_target.reset_statu_flags()
+        simulator_common.simulation_phase_start_of_tick(runtime_parameters, simulator_base_logger)
 
         """"""""" before training """""""""
-        runtime_parameters.phase = SimulationPhase.BEFORE_TRAINING
-        for service_name, service_inst in runtime_parameters.service_container.items():
-            service_inst.trigger(runtime_parameters)
+        simulator_common.simulation_phase_before_training(runtime_parameters, simulator_base_logger)
 
         """"""""" training """""""""
-        runtime_parameters.phase = SimulationPhase.TRAINING
-        for service_name, service_inst in runtime_parameters.service_container.items():
-            service_inst.trigger(runtime_parameters)
-
-        simulator_base_logger.info(f"current tick: {runtime_parameters.current_tick}/{runtime_parameters.max_tick}")
-        node_target: node.Node
-        node_name: str
-
-        training_node_names = []
-        for node_name, node_target in runtime_parameters.node_container.items():
-            if node_target.next_training_tick == runtime_parameters.current_tick:
-                node_target.is_training_this_tick = True
-                training_node_names.append(node_name)
-                for data, label in node_target.train_loader:
-                    if config_file.force_use_cpu:
-                        loss = cpu.submit_training_job_cpu(node_target, ml_config.criterion, data, label)
-                        node_target.most_recent_loss = loss
-                        simulator_base_logger.info(f"tick: {runtime_parameters.current_tick}, training node: {node_target.name}, loss={node_target.most_recent_loss:.2f}")
-                    else:
-                        loss = current_cuda_env.submit_training_job(node_target, ml_config.criterion, data, label)
-                        node_target.most_recent_loss = loss
-                        simulator_base_logger.info(f"tick: {runtime_parameters.current_tick}, training node: {node_target.name}, loss={node_target.most_recent_loss:.2f}")
-                    break
-
-        """update next training tick"""
-        for index, node_name in enumerate(training_node_names):
-            node_target = runtime_parameters.node_container[node_name]
-            node_target.next_training_tick = config_file.get_next_training_time(node_target, runtime_parameters)
+        simulator_common.simulation_phase_training(runtime_parameters, simulator_base_logger, config_file, ml_config, current_cuda_env)
 
         """"""""" after training """""""""
         runtime_parameters.phase = SimulationPhase.AFTER_TRAINING
