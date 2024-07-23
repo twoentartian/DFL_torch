@@ -5,9 +5,8 @@ import shutil
 import torch
 
 from datetime import datetime
-from py_src import configuration_file, internal_names, initial_checking, cuda, node, dataset, cpu, dfl_logging, simulator_common
+from py_src import configuration_file, internal_names, initial_checking, cuda, node, dataset, dfl_logging, simulator_common
 from py_src.simulation_runtime_parameters import RuntimeParameters, SimulationPhase
-from py_src.ml_setup import MlSetup
 
 simulator_base_logger = logging.getLogger(internal_names.logger_simulator_base_name)
 
