@@ -116,7 +116,7 @@ def process_file_func(output_folder_path, start_model_path, end_model_path, arg_
         loss.backward()
         optimizer.step()
         loss_val = loss.item()
-        if training_index == 10:
+        if training_index == 100:
             break
     start_model.load_state_dict(start_model_stat)
 
