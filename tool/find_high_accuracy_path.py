@@ -83,7 +83,7 @@ def process_file_func(output_folder_path, start_model_path, end_model_path, arg_
 
     # load models
     cpu_device = torch.device("cpu")
-    start_model = arg_ml_setup.model
+    start_model = copy.deepcopy(arg_ml_setup.model)
     start_model_stat_dict = torch.load(start_model_path, map_location=cpu_device)
     end_model_state_dict = torch.load(end_model_path, map_location=cpu_device)
     # cuda.CudaEnv.model_state_dict_to(start_model_stat_dict, cpu_device)
