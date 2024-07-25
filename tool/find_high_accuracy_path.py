@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from py_src import ml_setup, model_average, model_variance_correct, special_torch_layers, cuda
-from py_src.service import record_weights_difference, record_test_accuracy_loss, record_variance
+from py_src.service import record_weights_difference, record_test_accuracy_loss, record_variance, record_model_stat
 
 logger = logging.getLogger("find_high_accuracy_path")
 
@@ -68,7 +68,7 @@ class InverseLRScheduler(optim.lr_scheduler.LRScheduler):
         return [base_lr / (1 + self.gamma * self.last_epoch) for base_lr in self.base_lrs]
 
 
-def process_file_func(output_folder_path, start_model_path, end_model_path, arg_ml_setup, arg_lr, arg_max_tick, arg_training_round, arg_step_size):
+def process_file_func(output_folder_path, start_model_path, end_model_path, arg_ml_setup, arg_lr, arg_max_tick, arg_training_round, arg_step_size, arg_adoptive_step_size):
     start_file_name = get_file_name_without_extension(start_model_path)
     end_file_name = get_file_name_without_extension(end_model_path)
     assert start_file_name == end_file_name
@@ -89,7 +89,7 @@ def process_file_func(output_folder_path, start_model_path, end_model_path, arg_
 
     # load training data
     training_dataset = arg_ml_setup.training_data
-    dataloader = DataLoader(training_dataset, batch_size=arg_ml_setup.training_batch_size)
+    dataloader = DataLoader(training_dataset, batch_size=arg_ml_setup.training_batch_size, shuffle=True)
     criterion = arg_ml_setup.criterion
     optimizer = torch.optim.SGD(start_model.parameters(), lr=arg_lr)
 
@@ -101,10 +101,26 @@ def process_file_func(output_folder_path, start_model_path, end_model_path, arg_
     weight_diff_service.initialize_without_runtime_parameters(all_model_stats, output_folder_path)
     variance_service = record_variance.ServiceVarianceRecorder(1)
     variance_service.initialize_without_runtime_parameters(all_node_names, all_model_stats, output_folder_path)
+    record_model_service = record_model_stat.ModelStatRecorder(1)
+    record_model_service.initialize_without_runtime_parameters([0], output_folder_path)
+    record_test_accuracy_loss_service = record_test_accuracy_loss.ServiceTestAccuracyLossRecorder(1, 100, use_fixed_testing_dataset=True)
+    record_test_accuracy_loss_service.initialize_without_runtime_parameters(output_folder_path, [0], start_model, criterion, training_dataset)
 
     # begin finding path
-    current_tick = 0
+    """pre training"""
     start_model_stat = start_model.state_dict()
+    for (training_index, (data, label)) in enumerate(dataloader):
+        optimizer.zero_grad(set_to_none=True)
+        output = start_model(data)
+        loss = criterion(output, label)
+        loss.backward()
+        optimizer.step()
+        loss_val = loss.item()
+        if training_index == 10:
+            break
+    start_model.load_state_dict(start_model_stat)
+
+    current_tick = 0
     while current_tick < arg_max_tick:
         """record variance"""
         variance_record = model_variance_correct.VarianceCorrector(model_variance_correct.VarianceCorrectionType.FollowOthers)
@@ -112,7 +128,7 @@ def process_file_func(output_folder_path, start_model_path, end_model_path, arg_
         """move tensor"""
         for layer_name in start_model_stat.keys():
             dst_tensor = end_model_state_dict[layer_name]
-            start_model_stat[layer_name] = model_average.move_tensor_toward(start_model_stat[layer_name], dst_tensor, arg_step_size)
+            start_model_stat[layer_name] = model_average.move_tensor_toward(start_model_stat[layer_name], dst_tensor, arg_step_size, arg_adoptive_step_size)
         """rescale variance"""
         target_variance = variance_record.get_variance()
         for layer_name, single_layer_variance in target_variance.items():
@@ -142,6 +158,8 @@ def process_file_func(output_folder_path, start_model_path, end_model_path, arg_
         all_model_stats = [start_model_stat, end_model_state_dict]
         weight_diff_service.trigger_without_runtime_parameters(current_tick, all_model_stats)
         variance_service.trigger_without_runtime_parameters(current_tick, all_node_names, all_model_stats)
+        record_model_service.trigger_without_runtime_parameters(current_tick, [0], [start_model_stat])
+        record_test_accuracy_loss_service.trigger_without_runtime_parameters(current_tick, {0: start_model_stat})
 
         current_tick += 1
         print(f"[{start_file_name}] current tick: {current_tick}, training loss = {loss_val}")
@@ -157,8 +175,9 @@ if __name__ == '__main__':
     parser.add_argument("-m", "--model_type", type=str, default='lenet5', choices=['lenet5', 'resnet18'])
     parser.add_argument("-t", "--max_tick", type=int, default=10000)
     parser.add_argument("-s", "--step_size", type=float, default=0.002)
+    parser.add_argument("-a", "--adoptive_step_size", type=float, default=0.001)
     parser.add_argument("--training_round", type=int, default=1)
-    parser.add_argument("--lr", type=float, default=0.001)
+    parser.add_argument("--lr", type=float, default=0.01)
 
     args = parser.parse_args()
 
@@ -169,6 +188,7 @@ if __name__ == '__main__':
     end_folder = args.end_folder
     max_tick = args.max_tick
     step_size = args.step_size
+    adoptive_step_size = args.adoptive_step_size
     training_round = args.training_round
     learning_rate = args.lr
     files = get_files_to_process(args.start_folder, args.end_folder)
@@ -194,7 +214,7 @@ if __name__ == '__main__':
     # finding path
     if worker_count > file_count:
         worker_count = file_count
-    args = [(output_folder_path, os.path.join(start_folder, f), os.path.join(end_folder, f), current_ml_setup, learning_rate, max_tick, training_round, step_size) for f in files]
+    args = [(output_folder_path, os.path.join(start_folder, f), os.path.join(end_folder, f), current_ml_setup, learning_rate, max_tick, training_round, step_size, adoptive_step_size) for f in files]
     with concurrent.futures.ProcessPoolExecutor(max_workers=worker_count) as executor:
         futures = [executor.submit(process_file_func, *arg) for arg in args]
         for future in concurrent.futures.as_completed(futures):

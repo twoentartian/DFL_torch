@@ -3,11 +3,13 @@ import torch
 from py_src import special_torch_layers
 from py_src.model_variance_correct import VarianceCorrectionType, VarianceCorrector
 
-def move_tensor_toward(src_tensor, dest_tensor, step):
+def move_tensor_toward(src_tensor, dest_tensor, step, adoptive_step):
     diff_tensor = dest_tensor - src_tensor
     norm = torch.norm(diff_tensor)
+    step_from_adoptive_part = norm * adoptive_step
+    real_step = step if step > step_from_adoptive_part else step_from_adoptive_part
     angle_tensor = diff_tensor / norm
-    move_tensor = angle_tensor * step
+    move_tensor = angle_tensor * real_step
     return src_tensor + move_tensor
 
 class ModelAverager():

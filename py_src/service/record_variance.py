@@ -5,7 +5,6 @@ from py_src.simulation_runtime_parameters import RuntimeParameters, SimulationPh
 
 class ServiceVarianceRecorder(Service):
     def __init__(self, interval, phase=SimulationPhase.END_OF_TICK, record_node=None) -> None:
-        import os
         super().__init__()
         self.save_path = None
         self.save_files = {}
