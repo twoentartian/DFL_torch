@@ -6,30 +6,12 @@ import random
 import numpy as np
 from datetime import datetime
 import concurrent.futures
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import DataLoader
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from py_src import ml_setup
+from py_src import ml_setup, complete_ml_setup
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-class PredefinedCompleteMlSetup:
-    def __init__(self, arg_ml_setup, optimizer, epochs):
-        self.ml_setup = arg_ml_setup
-        self.optimizer = optimizer
-        self.epochs = epochs
-
-    @staticmethod
-    def get_lenet5():
-        arg_ml_setup = ml_setup.mnist_lenet5()
-        optimizer = torch.optim.SGD(arg_ml_setup.model.parameters(), lr=0.001)
-        return PredefinedCompleteMlSetup(arg_ml_setup, optimizer, 20)
-
-    @staticmethod
-    def get_resnet18(self):
-        arg_ml_setup = ml_setup.resnet18_cifar10()
-        optimizer = torch.optim.SGD(arg_ml_setup.model.parameters(), lr=0.001)
-        return PredefinedCompleteMlSetup(arg_ml_setup, optimizer, 100)
 
 
 def re_initialize_model(model, ml_setup):
@@ -46,7 +28,7 @@ def re_initialize_model(model, ml_setup):
         model.apply(ml_setup.weights_init_func)
 
 
-def training_model(output_folder, index, number_of_models, complete_ml_setup: PredefinedCompleteMlSetup):
+def training_model(output_folder, index, number_of_models, complete_ml_setup: complete_ml_setup.PredefinedCompleteMlSetup):
     digit_number_of_models = len(str(number_of_models))
     model = complete_ml_setup.ml_setup.model
     model.to(device)
@@ -97,22 +79,22 @@ if __name__ == "__main__":
     model_type = args.model_type
 
     # prepare model and dataset
-    complete_ml_setup = None
+    current_complete_ml_setup = None
     if model_type == 'lenet5':
-        complete_ml_setup = PredefinedCompleteMlSetup.get_lenet5()
+        current_complete_ml_setup = complete_ml_setup.PredefinedCompleteMlSetup.get_lenet5()
     elif model_type == 'resnet18':
-        complete_ml_setup = PredefinedCompleteMlSetup.get_resnet18()
+        current_complete_ml_setup = complete_ml_setup.PredefinedCompleteMlSetup.get_resnet18()
     else:
         raise ValueError(f'Invalid model type: {model_type}')
 
     # create output folder
-    output_folder_path = os.path.join(os.curdir, datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f"))
+    output_folder_path = os.path.join(os.curdir, f"{__file__}_{datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")}")
     os.mkdir(output_folder_path)
 
     # training
     if worker_count > number_of_models:
         worker_count = number_of_models
-    args = [(output_folder_path, i, number_of_models, complete_ml_setup) for i in range(number_of_models)]
+    args = [(output_folder_path, i, number_of_models, current_complete_ml_setup) for i in range(number_of_models)]
     with concurrent.futures.ProcessPoolExecutor(max_workers=worker_count) as executor:
         futures = [executor.submit(training_model, *arg) for arg in args]
         for future in concurrent.futures.as_completed(futures):

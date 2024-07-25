@@ -22,7 +22,7 @@ def calculate_herd_effect_delay(arg_accuracy_df: pandas.DataFrame):
 
 if __name__ == '__main__':
     accuracy_file_path = 'accuracy.csv'
-    weight_diff_file_path = 'model_weight_diff.csv'
+    weight_diff_file_path = 'weight_difference_l2.csv'
     loss_file_path = 'loss.csv'
 
     num_of_plots = 0

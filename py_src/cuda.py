@@ -227,7 +227,7 @@ class CudaEnv:
 
 
     @staticmethod
-    def __optimizer_to(optim, device):
+    def optimizer_to(optim, device):
         for param in optim.state.values():
             # Not sure are there any global tensors in the state dict
             if isinstance(param, torch.Tensor):
@@ -242,7 +242,7 @@ class CudaEnv:
                             subparam._grad.data = subparam._grad.data.to(device, non_blocking=True)
 
     @staticmethod
-    def __model_state_dict_to(stat_dict, device):
+    def model_state_dict_to(stat_dict, device):
         for k, v in stat_dict.items():
             stat_dict[k] = v.to(device, non_blocking=True)
 
@@ -271,9 +271,9 @@ class CudaEnv:
                     loss.backward()
                     shared_optimizer_on_gpu.step()
                     stat_dict = shared_model_on_gpu.state_dict()
-                    CudaEnv.__model_state_dict_to(stat_dict, torch.device('cpu'))
+                    CudaEnv.model_state_dict_to(stat_dict, torch.device('cpu'))
                     target_node.model_status = stat_dict
-                    CudaEnv.__optimizer_to(shared_optimizer_on_gpu, torch.device('cpu')) # move optimizer data back to memory
+                    CudaEnv.optimizer_to(shared_optimizer_on_gpu, torch.device('cpu')) # move optimizer data back to memory
                     target_node.optimizer_status = shared_optimizer_on_gpu.state_dict()
                     output_loss.append(loss.item())
                 else:
@@ -310,9 +310,9 @@ class CudaEnv:
             loss.backward()
             shared_optimizer_on_gpu.step()
             stat_dict = shared_model_on_gpu.state_dict()
-            CudaEnv.__model_state_dict_to(stat_dict, torch.device('cpu'))
+            CudaEnv.model_state_dict_to(stat_dict, torch.device('cpu'))
             training_node.set_model_stat(stat_dict)
-            CudaEnv.__optimizer_to(shared_optimizer_on_gpu, torch.device('cpu'))  # move optimizer data back to memory
+            CudaEnv.optimizer_to(shared_optimizer_on_gpu, torch.device('cpu'))  # move optimizer data back to memory
             training_node.set_optimizer_stat(shared_optimizer_on_gpu.state_dict())
         else:
             """use dedicated model on gpu"""

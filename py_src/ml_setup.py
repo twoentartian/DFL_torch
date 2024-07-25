@@ -14,6 +14,7 @@ def weights_init_xavier(m):
 class MlSetup:
     def __init__(self):
         self.model = None
+        self.model_name = None
         self.training_data = None
         self.testing_data = None
         self.criterion = None
@@ -82,6 +83,7 @@ def lenet5():
 def mnist_lenet5():
     mnist_lenet5 = MlSetup()
     mnist_lenet5.model = lenet5()
+    mnist_lenet5.model_name = "lenet5"
     mnist_lenet5.training_data, mnist_lenet5.testing_data, mnist_lenet5.dataset_label = dataset_mnist()
     mnist_lenet5.criterion = torch.nn.CrossEntropyLoss()
     mnist_lenet5.training_batch_size = 64
@@ -94,6 +96,7 @@ def mnist_lenet5():
 def resnet18_cifar10():
     resnet18_cifar10 = MlSetup()
     resnet18_cifar10.model = models.resnet18(progress=False, num_classes=10, zero_init_residual=False, groups=1, width_per_group=64, replace_stride_with_dilation=None)
+    resnet18_cifar10.model_name = "resnet18"
     resnet18_cifar10.training_data, resnet18_cifar10.testing_data, resnet18_cifar10.dataset_label = dataset_cifar10()
     resnet18_cifar10.criterion = torch.nn.CrossEntropyLoss()
     resnet18_cifar10.training_batch_size = 64

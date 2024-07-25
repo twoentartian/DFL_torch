@@ -1,6 +1,7 @@
 import enum
 import torch
 
+from py_src import special_torch_layers
 
 class VarianceCorrectionType(enum.Enum):
     FollowSelfVariance = 0,
@@ -20,8 +21,8 @@ class VarianceCorrector():
                 for name, param in model_stat.items():
                     self.variance_record[name] = 0.0
             for name, param in model_stat.items():
-                if "num_batches_tracked" in name:
-                    continue  # skip "num_batches_tracked"
+                if special_torch_layers.is_ignored_layer(name):
+                    continue
                 variance = torch.var(param).item()
                 self.variance_record[name] += variance
             self.model_counter += 1

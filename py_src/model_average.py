@@ -1,5 +1,14 @@
 import copy
+import torch
+from py_src import special_torch_layers
 from py_src.model_variance_correct import VarianceCorrectionType, VarianceCorrector
+
+def move_tensor_toward(src_tensor, dest_tensor, step):
+    diff_tensor = dest_tensor - src_tensor
+    norm = torch.norm(diff_tensor)
+    angle_tensor = diff_tensor / norm
+    move_tensor = angle_tensor * step
+    return src_tensor + move_tensor
 
 class ModelAverager():
     def __init__(self, variance_corrector=None, *args, **kwargs):
@@ -46,7 +55,7 @@ class StandardModelAverager(ModelAverager):
 
     def get_model(self, *args, **kwargs):
         for layer_name, layer_weights in self.model_buffer.items():
-            if "num_batches_tracked" in layer_name:  # skip "num_batches_tracked"
+            if special_torch_layers.is_ignored_layer(layer_name):
                 continue
             layer_weights /= self.model_counter
         output = self.model_buffer
@@ -54,7 +63,7 @@ class StandardModelAverager(ModelAverager):
         if self.variance_corrector is not None:
             target_variance = self.variance_corrector.get_variance()
             for layer_name, single_layer_variance in target_variance.items():
-                if "num_batches_tracked" in layer_name:  # skip "num_batches_tracked"
+                if special_torch_layers.is_ignored_layer(layer_name):
                     continue
                 output[layer_name] = VarianceCorrector.scale_model_stat_to_variance(output[layer_name], single_layer_variance)
         self.model_buffer = None
@@ -85,7 +94,7 @@ class ConservativeModelAverager(ModelAverager):
 
     def get_model(self, self_model, *args, **kwargs):
         for layer_name, layer_weights in self.model_buffer.items():
-            if "num_batches_tracked" in layer_name:  # skip "num_batches_tracked"
+            if special_torch_layers.is_ignored_layer(layer_name):
                 continue
             layer_weights /= self.model_counter
         output = self.model_buffer
@@ -94,7 +103,7 @@ class ConservativeModelAverager(ModelAverager):
         if self.variance_corrector is not None:
             target_variance = self.variance_corrector.get_variance(self_model, self.conservative)
             for layer_name, single_layer_variance in target_variance:
-                if "num_batches_tracked" in layer_name:  # skip "num_batches_tracked"
+                if special_torch_layers.is_ignored_layer(layer_name):
                     continue
                 output[layer_name] = VarianceCorrector.scale_model_stat_to_variance(output[layer_name], single_layer_variance)
         self.model_buffer = None
