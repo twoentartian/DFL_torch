@@ -69,7 +69,7 @@ class InverseLRScheduler(optim.lr_scheduler.LRScheduler):
 
 
 def process_file_func(output_folder_path, start_model_path, end_model_path, arg_ml_setup, arg_lr, arg_max_tick, arg_training_round, arg_step_size, arg_adoptive_step_size, arg_worker_count):
-    thread_per_process = os.cpu_count() // worker_count
+    thread_per_process = os.cpu_count() // arg_worker_count
     torch.set_num_threads(thread_per_process)
 
     start_file_name = get_file_name_without_extension(start_model_path)
