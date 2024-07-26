@@ -10,7 +10,7 @@ from py_src import lmdb_pack
 def process_func(arg_model_stat_folder, output_path=None):
     if os.path.exists(arg_model_stat_folder) and os.path.isdir(arg_model_stat_folder):
         if output_path is None:
-            output_path = os.path.join(arg_model_stat_folder, f"{arg_model_stat_folder}.lmdb")
+            output_path = f"{arg_model_stat_folder}.lmdb"
         print(f"processing {folder}/{model_stat_folder_name}")
         lmdb_pack.store_folder_in_lmdb(arg_model_stat_folder, output_path)
         shutil.rmtree(arg_model_stat_folder)
