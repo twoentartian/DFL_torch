@@ -12,40 +12,41 @@ from torch.utils.data import DataLoader
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from py_src import ml_setup, complete_ml_setup
 
-def re_initialize_model(model, ml_setup):
+def re_initialize_model(model, arg_ml_setup):
     random_data = os.urandom(4)
     seed = int.from_bytes(random_data, byteorder="big")
     torch.manual_seed(seed)
     random.seed(seed)
     np.random.seed(seed)
-    if ml_setup.weights_init_func is None:
+    if arg_ml_setup.weights_init_func is None:
         for layer in model.children():
             if hasattr(layer, 'reset_parameters'):
                 layer.reset_parameters()
     else:
-        model.apply(ml_setup.weights_init_func)
+        model.apply(arg_ml_setup.weights_init_func)
 
 
-def training_model(output_folder, index, number_of_models, complete_ml_setup: complete_ml_setup.PredefinedCompleteMlSetup, use_cpu: bool, worker_count):
-    torch.set_num_threads(worker_count)
-    if use_cpu:
+def training_model(output_folder, index, arg_number_of_models, arg_complete_ml_setup: complete_ml_setup.PredefinedCompleteMlSetup, arg_use_cpu: bool, arg_worker_count):
+    thread_per_process = os.cpu_count() // arg_worker_count
+    torch.set_num_threads(thread_per_process)
+    if arg_use_cpu:
         device = torch.device("cpu")
     else:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    digit_number_of_models = len(str(number_of_models))
-    model = copy.deepcopy(complete_ml_setup.ml_setup.model)
+    digit_number_of_models = len(str(arg_number_of_models))
+    model = copy.deepcopy(arg_complete_ml_setup.ml_setup.model)
     model.to(device)
-    dataset = copy.deepcopy(complete_ml_setup.ml_setup.training_data)
-    batch_size = complete_ml_setup.ml_setup.training_batch_size
+    dataset = copy.deepcopy(arg_complete_ml_setup.ml_setup.training_data)
+    batch_size = arg_complete_ml_setup.ml_setup.training_batch_size
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-    criterion = complete_ml_setup.ml_setup.criterion
-    optimizer = copy.deepcopy(complete_ml_setup.optimizer)
+    criterion = arg_complete_ml_setup.ml_setup.criterion
+    optimizer = copy.deepcopy(arg_complete_ml_setup.optimizer)
     optimizer.param_groups[0]['params'] = list(model.parameters())
-    epochs = complete_ml_setup.epochs
+    epochs = arg_complete_ml_setup.epochs
 
     # reset random weights
-    re_initialize_model(model, complete_ml_setup.ml_setup)
+    re_initialize_model(model, arg_complete_ml_setup.ml_setup)
 
     model.train()
     print(f"INDEX[{index}] begin training")
