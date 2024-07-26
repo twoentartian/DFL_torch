@@ -26,7 +26,8 @@ def re_initialize_model(model, ml_setup):
         model.apply(ml_setup.weights_init_func)
 
 
-def training_model(output_folder, index, number_of_models, complete_ml_setup: complete_ml_setup.PredefinedCompleteMlSetup, use_cpu: bool):
+def training_model(output_folder, index, number_of_models, complete_ml_setup: complete_ml_setup.PredefinedCompleteMlSetup, use_cpu: bool, worker_count):
+    torch.set_num_threads(worker_count)
     if use_cpu:
         device = torch.device("cpu")
     else:
@@ -100,7 +101,7 @@ if __name__ == "__main__":
     # training
     if worker_count > number_of_models:
         worker_count = number_of_models
-    args = [(output_folder_path, i, number_of_models, current_complete_ml_setup, use_cpu) for i in range(number_of_models)]
+    args = [(output_folder_path, i, number_of_models, current_complete_ml_setup, use_cpu, worker_count) for i in range(number_of_models)]
     with concurrent.futures.ProcessPoolExecutor(max_workers=worker_count) as executor:
         futures = [executor.submit(training_model, *arg) for arg in args]
         for future in concurrent.futures.as_completed(futures):
