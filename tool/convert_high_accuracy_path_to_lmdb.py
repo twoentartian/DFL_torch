@@ -15,6 +15,7 @@ if __name__ == '__main__':
 
     all_entries = os.listdir(root_folder)
     folders = [entry for entry in all_entries if os.path.isdir(os.path.join(root_folder, entry))]
+    folders = sorted(folders)
     print(f"all {len(folders)} folders: {folders}")
     model_stat_folder_name = "model_stat"
     for folder in folders:
