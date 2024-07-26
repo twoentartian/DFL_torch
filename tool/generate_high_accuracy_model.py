@@ -12,9 +12,6 @@ from torch.utils.data import DataLoader
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from py_src import ml_setup, complete_ml_setup
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-
 def re_initialize_model(model, ml_setup):
     random_data = os.urandom(4)
     seed = int.from_bytes(random_data, byteorder="big")
@@ -29,7 +26,12 @@ def re_initialize_model(model, ml_setup):
         model.apply(ml_setup.weights_init_func)
 
 
-def training_model(output_folder, index, number_of_models, complete_ml_setup: complete_ml_setup.PredefinedCompleteMlSetup):
+def training_model(output_folder, index, number_of_models, complete_ml_setup: complete_ml_setup.PredefinedCompleteMlSetup, use_cpu: bool):
+    if use_cpu:
+        device = torch.device("cpu")
+    else:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     digit_number_of_models = len(str(number_of_models))
     model = copy.deepcopy(complete_ml_setup.ml_setup.model)
     model.to(device)
@@ -72,12 +74,14 @@ if __name__ == "__main__":
     parser.add_argument("-n", "--number_of_models", type=int, default=1)
     parser.add_argument("-c", '--cores', type=int, default=os.cpu_count(), help='specify how many models to train in parallel')
     parser.add_argument("-m", "--model_type", type=str, default='lenet5', choices=['lenet5', 'resnet18'])
+    parser.add_argument("--cpu", action='store_true', help='Force using CPU for training')
 
     args = parser.parse_args()
 
     number_of_models = args.number_of_models
     worker_count = args.cores
     model_type = args.model_type
+    use_cpu = args.cpu
 
     # prepare model and dataset
     current_complete_ml_setup = None
@@ -95,7 +99,7 @@ if __name__ == "__main__":
     # training
     if worker_count > number_of_models:
         worker_count = number_of_models
-    args = [(output_folder_path, i, number_of_models, current_complete_ml_setup) for i in range(number_of_models)]
+    args = [(output_folder_path, i, number_of_models, current_complete_ml_setup, use_cpu) for i in range(number_of_models)]
     with concurrent.futures.ProcessPoolExecutor(max_workers=worker_count) as executor:
         futures = [executor.submit(training_model, *arg) for arg in args]
         for future in concurrent.futures.as_completed(futures):
