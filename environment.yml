@@ -96,7 +96,6 @@ dependencies:
   - libxml2=2.9.14=h74e7548_0
   - libzlib=1.2.13=h4ab18f5_6
   - llvm-openmp=14.0.6=h9e868ea_0
-  - lmdb=0.9.29=h2531618_0
   - lz4-c=1.9.4=h6a678d5_1
   - markupsafe=2.1.3=py312h5eee18b_0
   - matplotlib=3.8.4=py312h06a4308_0
@@ -129,6 +128,7 @@ dependencies:
   - pysocks=1.7.1=py312h06a4308_0
   - python=3.12.2=hab00c5b_0_cpython
   - python-dateutil=2.9.0post0=py312h06a4308_2
+  - python-lmdb=1.4.1=py312h6a678d5_0
   - python-tzdata=2023.3=pyhd3eb1b0_0
   - pytorch=2.3.1=py3.12_cuda12.1_cudnn8.9.2_0
   - pytorch-cuda=12.1=ha16c6d3_5
