@@ -35,7 +35,7 @@ if __name__ == '__main__':
     args = []
     for folder in folders:
         model_stat_folder = os.path.join(root_folder, folder, model_stat_folder_name)
-        args.append(model_stat_folder)
+        args.append((model_stat_folder,))
 
     if worker_count > len(folders):
         worker_count = len(folders)
