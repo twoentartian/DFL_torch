@@ -40,6 +40,7 @@ def training_model(output_folder, index, number_of_models, complete_ml_setup: co
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     criterion = complete_ml_setup.ml_setup.criterion
     optimizer = copy.deepcopy(complete_ml_setup.optimizer)
+    optimizer.param_groups[0]['params'] = list(model.parameters())
     epochs = complete_ml_setup.epochs
 
     # reset random weights
