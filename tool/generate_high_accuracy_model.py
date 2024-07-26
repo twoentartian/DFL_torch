@@ -3,6 +3,7 @@ import torch
 import os
 import sys
 import random
+import copy
 import numpy as np
 from datetime import datetime
 import concurrent.futures
@@ -30,13 +31,13 @@ def re_initialize_model(model, ml_setup):
 
 def training_model(output_folder, index, number_of_models, complete_ml_setup: complete_ml_setup.PredefinedCompleteMlSetup):
     digit_number_of_models = len(str(number_of_models))
-    model = complete_ml_setup.ml_setup.model
+    model = copy.deepcopy(complete_ml_setup.ml_setup.model)
     model.to(device)
-    dataset = complete_ml_setup.ml_setup.training_data
+    dataset = copy.deepcopy(complete_ml_setup.ml_setup.training_data)
     batch_size = complete_ml_setup.ml_setup.training_batch_size
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
     criterion = complete_ml_setup.ml_setup.criterion
-    optimizer = complete_ml_setup.optimizer
+    optimizer = copy.deepcopy(complete_ml_setup.optimizer)
     epochs = complete_ml_setup.epochs
 
     # reset random weights
