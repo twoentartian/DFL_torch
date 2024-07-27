@@ -122,4 +122,4 @@ if __name__ == '__main__':
 
     plt.tight_layout()
     plt.savefig('accuracy_weight_diff_combine.pdf')
-    plt.savefig('accuracy_weight_diff_combine.jpg', dpi=800)
+    plt.savefig('accuracy_weight_diff_combine.jpg', dpi=400)

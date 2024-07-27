@@ -177,10 +177,10 @@ if __name__ == '__main__':
     parser.add_argument("-c", '--cores', type=int, default=os.cpu_count(), help='specify how many models to train in parallel')
     parser.add_argument("-m", "--model_type", type=str, default='lenet5', choices=['lenet5', 'resnet18'])
     parser.add_argument("-t", "--max_tick", type=int, default=10000)
-    parser.add_argument("-s", "--step_size", type=float, default=0.002)
-    parser.add_argument("-a", "--adoptive_step_size", type=float, default=0.001)
+    parser.add_argument("-s", "--step_size", type=float, default=0.001)
+    parser.add_argument("-a", "--adoptive_step_size", type=float, default=0.0005)
     parser.add_argument("--training_round", type=int, default=1)
-    parser.add_argument("--lr", type=float, default=0.01)
+    parser.add_argument("--lr", type=float, default=0.001)
     parser.add_argument("--save_format", type=str, default='lmdb', choices=['file', 'lmdb'])
 
     args = parser.parse_args()
@@ -215,6 +215,10 @@ if __name__ == '__main__':
     # create output folder
     output_folder_path = os.path.join(os.curdir, f"{__file__}_{datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")}")
     os.mkdir(output_folder_path)
+    info_file = open(os.path.join(output_folder_path, "info.txt"), 'x')
+    info_file.write(f"{args}")
+    info_file.flush()
+    info_file.close()
 
     # finding path
     if worker_count > file_count:

@@ -96,6 +96,7 @@ dependencies:
   - libxml2=2.9.14=h74e7548_0
   - libzlib=1.2.13=h4ab18f5_6
   - llvm-openmp=14.0.6=h9e868ea_0
+  - llvmlite=0.43.0=py312h6a678d5_0
   - lz4-c=1.9.4=h6a678d5_1
   - markupsafe=2.1.3=py312h5eee18b_0
   - matplotlib=3.8.4=py312h06a4308_0
@@ -109,6 +110,7 @@ dependencies:
   - ncurses=6.4=h6a678d5_0
   - nettle=3.7.3=hbbd107a_1
   - networkx=3.3=py312h06a4308_0
+  - numba=0.60.0=py312h83e6fd3_0
   - numexpr=2.8.7=py312hf827012_0
   - numpy=1.26.4=py312hc5e2394_0
   - numpy-base=1.26.4=py312h0da6c21_0
@@ -122,6 +124,7 @@ dependencies:
   - pip=24.0=py312h06a4308_0
   - ply=3.11=py312h06a4308_1
   - pybind11-abi=5=hd3eb1b0_0
+  - pynndescent=0.5.10=py312h06a4308_0
   - pyparsing=3.0.9=py312h06a4308_0
   - pyqt=5.15.10=py312h6a678d5_0
   - pyqt5-sip=12.13.0=py312h5eee18b_0
@@ -130,6 +133,7 @@ dependencies:
   - python-dateutil=2.9.0post0=py312h06a4308_2
   - python-lmdb=1.4.1=py312h6a678d5_0
   - python-tzdata=2023.3=pyhd3eb1b0_0
+  - python_abi=3.12=4_cp312
   - pytorch=2.3.1=py3.12_cuda12.1_cudnn8.9.2_0
   - pytorch-cuda=12.1=ha16c6d3_5
   - pytorch-mutex=1.0=cuda
@@ -151,8 +155,10 @@ dependencies:
   - torchaudio=2.3.1=py312_cu121
   - torchvision=0.18.1=py312_cu121
   - tornado=6.4.1=py312h5eee18b_0
+  - tqdm=4.66.4=py312he106c6f_0
   - typing_extensions=4.11.0=py312h06a4308_0
   - tzdata=2024a=h04d1e81_0
+  - umap-learn=0.5.6=py312h7900ff3_0
   - unicodedata2=15.1.0=py312h5eee18b_0
   - urllib3=2.2.2=py312h06a4308_0
   - wheel=0.43.0=py312h06a4308_0
@@ -162,5 +168,4 @@ dependencies:
   - zstd=1.5.5=hc292b87_2
   - pip:
       - mpi4py==3.1.6
-      - pydevd-pycharm==241.18034.82
 prefix: /home/tyd/anaconda3/envs/torch
