@@ -252,6 +252,8 @@ if __name__ == '__main__':
     node_name = args.node_name
     plot_dimension = 3 if args.use_3d else 2
     dimension_reduction_method = args.dimension_reduce
+    if mode == 'all_path' or mode == 'single_path':
+        assert dimension_reduction_method is not None
     only_layer = args.layer
 
     # create output folder
