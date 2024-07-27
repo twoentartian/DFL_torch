@@ -68,7 +68,7 @@ class InverseLRScheduler(optim.lr_scheduler.LRScheduler):
         return [base_lr / (1 + self.gamma * self.last_epoch) for base_lr in self.base_lrs]
 
 
-def process_file_func(output_folder_path, start_model_path, end_model_path, arg_ml_setup, arg_lr, arg_max_tick, arg_training_round, arg_step_size, arg_adoptive_step_size, arg_worker_count):
+def process_file_func(output_folder_path, start_model_path, end_model_path, arg_ml_setup, arg_lr, arg_max_tick, arg_training_round, arg_step_size, arg_adoptive_step_size, arg_worker_count, arg_save_format):
     thread_per_process = os.cpu_count() // arg_worker_count
     torch.set_num_threads(thread_per_process)
 
@@ -181,6 +181,7 @@ if __name__ == '__main__':
     parser.add_argument("-a", "--adoptive_step_size", type=float, default=0.001)
     parser.add_argument("--training_round", type=int, default=1)
     parser.add_argument("--lr", type=float, default=0.01)
+    parser.add_argument("--save_format", type=str, default='lmdb', choices=['file', 'lmdb'])
 
     args = parser.parse_args()
 
@@ -195,6 +196,7 @@ if __name__ == '__main__':
     training_round = args.training_round
     learning_rate = args.lr
     files = get_files_to_process(args.start_folder, args.end_folder)
+    save_format = args.save_format
     file_count = len(files)
     logger.info(f"totally {len(files)} files to process: {files}")
 
@@ -217,7 +219,7 @@ if __name__ == '__main__':
     # finding path
     if worker_count > file_count:
         worker_count = file_count
-    args = [(output_folder_path, os.path.join(start_folder, f), os.path.join(end_folder, f), current_ml_setup, learning_rate, max_tick, training_round, step_size, adoptive_step_size, worker_count) for f in files]
+    args = [(output_folder_path, os.path.join(start_folder, f), os.path.join(end_folder, f), current_ml_setup, learning_rate, max_tick, training_round, step_size, adoptive_step_size, worker_count, save_format) for f in files]
     with concurrent.futures.ProcessPoolExecutor(max_workers=worker_count) as executor:
         futures = [executor.submit(process_file_func, *arg) for arg in args]
         for future in concurrent.futures.as_completed(futures):
