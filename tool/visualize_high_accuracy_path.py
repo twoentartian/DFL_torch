@@ -104,7 +104,7 @@ def deduplicate_weights(weights_trajectory):
     print(f"de-duplicate trajectory: {len(weights_trajectory)} -> {len(weights_trajectory_reduced)}")
     return weights_trajectory_reduced, index_reduced
 
-def visualize_single_path(arg_path_folder, arg_output_folder, arg_node_name: int, methods, dimension=None):
+def visualize_single_path(arg_path_folder, arg_output_folder, arg_node_name: int, methods, dimension=None, arg_remove_duplicate_points=True):
     if dimension is None:
         dimension = [2, 3]
     assert os.path.exists(arg_path_folder)
@@ -134,7 +134,10 @@ def visualize_single_path(arg_path_folder, arg_output_folder, arg_node_name: int
                 elif method == 'pca':
                     pca_2d = PCA(n_components=2)
                     projected_2d = pca_2d.fit_transform(weights_array)
-                    projected_2d, projection_index = deduplicate_weights(projected_2d)
+                    if arg_remove_duplicate_points:
+                        projected_2d, projection_index = deduplicate_weights(projected_2d)
+                    else:
+                        projection_index = range(len(projected_2d))
                 elif method == 'tsne':
                     tsne_2d = TSNE(n_components=2, perplexity=30)
                     projected_2d = tsne_2d.fit_transform(weights_array)
@@ -163,7 +166,10 @@ def visualize_single_path(arg_path_folder, arg_output_folder, arg_node_name: int
                 elif method == 'pca':
                     pca_3d = PCA(n_components=3)
                     projected_3d = pca_3d.fit_transform(weights_array)
-                    projected_3d, projection_index = deduplicate_weights(projected_3d)
+                    if arg_remove_duplicate_points:
+                        projected_3d, projection_index = deduplicate_weights(projected_3d)
+                    else:
+                        projection_index = range(len(projected_3d))
                 elif method == 'tsne':
                     tsne_3d = TSNE(n_components=3, perplexity=30)
                     projected_3d = tsne_3d.fit_transform(weights_array)
@@ -183,7 +189,7 @@ def visualize_single_path(arg_path_folder, arg_output_folder, arg_node_name: int
                 pickle.dump(fig, open(f'{file_name}.plt3d', 'wb'))
                 plt.close(fig)
 
-def visualize_all_path(arg_path_folder, arg_output_folder, arg_node_name: int, methods, only_layer=None, dimension=None):
+def visualize_all_path(arg_path_folder, arg_output_folder, arg_node_name: int, methods, only_layer=None, dimension=None, arg_remove_duplicate_points=True):
     if dimension is None:
         dimension = [2, 3]
     assert os.path.exists(arg_path_folder)
@@ -225,7 +231,10 @@ def visualize_all_path(arg_path_folder, arg_output_folder, arg_node_name: int, m
                 elif method == 'pca':
                     pca_2d = PCA(n_components=2)
                     projected_2d = pca_2d.fit_transform(layers_and_trajectory[layer_name])
-                    projected_2d, projection_index = deduplicate_weights(projected_2d)
+                    if arg_remove_duplicate_points:
+                        projected_2d, projection_index = deduplicate_weights(projected_2d)
+                    else:
+                        projection_index = range(len(projected_2d))
                 elif method == 'tsne':
                     tsne_2d = TSNE(n_components=2, perplexity=30)
                     projected_2d = tsne_2d.fit_transform(layers_and_trajectory[layer_name])
@@ -258,7 +267,10 @@ def visualize_all_path(arg_path_folder, arg_output_folder, arg_node_name: int, m
                 elif method == 'pca':
                     pca_3d = PCA(n_components=3)
                     projected_3d = pca_3d.fit_transform(layers_and_trajectory[layer_name])
-                    projected_3d, projection_index = deduplicate_weights(projected_3d)
+                    if arg_remove_duplicate_points:
+                        projected_3d, projection_index = deduplicate_weights(projected_3d)
+                    else:
+                        projection_index = range(len(projected_3d))
                 elif method == 'tsne':
                     tsne_3d = TSNE(n_components=3, perplexity=30)
                     projected_3d = tsne_3d.fit_transform(layers_and_trajectory[layer_name])
@@ -291,6 +303,7 @@ if __name__ == '__main__':
     parser.add_argument("path_folder", type=str)
     parser.add_argument("-m", "--dimension_reduce", type=str, nargs='+', choices=['umap', 'tsne', 'pca'])
     parser.add_argument("--node_name", type=int, default=0)
+    parser.add_argument("--remove_duplicate_points", action="store_true", default=True)
     parser.add_argument("--disable_3d", action='store_true')
     parser.add_argument("--disable_2d", action='store_true')
     parser.add_argument("--layer", type=str)
@@ -309,6 +322,7 @@ if __name__ == '__main__':
     if 'all_path' in mode or 'single_path' in mode:
         assert dimension_reduction_methods is not None
     only_layer = args.layer
+    remove_duplicate_points = args.remove_duplicate_points
 
     # create output folder
     output_folder_path = os.path.join(os.curdir, f"{__file__}_{datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")}")
