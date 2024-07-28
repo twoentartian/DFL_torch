@@ -232,6 +232,7 @@ def visualize_all_path(arg_path_folder, arg_output_folder, arg_node_name: int, m
     assert os.path.exists(arg_path_folder)
     all_sub_folders = [f.path for f in os.scandir(arg_path_folder) if f.is_dir()]
     assert len(all_sub_folders) > 0
+    all_sub_folders = sorted(all_sub_folders)
 
     layers_and_trajectory = {}
     layer_and_trajectory_index = {}
