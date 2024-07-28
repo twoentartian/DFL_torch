@@ -13,9 +13,6 @@ import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
 from sklearn.cluster import DBSCAN
-from sklearn.preprocessing import StandardScaler
-from sklearn.neighbors import NearestNeighbors
-from kneed import KneeLocator
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -302,11 +299,11 @@ if __name__ == '__main__':
     parser.add_argument("mode", type=str, choices=['single_path_all_weights', 'all_path', 'single_path'])
     parser.add_argument("path_folder", type=str)
     parser.add_argument("-m", "--dimension_reduce", type=str, nargs='+', choices=['umap', 'tsne', 'pca'])
+    parser.add_argument("-l", "--layer", type=str)
     parser.add_argument("--node_name", type=int, default=0)
     parser.add_argument("--remove_duplicate_points", action="store_true", default=True)
     parser.add_argument("--disable_3d", action='store_true')
     parser.add_argument("--disable_2d", action='store_true')
-    parser.add_argument("--layer", type=str)
 
     args = parser.parse_args()
     mode = args.mode
