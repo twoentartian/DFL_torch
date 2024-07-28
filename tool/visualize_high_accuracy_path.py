@@ -226,7 +226,7 @@ def de_duplicate_weights_all_path(arg_trajectory, arg_trajectory_length_list, sh
 
     return np.array(projection), np.array(projection_index), np.array(projection_slice_length)
 
-def visualize_all_path(arg_path_folder, arg_output_folder, arg_node_name: int, methods, only_layer=None, dimension=None, arg_remove_duplicate_points=True, shrink_ratio=None):
+def visualize_all_path(arg_path_folder, arg_output_folder, arg_node_name: int, methods, only_layers=None, dimension=None, arg_remove_duplicate_points=True, shrink_ratio=None):
     if dimension is None:
         dimension = [2, 3]
     assert os.path.exists(arg_path_folder)
@@ -244,7 +244,7 @@ def visualize_all_path(arg_path_folder, arg_output_folder, arg_node_name: int, m
         ticks_ordered = sorted(tick_and_models.keys())
         sample_model = tick_and_models[next(iter(tick_and_models))]
         for layer_name in sample_model.keys():
-            if only_layer is not None and (only_layer not in layer_name):
+            if only_layers is not None and (layer_name not in only_layers):
                 continue
             weights_list = [extract_weights(tick_and_models[tick], layer_name) for tick in ticks_ordered]
             if layer_name not in layers_and_trajectory.keys():
@@ -339,7 +339,7 @@ if __name__ == '__main__':
     parser.add_argument("mode", type=str, choices=['single_path_all_weights', 'all_path', 'single_path'])
     parser.add_argument("path_folder", type=str)
     parser.add_argument("-m", "--dimension_reduce", type=str, nargs='+', choices=['umap', 'tsne', 'pca'])
-    parser.add_argument("-l", "--layer", type=str)
+    parser.add_argument("-l", "--layer", type=str, nargs='+')
     parser.add_argument("--node_name", type=int, default=0)
     parser.add_argument("--remove_duplicate_points", action="store_true", default=True)
     parser.add_argument("-r", "--remove_duplicate_shrink_ratio", type=float)
@@ -359,7 +359,7 @@ if __name__ == '__main__':
     dimension_reduction_methods = args.dimension_reduce
     if 'all_path' in mode or 'single_path' in mode:
         assert dimension_reduction_methods is not None
-    only_layer = args.layer
+    only_layers = args.layer
     remove_duplicate_points = args.remove_duplicate_points
     remove_duplicate_shrink_ratio = args.remove_duplicate_shrink_ratio
 
@@ -370,6 +370,6 @@ if __name__ == '__main__':
     if mode == 'single_path_all_weights':
         visualize_single_path_all_weights(path_folder, output_folder_path, node_name)
     elif mode == 'all_path':
-        visualize_all_path(path_folder, output_folder_path, node_name, dimension_reduction_methods, only_layer=only_layer, dimension=plot_dimensions, shrink_ratio=remove_duplicate_shrink_ratio)
+        visualize_all_path(path_folder, output_folder_path, node_name, dimension_reduction_methods, only_layers=only_layers, dimension=plot_dimensions, shrink_ratio=remove_duplicate_shrink_ratio)
     elif mode == "single_path":
         visualize_single_path(path_folder, output_folder_path, node_name, dimension_reduction_methods, dimension=plot_dimensions)
