@@ -180,6 +180,9 @@ def visualize_all_path(arg_path_folder, arg_output_folder, arg_node_name: int, m
             layers_and_trajectory[layer_name].extend(weights_list)
             layers_and_trajectory_length[layer_name].append(len(weights_list))
 
+    for layer_name in layers_and_trajectory.keys():
+        layers_and_trajectory[layer_name] = np.array(layers_and_trajectory[layer_name])
+
     for layer_name in all_layer_names:
         for method in methods:
             print(f"processing {method}: {layer_name}")
