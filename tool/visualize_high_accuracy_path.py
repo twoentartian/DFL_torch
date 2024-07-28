@@ -12,6 +12,10 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
+from sklearn.cluster import DBSCAN
+from sklearn.preprocessing import StandardScaler
+from sklearn.neighbors import NearestNeighbors
+from kneed import KneeLocator
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -79,6 +83,27 @@ def extract_weights(model_stat, layer_name):
     weights = model_stat[layer_name].numpy()
     return weights.flatten()
 
+def deduplicate_weights(weights_trajectory):
+    dbscan = DBSCAN(eps=0.0001, min_samples=100)
+    labels = dbscan.fit_predict(weights_trajectory)
+
+    processed_labels = set()
+    weights_trajectory_reduced = []
+    index_reduced = []
+    for index, label in enumerate(labels):
+        if label == -1:
+            weights_trajectory_reduced.append(weights_trajectory[index])
+            index_reduced.append(index)
+        else:
+            if label not in processed_labels:
+                processed_labels.add(label)
+                weights_trajectory_reduced.append(weights_trajectory[index])
+                index_reduced.append(index)
+    weights_trajectory_reduced = np.array(weights_trajectory_reduced)
+    index_reduced = np.array(index_reduced)
+    print(f"de-duplicate trajectory: {len(weights_trajectory)} -> {len(weights_trajectory_reduced)}")
+    return weights_trajectory_reduced, index_reduced
+
 def visualize_single_path(arg_path_folder, arg_output_folder, arg_node_name: int, methods, dimension=None):
     if dimension is None:
         dimension = [2, 3]
@@ -105,18 +130,21 @@ def visualize_single_path(arg_path_folder, arg_output_folder, arg_node_name: int
                 if method == 'umap':
                     umap_2d = umap.UMAP(n_components=2)
                     projected_2d = umap_2d.fit_transform(weights_array)
+                    projection_index = range(len(projected_2d))
                 elif method == 'pca':
                     pca_2d = PCA(n_components=2)
                     projected_2d = pca_2d.fit_transform(weights_array)
+                    projected_2d, projection_index = deduplicate_weights(projected_2d)
                 elif method == 'tsne':
                     tsne_2d = TSNE(n_components=2, perplexity=30)
                     projected_2d = tsne_2d.fit_transform(weights_array)
+                    projection_index = range(len(projected_2d))
                 else:
                     raise ValueError(f"Unsupported method: {method}")
 
                 fig = plt.figure(figsize=(8, 8))
                 ax = fig.add_subplot(111)
-                sc = ax.scatter(projected_2d[:, 0], projected_2d[:, 1], s=plot_size, alpha=plot_alpha, c=range(len(projected_2d)), cmap='viridis')
+                sc = ax.scatter(projected_2d[:, 0], projected_2d[:, 1], s=plot_size, alpha=plot_alpha, c=projection_index, cmap='viridis')
                 plt.colorbar(sc, label='Model Index')
                 ax.set_xlabel(f'{method} Dimension 1')
                 ax.set_ylabel(f'{method} Dimension 2')
@@ -131,18 +159,21 @@ def visualize_single_path(arg_path_folder, arg_output_folder, arg_node_name: int
                 if method == 'umap':
                     umap_3d = umap.UMAP(n_components=3)
                     projected_3d = umap_3d.fit_transform(weights_array)
+                    projection_index = range(len(projected_3d))
                 elif method == 'pca':
                     pca_3d = PCA(n_components=3)
                     projected_3d = pca_3d.fit_transform(weights_array)
+                    projected_3d, projection_index = deduplicate_weights(projected_3d)
                 elif method == 'tsne':
                     tsne_3d = TSNE(n_components=3, perplexity=30)
                     projected_3d = tsne_3d.fit_transform(weights_array)
+                    projection_index = range(len(projected_3d))
                 else:
                     raise ValueError(f"Unsupported method: {method}")
 
                 fig = plt.figure(figsize=(10, 8))
                 ax = fig.add_subplot(111, projection='3d')
-                sc = ax.scatter(projected_3d[:, 0], projected_3d[:, 1], projected_3d[:, 2], s=plot_size, alpha=plot_alpha, c=range(len(projected_3d)), cmap='viridis')
+                sc = ax.scatter(projected_3d[:, 0], projected_3d[:, 1], projected_3d[:, 2], s=plot_size, alpha=plot_alpha, c=projection_index, cmap='viridis')
                 plt.colorbar(sc, label='Model Index')
                 ax.set_xlabel(f'{method} Dimension 1')
                 ax.set_ylabel(f'{method} Dimension 2')
@@ -190,12 +221,15 @@ def visualize_all_path(arg_path_folder, arg_output_folder, arg_node_name: int, m
                 if method == 'umap':
                     umap_2d = umap.UMAP(n_components=2)
                     projected_2d = umap_2d.fit_transform(layers_and_trajectory[layer_name])
+                    projection_index = range(len(projected_2d))
                 elif method == 'pca':
                     pca_2d = PCA(n_components=2)
                     projected_2d = pca_2d.fit_transform(layers_and_trajectory[layer_name])
+                    projected_2d, projection_index = deduplicate_weights(projected_2d)
                 elif method == 'tsne':
                     tsne_2d = TSNE(n_components=2, perplexity=30)
                     projected_2d = tsne_2d.fit_transform(layers_and_trajectory[layer_name])
+                    projection_index = range(len(projected_2d))
                 else:
                     raise ValueError(f"Unsupported method: {method}")
 
@@ -203,7 +237,7 @@ def visualize_all_path(arg_path_folder, arg_output_folder, arg_node_name: int, m
                 ax = fig.add_subplot(111)
                 count = 0
                 for index, trajectory_length in enumerate(layers_and_trajectory_length[layer_name]):
-                    sc = ax.scatter(projected_2d[count:count+trajectory_length, 0], projected_2d[count:count+trajectory_length, 1], s=plot_size, alpha=plot_alpha, c=range(trajectory_length), cmap='viridis')
+                    sc = ax.scatter(projected_2d[count:count+trajectory_length, 0], projected_2d[count:count+trajectory_length, 1], s=plot_size, alpha=plot_alpha, c=projection_index, cmap='viridis')
                     count += trajectory_length
                     if index == 0:
                         plt.colorbar(sc, label='Model Index')
@@ -220,12 +254,15 @@ def visualize_all_path(arg_path_folder, arg_output_folder, arg_node_name: int, m
                 if method == 'umap':
                     umap_3d = umap.UMAP(n_components=3)
                     projected_3d = umap_3d.fit_transform(layers_and_trajectory[layer_name])
+                    projection_index = range(len(projected_3d))
                 elif method == 'pca':
                     pca_3d = PCA(n_components=3)
                     projected_3d = pca_3d.fit_transform(layers_and_trajectory[layer_name])
+                    projected_3d, projection_index = deduplicate_weights(projected_3d)
                 elif method == 'tsne':
                     tsne_3d = TSNE(n_components=3, perplexity=30)
                     projected_3d = tsne_3d.fit_transform(layers_and_trajectory[layer_name])
+                    projection_index = range(len(projected_3d))
                 else:
                     raise ValueError(f"Unsupported method: {method}")
 
@@ -233,7 +270,7 @@ def visualize_all_path(arg_path_folder, arg_output_folder, arg_node_name: int, m
                 ax = fig.add_subplot(111, projection='3d')
                 count = 0
                 for index, trajectory_length in enumerate(layers_and_trajectory_length[layer_name]):
-                    sc = ax.scatter(projected_3d[count:count + trajectory_length, 0], projected_3d[count:count + trajectory_length, 1], projected_3d[count:count + trajectory_length, 2], s=plot_size, alpha=plot_alpha, c=range(trajectory_length), cmap='viridis')
+                    sc = ax.scatter(projected_3d[count:count + trajectory_length, 0], projected_3d[count:count + trajectory_length, 1], projected_3d[count:count + trajectory_length, 2], s=plot_size, alpha=plot_alpha, c=projection_index, cmap='viridis')
                     count += trajectory_length
                     if index == 0:
                         plt.colorbar(sc, label='Model Index')
