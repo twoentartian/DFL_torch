@@ -91,7 +91,7 @@ def deduplicate_weights(weights_trajectory, shrink_ratio: float | None = None):
 
     dimension = weights_trajectory_scaled.shape[1]
     if dimension == 2:
-        dbscan = DBSCAN(eps=0.01, min_samples=100)
+        dbscan = DBSCAN(eps=0.05, min_samples=100)
     elif dimension == 3:
         dbscan = DBSCAN(eps=0.05, min_samples=100)
     else:
