@@ -82,7 +82,10 @@ def extract_weights(model_stat, layer_name):
     weights = model_stat[layer_name].numpy()
     return weights.flatten()
 
-def deduplicate_weights(weights_trajectory):
+def deduplicate_weights(weights_trajectory, shrink_ratio: float | None = None):
+    if shrink_ratio is not None:
+        assert 0 < shrink_ratio < 1
+
     scaler = StandardScaler()
     weights_trajectory_scaled = scaler.fit_transform(weights_trajectory)
 
@@ -110,7 +113,17 @@ def deduplicate_weights(weights_trajectory):
     weights_trajectory_reduced = np.array(weights_trajectory_reduced)
     index_reduced = np.array(index_reduced)
     print(f"De-duplicate trajectory points: {weights_trajectory.shape[0]} -> {weights_trajectory_reduced.shape[0]}")
-    return weights_trajectory_reduced, index_reduced
+    if shrink_ratio is None:
+        return weights_trajectory_reduced, index_reduced
+    else:
+        target_len = weights_trajectory.shape[0] * shrink_ratio
+        current_len = weights_trajectory_reduced.shape[0]
+        sample_rate = round(current_len / target_len)
+        if sample_rate < 1:
+            sample_rate = 1
+        print(f"De-duplicate extra sampling rate: {sample_rate}")
+        return weights_trajectory_reduced[::sample_rate], index_reduced[::sample_rate]
+
 
 def visualize_single_path(arg_path_folder, arg_output_folder, arg_node_name: int, methods, dimension=None, arg_remove_duplicate_points=True):
     if dimension is None:
@@ -198,13 +211,13 @@ def visualize_single_path(arg_path_folder, arg_output_folder, arg_node_name: int
                 pickle.dump(fig, open(f'{file_name}.plt3d', 'wb'))
                 plt.close(fig)
 
-def de_duplicate_weights_all_path(arg_trajectory, arg_trajectory_length_list):
+def de_duplicate_weights_all_path(arg_trajectory, arg_trajectory_length_list, shrink_ratio=None):
     projection = []
     projection_index = []
     projection_slice_length = []
     count = 0
     for original_trajectory_length in arg_trajectory_length_list:
-        projection_slice, projection_slice_index = deduplicate_weights(arg_trajectory[count: count+original_trajectory_length])
+        projection_slice, projection_slice_index = deduplicate_weights(arg_trajectory[count: count+original_trajectory_length], shrink_ratio=shrink_ratio)
         count += original_trajectory_length
 
         projection_slice_length.append(len(projection_slice))
@@ -213,7 +226,7 @@ def de_duplicate_weights_all_path(arg_trajectory, arg_trajectory_length_list):
 
     return np.array(projection), np.array(projection_index), np.array(projection_slice_length)
 
-def visualize_all_path(arg_path_folder, arg_output_folder, arg_node_name: int, methods, only_layer=None, dimension=None, arg_remove_duplicate_points=True):
+def visualize_all_path(arg_path_folder, arg_output_folder, arg_node_name: int, methods, only_layer=None, dimension=None, arg_remove_duplicate_points=True, shrink_ratio=None):
     if dimension is None:
         dimension = [2, 3]
     assert os.path.exists(arg_path_folder)
@@ -260,7 +273,7 @@ def visualize_all_path(arg_path_folder, arg_output_folder, arg_node_name: int, m
                     pca_2d = PCA(n_components=2)
                     projected_2d = pca_2d.fit_transform(layers_and_trajectory[layer_name])
                     if arg_remove_duplicate_points:
-                        projected_2d, projection_index, new_trajectory_length = de_duplicate_weights_all_path(projected_2d, trajectory_length_list)
+                        projected_2d, projection_index, new_trajectory_length = de_duplicate_weights_all_path(projected_2d, trajectory_length_list, shrink_ratio=shrink_ratio)
                         layers_and_trajectory_length[layer_name] = new_trajectory_length
                 elif method == 'tsne':
                     tsne_2d = TSNE(n_components=2, perplexity=30)
@@ -294,7 +307,7 @@ def visualize_all_path(arg_path_folder, arg_output_folder, arg_node_name: int, m
                     pca_3d = PCA(n_components=3)
                     projected_3d = pca_3d.fit_transform(layers_and_trajectory[layer_name])
                     if arg_remove_duplicate_points:
-                        projected_3d, projection_index, new_trajectory_length = de_duplicate_weights_all_path(projected_3d, trajectory_length_list)
+                        projected_3d, projection_index, new_trajectory_length = de_duplicate_weights_all_path(projected_3d, trajectory_length_list, shrink_ratio=shrink_ratio)
                         layers_and_trajectory_length[layer_name] = new_trajectory_length
                 elif method == 'tsne':
                     tsne_3d = TSNE(n_components=3, perplexity=30)
@@ -329,6 +342,7 @@ if __name__ == '__main__':
     parser.add_argument("-l", "--layer", type=str)
     parser.add_argument("--node_name", type=int, default=0)
     parser.add_argument("--remove_duplicate_points", action="store_true", default=True)
+    parser.add_argument("-r", "--remove_duplicate_shrink_ratio", type=float)
     parser.add_argument("--disable_3d", action='store_true')
     parser.add_argument("--disable_2d", action='store_true')
 
@@ -347,6 +361,7 @@ if __name__ == '__main__':
         assert dimension_reduction_methods is not None
     only_layer = args.layer
     remove_duplicate_points = args.remove_duplicate_points
+    remove_duplicate_shrink_ratio = args.remove_duplicate_shrink_ratio
 
     # create output folder
     output_folder_path = os.path.join(os.curdir, f"{__file__}_{datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")}")
@@ -355,6 +370,6 @@ if __name__ == '__main__':
     if mode == 'single_path_all_weights':
         visualize_single_path_all_weights(path_folder, output_folder_path, node_name)
     elif mode == 'all_path':
-        visualize_all_path(path_folder, output_folder_path, node_name, dimension_reduction_methods, only_layer=only_layer, dimension=plot_dimensions)
+        visualize_all_path(path_folder, output_folder_path, node_name, dimension_reduction_methods, only_layer=only_layer, dimension=plot_dimensions, shrink_ratio=remove_duplicate_shrink_ratio)
     elif mode == "single_path":
         visualize_single_path(path_folder, output_folder_path, node_name, dimension_reduction_methods, dimension=plot_dimensions)
