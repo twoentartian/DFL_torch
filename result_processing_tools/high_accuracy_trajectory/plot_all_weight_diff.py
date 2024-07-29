@@ -2,13 +2,16 @@ import os
 import pandas as pd
 import matplotlib.pyplot as plt
 
+samples_per_df = 200
 
 # Function to create and save a plot for a specific column
 def plot_column(data, column_name):
     plt.figure(figsize=(10, 6))
 
     for folder, df in data.items():
-        df_down_sampled = df.sample(n=200)  # Sample 200 rows
+        row = len(df.index)
+        down_sample_rate = (row - 1) // samples_per_df + 1
+        df_down_sampled = df.iloc[::down_sample_rate, :]
         plt.plot(df_down_sampled['tick'], df_down_sampled[column_name], label=f"{folder}")
 
     plt.xlabel('Tick')
