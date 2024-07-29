@@ -33,26 +33,37 @@ def set_logging(base_logger, task_name):
 
     del console, formatter
 
-def get_files_to_process(start_folder, end_folder):
-    if not os.path.isdir(start_folder):
-        logger.critical(f"{start_folder} does not exist")
-    if not os.path.isdir(end_folder):
-        logger.critical(f"{end_folder} does not exist")
+def get_files_to_process(arg_start_folder, arg_end_folder, arg_mode):
+    if not os.path.isdir(arg_start_folder):
+        logger.critical(f"{arg_start_folder} does not exist")
+    if not os.path.isdir(arg_end_folder):
+        logger.critical(f"{arg_end_folder} does not exist")
 
-    files_in_folder1 = set(os.listdir(start_folder))
-    files_in_folder2 = set(os.listdir(end_folder))
+    files_in_start_folder = sorted(set(os.listdir(arg_start_folder)))
+    files_in_end_folder = sorted(set(os.listdir(arg_end_folder)))
+    if arg_mode == "auto":
+        if len(files_in_start_folder) == len(files_in_end_folder):
+            arg_mode = "each_to_each"
+        else:
+            arg_mode = "all_to_all"
 
-    if len(files_in_folder1) != len(files_in_folder2):
-        logger.critical(f"file counts mismatch: {len(files_in_folder1)} != {len(files_in_folder2)}")
+    output_paths = []
+    if arg_mode == "all_to_all":
+        for start_file in files_in_start_folder:
+            for end_file in files_in_end_folder:
+                output_paths.append((os.path.join(arg_start_folder, start_file), os.path.join(arg_end_folder, end_file)))
 
-    if files_in_folder1 != files_in_folder2:
-        logger.critical(f"file names mismatch: {files_in_folder1} != {files_in_folder2}")
+    elif arg_mode == "each_to_each":
+        if len(files_in_start_folder) != len(files_in_end_folder):
+            logger.critical(f"file counts mismatch: {len(files_in_start_folder)} != {len(files_in_end_folder)}")
+        if files_in_start_folder != files_in_end_folder:
+            logger.critical(f"file names mismatch: {files_in_start_folder} != {files_in_end_folder}")
+        for file in files_in_start_folder:
+            output_paths.append((os.path.join(arg_start_folder, file), os.path.join(arg_end_folder, file)))
+    else:
+        logger.critical(f"mode {arg_mode} not recognized")
 
-    file_names = []
-    for file in files_in_folder1:
-        file_names.append(file)
-
-    return sorted(file_names)
+    return sorted(output_paths)
 
 def get_file_name_without_extension(file_path):
     base_name = os.path.basename(file_path)  # Get the file name with extension
@@ -174,6 +185,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Generate some high accuracy models')
     parser.add_argument("start_folder", type=str, help="folder containing starting models")
     parser.add_argument("end_folder", type=str, help="folder containing destination models")
+    parser.add_argument("--mapping_mode", type=str, default='auto', choices=['auto', 'all_to_all', 'each_to_each', 'one_to_all', 'all_to_one'])
     parser.add_argument("-c", '--cores', type=int, default=os.cpu_count(), help='specify how many models to train in parallel')
     parser.add_argument("-m", "--model_type", type=str, default='lenet5', choices=['lenet5', 'resnet18'])
     parser.add_argument("-t", "--max_tick", type=int, default=10000)
@@ -189,16 +201,17 @@ if __name__ == '__main__':
     logger.info("logging setup complete")
 
     start_folder = args.start_folder
+    mode = args.mapping_mode
     end_folder = args.end_folder
     max_tick = args.max_tick
     step_size = args.step_size
     adoptive_step_size = args.adoptive_step_size
     training_round = args.training_round
     learning_rate = args.lr
-    files = get_files_to_process(args.start_folder, args.end_folder)
+    paths_to_find = get_files_to_process(args.start_folder, args.end_folder, mode)
     save_format = args.save_format
-    file_count = len(files)
-    logger.info(f"totally {len(files)} files to process: {files}")
+    paths_to_find_count = len(paths_to_find)
+    logger.info(f"totally {paths_to_find_count} paths to process: {paths_to_find}")
 
     worker_count = args.cores
     model_type = args.model_type
@@ -221,9 +234,9 @@ if __name__ == '__main__':
     info_file.close()
 
     # finding path
-    if worker_count > file_count:
-        worker_count = file_count
-    args = [(output_folder_path, os.path.join(start_folder, f), os.path.join(end_folder, f), current_ml_setup, learning_rate, max_tick, training_round, step_size, adoptive_step_size, worker_count, save_format) for f in files]
+    if worker_count > paths_to_find_count:
+        worker_count = paths_to_find_count
+    args = [(output_folder_path, start_file, end_file, current_ml_setup, learning_rate, max_tick, training_round, step_size, adoptive_step_size, worker_count, save_format) for (start_file, end_file) in paths_to_find]
     with concurrent.futures.ProcessPoolExecutor(max_workers=worker_count) as executor:
         futures = [executor.submit(process_file_func, *arg) for arg in args]
         for future in concurrent.futures.as_completed(futures):
