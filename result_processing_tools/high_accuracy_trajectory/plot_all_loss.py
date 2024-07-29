@@ -12,8 +12,8 @@ for root, dirs, files in os.walk('..'):
             file_path = os.path.join(root, file)
 
             df = pd.read_csv(file_path)
-
-            plt.plot(df['tick'], df['0'], label=f"{root}_1", alpha=0.5)
+            df_down_sampled = df.sample(n=200)  # Sample 200 rows
+            plt.plot(df_down_sampled['tick'], df_down_sampled['0'], label=f"{root}_1", alpha=0.5)
 
 # Add labels and title
 plt.xlabel('Tick')

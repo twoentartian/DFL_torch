@@ -8,7 +8,8 @@ def plot_column(data, column_name):
     plt.figure(figsize=(10, 6))
 
     for folder, df in data.items():
-        plt.plot(df['tick'], df[column_name], label=f"{folder}")
+        df_down_sampled = df.sample(n=200)  # Sample 200 rows
+        plt.plot(df_down_sampled['tick'], df_down_sampled[column_name], label=f"{folder}")
 
     plt.xlabel('Tick')
     plt.ylabel(column_name)
