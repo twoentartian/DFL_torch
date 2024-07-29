@@ -343,7 +343,7 @@ if __name__ == '__main__':
     parser.add_argument("-l", "--layer", type=str, nargs='+', help="only plot these layers, default: plot all layers")
     parser.add_argument("--node_name", type=int, default=0)
     parser.add_argument("--remove_duplicate_points", action="store_true", default=True, help="enable removing close points to reduce output image size")
-    parser.add_argument("-r", "--remove_duplicate_shrink_ratio", type=float, help="down sample ratio to reduce output image size")
+    parser.add_argument("-r", "--remove_duplicate_shrink_ratio", default=0.05, type=float, help="down sample ratio to reduce output image size, recommend 0.05 for 100 paths (10000 points per path)")
     parser.add_argument("--disable_3d", action='store_true')
     parser.add_argument("--disable_2d", action='store_true')
 
