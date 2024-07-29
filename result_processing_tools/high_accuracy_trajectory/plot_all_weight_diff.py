@@ -25,9 +25,9 @@ def plot_column(data, column_name):
 data = {}
 
 # Walk through the current directory and its subdirectories
-for root, dirs, files in os.walk('.'):
+for root, dirs, files in os.walk('..'):
     for file in files:
-        if file == "model_weight_diff.csv":
+        if file == "model_weight_diff_l2.csv":
             file_path = os.path.join(root, file)
 
             # Read the CSV file
