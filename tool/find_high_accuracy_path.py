@@ -85,7 +85,6 @@ def process_file_func(output_folder_path, start_model_path, end_model_path, arg_
 
     start_file_name = get_file_name_without_extension(start_model_path)
     end_file_name = get_file_name_without_extension(end_model_path)
-    assert start_file_name == end_file_name
     output_folder_path = os.path.join(output_folder_path, f"{start_file_name}-{end_file_name}")
     if os.path.exists(output_folder_path):
         logger.critical(f"{output_folder_path} already exists")
@@ -116,7 +115,7 @@ def process_file_func(output_folder_path, start_model_path, end_model_path, arg_
     variance_service = record_variance.ServiceVarianceRecorder(1)
     variance_service.initialize_without_runtime_parameters(all_node_names, all_model_stats, output_folder_path)
     record_model_service = record_model_stat.ModelStatRecorder(1)
-    record_model_service.initialize_without_runtime_parameters([0], output_folder_path)
+    record_model_service.initialize_without_runtime_parameters([0], output_folder_path, save_format=arg_save_format)
     record_test_accuracy_loss_service = record_test_accuracy_loss.ServiceTestAccuracyLossRecorder(1, 100, use_fixed_testing_dataset=True)
     record_test_accuracy_loss_service.initialize_without_runtime_parameters(output_folder_path, [0], start_model, criterion, training_dataset)
 
@@ -176,7 +175,7 @@ def process_file_func(output_folder_path, start_model_path, end_model_path, arg_
         record_test_accuracy_loss_service.trigger_without_runtime_parameters(current_tick, {0: start_model_stat})
 
         current_tick += 1
-        print(f"[{start_file_name}] current tick: {current_tick}, training loss = {loss_val}")
+        print(f"[{start_file_name}--{end_file_name}] current tick: {current_tick}, training loss = {loss_val}")
 
 
 if __name__ == '__main__':
@@ -236,6 +235,7 @@ if __name__ == '__main__':
     # finding path
     if worker_count > paths_to_find_count:
         worker_count = paths_to_find_count
+    logger.info(f"worker: {worker_count}")
     args = [(output_folder_path, start_file, end_file, current_ml_setup, learning_rate, max_tick, training_round, step_size, adoptive_step_size, worker_count, save_format) for (start_file, end_file) in paths_to_find]
     with concurrent.futures.ProcessPoolExecutor(max_workers=worker_count) as executor:
         futures = [executor.submit(process_file_func, *arg) for arg in args]
