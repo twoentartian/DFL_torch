@@ -338,12 +338,12 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Visualize high accuracy paths')
     parser.add_argument("mode", type=str, choices=['single_path_all_weights', 'all_path', 'single_path'])
-    parser.add_argument("path_folder", type=str)
-    parser.add_argument("-m", "--dimension_reduce", type=str, nargs='+', choices=['umap', 'tsne', 'pca'])
-    parser.add_argument("-l", "--layer", type=str, nargs='+')
+    parser.add_argument("path_folder", type=str, help="high accuracy path data folder")
+    parser.add_argument("-m", "--dimension_reduce_method", type=str, nargs='+', choices=['umap', 'tsne', 'pca'], help="the method to reduce dimension to 2 or 3")
+    parser.add_argument("-l", "--layer", type=str, nargs='+', help="only plot these layers, default: plot all layers")
     parser.add_argument("--node_name", type=int, default=0)
-    parser.add_argument("--remove_duplicate_points", action="store_true", default=True)
-    parser.add_argument("-r", "--remove_duplicate_shrink_ratio", type=float)
+    parser.add_argument("--remove_duplicate_points", action="store_true", default=True, help="enable removing close points to reduce output image size")
+    parser.add_argument("-r", "--remove_duplicate_shrink_ratio", type=float, help="down sample ratio to reduce output image size")
     parser.add_argument("--disable_3d", action='store_true')
     parser.add_argument("--disable_2d", action='store_true')
 
