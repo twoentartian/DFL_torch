@@ -12,7 +12,17 @@ def move_tensor_toward(src_tensor, dest_tensor, step, adoptive_step):
     move_tensor = angle_tensor * real_step
     return src_tensor + move_tensor
 
-class ModelAverager():
+def move_model_state_toward(src_model_stat, dest_model_stat, step, adoptive_step):
+    output_stat = copy.deepcopy(src_model_stat)
+    for layer_name in src_model_stat.keys():
+        if special_torch_layers.is_ignored_layer(layer_name):
+            continue
+        src_tensor = src_model_stat[layer_name]
+        dst_tensor = dest_model_stat[layer_name]
+        output_stat[layer_name] = move_tensor_toward(src_tensor, dst_tensor, step, adoptive_step)
+    return output_stat
+
+class ModelAverager:
     def __init__(self, variance_corrector=None, *args, **kwargs):
         self.variance_corrector = variance_corrector
 
@@ -67,7 +77,7 @@ class StandardModelAverager(ModelAverager):
             for layer_name, single_layer_variance in target_variance.items():
                 if special_torch_layers.is_ignored_layer(layer_name):
                     continue
-                output[layer_name] = VarianceCorrector.scale_model_stat_to_variance(output[layer_name], single_layer_variance)
+                output[layer_name] = VarianceCorrector.scale_tensor_to_variance(output[layer_name], single_layer_variance)
         self.model_buffer = None
         self.model_counter = 0
         return output
@@ -107,7 +117,7 @@ class ConservativeModelAverager(ModelAverager):
             for layer_name, single_layer_variance in target_variance:
                 if special_torch_layers.is_ignored_layer(layer_name):
                     continue
-                output[layer_name] = VarianceCorrector.scale_model_stat_to_variance(output[layer_name], single_layer_variance)
+                output[layer_name] = VarianceCorrector.scale_tensor_to_variance(output[layer_name], single_layer_variance)
         self.model_buffer = None
         self.model_counter = 0
         return output

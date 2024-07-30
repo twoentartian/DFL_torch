@@ -1,3 +1,4 @@
+import copy
 import enum
 import torch
 
@@ -8,7 +9,7 @@ class VarianceCorrectionType(enum.Enum):
     FollowConservative = 1,
     FollowOthers = 2,
 
-class VarianceCorrector():
+class VarianceCorrector:
     def __init__(self, variance_correction_type: VarianceCorrectionType):
         self.variance_correction_type = variance_correction_type
         self.variance_record = None
@@ -60,10 +61,18 @@ class VarianceCorrector():
         return output
 
     @staticmethod
-    def scale_model_stat_to_variance(layer_tensor, target_variance):
+    def scale_tensor_to_variance(layer_tensor, target_variance):
         current_mean = torch.mean(layer_tensor)
         current_variance = torch.var(layer_tensor)
         scaling_factor = torch.sqrt(target_variance / current_variance)
         rescaled_tensor = (layer_tensor - current_mean) * scaling_factor + current_mean
         return rescaled_tensor
 
+    @staticmethod
+    def scale_model_stat_to_variance(model_stat, target_variance):
+        output_model_stat = copy.deepcopy(model_stat)
+        for layer_name, single_layer_variance in target_variance.items():
+            if special_torch_layers.is_ignored_layer(layer_name):
+                continue
+            output_model_stat[layer_name] = VarianceCorrector.scale_tensor_to_variance(model_stat[layer_name], single_layer_variance)
+        return output_model_stat

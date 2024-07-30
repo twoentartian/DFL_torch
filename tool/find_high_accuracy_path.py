@@ -79,7 +79,12 @@ class InverseLRScheduler(optim.lr_scheduler.LRScheduler):
         return [base_lr / (1 + self.gamma * self.last_epoch) for base_lr in self.base_lrs]
 
 
-def process_file_func(output_folder_path, start_model_path, end_model_path, arg_ml_setup, arg_lr, arg_max_tick, arg_training_round, arg_step_size, arg_adoptive_step_size, arg_worker_count, arg_save_format):
+def process_file_func(output_folder_path, start_model_path, end_model_path, arg_ml_setup, arg_lr, arg_max_tick, arg_training_round, arg_step_size, arg_adoptive_step_size, arg_worker_count, arg_save_format, arg_use_cpu):
+    if arg_use_cpu:
+        device = torch.device("cpu")
+    else:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     thread_per_process = os.cpu_count() // arg_worker_count
     torch.set_num_threads(thread_per_process)
 
@@ -119,8 +124,13 @@ def process_file_func(output_folder_path, start_model_path, end_model_path, arg_
 
     # begin finding path
     """pre training"""
+    print(f"[{start_file_name}--{end_file_name}] pre training")
     start_model_stat = start_model.state_dict()
+    cuda.CudaEnv.model_state_dict_to(start_model_stat, cpu_device)
+    start_model.train()
+    start_model.to(device)
     for (training_index, (data, label)) in enumerate(dataloader):
+        data, label = data.to(device), label.to(device)
         optimizer.zero_grad(set_to_none=True)
         output = start_model(data)
         loss = criterion(output, label)
@@ -137,19 +147,20 @@ def process_file_func(output_folder_path, start_model_path, end_model_path, arg_
         variance_record = model_variance_correct.VarianceCorrector(model_variance_correct.VarianceCorrectionType.FollowOthers)
         variance_record.add_variance(start_model_stat)
         """move tensor"""
-        for layer_name in start_model_stat.keys():
-            dst_tensor = end_model_state_dict[layer_name]
-            start_model_stat[layer_name] = model_average.move_tensor_toward(start_model_stat[layer_name], dst_tensor, arg_step_size, arg_adoptive_step_size)
+        start_model_stat = model_average.move_model_state_toward(start_model_stat, end_model_state_dict, arg_step_size, arg_adoptive_step_size)
         """rescale variance"""
         target_variance = variance_record.get_variance()
         for layer_name, single_layer_variance in target_variance.items():
             if special_torch_layers.is_ignored_layer(layer_name):
                 continue
-            start_model_stat[layer_name] = model_variance_correct.VarianceCorrector.scale_model_stat_to_variance(start_model_stat[layer_name], single_layer_variance)
+            start_model_stat[layer_name] = model_variance_correct.VarianceCorrector.scale_tensor_to_variance(start_model_stat[layer_name], single_layer_variance)
         """training"""
         start_model.load_state_dict(start_model_stat)
         loss_val = None
+        start_model.train()
+        start_model.to(device)
         for (training_index, (data, label)) in enumerate(dataloader):
+            data, label = data.to(device), label.to(device)
             optimizer.zero_grad(set_to_none=True)
             output = start_model(data)
             loss = criterion(output, label)
@@ -159,11 +170,9 @@ def process_file_func(output_folder_path, start_model_path, end_model_path, arg_
             if training_index == arg_training_round:
                 break
         start_model_stat = start_model.state_dict()
+        cuda.CudaEnv.model_state_dict_to(start_model_stat, cpu_device)
         """scale variance back, due to SGD variance drift"""
-        for layer_name, single_layer_variance in target_variance.items():
-            if special_torch_layers.is_ignored_layer(layer_name):
-                continue
-            start_model_stat[layer_name] = model_variance_correct.VarianceCorrector.scale_model_stat_to_variance(start_model_stat[layer_name], single_layer_variance)
+        start_model_stat = model_variance_correct.VarianceCorrector.scale_model_stat_to_variance(start_model_stat, target_variance)
 
         # service
         all_model_stats = [start_model_stat, end_model_state_dict]
@@ -191,6 +200,7 @@ if __name__ == '__main__':
     parser.add_argument("--training_round", type=int, default=1)
     parser.add_argument("--lr", type=float, default=0.001)
     parser.add_argument("--save_format", type=str, default='lmdb', choices=['file', 'lmdb'])
+    parser.add_argument("--cpu", action='store_true', help='force using CPU for training')
 
     args = parser.parse_args()
 
@@ -205,6 +215,7 @@ if __name__ == '__main__':
     adoptive_step_size = args.adoptive_step_size
     training_round = args.training_round
     learning_rate = args.lr
+    use_cpu = args.cpu
     paths_to_find = get_files_to_process(args.start_folder, args.end_folder, mode)
     save_format = args.save_format
     paths_to_find_count = len(paths_to_find)
@@ -234,7 +245,7 @@ if __name__ == '__main__':
     if worker_count > paths_to_find_count:
         worker_count = paths_to_find_count
     logger.info(f"worker: {worker_count}")
-    args = [(output_folder_path, start_file, end_file, current_ml_setup, learning_rate, max_tick, training_round, step_size, adoptive_step_size, worker_count, save_format) for (start_file, end_file) in paths_to_find]
+    args = [(output_folder_path, start_file, end_file, current_ml_setup, learning_rate, max_tick, training_round, step_size, adoptive_step_size, worker_count, save_format, use_cpu) for (start_file, end_file) in paths_to_find]
     with concurrent.futures.ProcessPoolExecutor(max_workers=worker_count) as executor:
         futures = [executor.submit(process_file_func, *arg) for arg in args]
         for future in concurrent.futures.as_completed(futures):

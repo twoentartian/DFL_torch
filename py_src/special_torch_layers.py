@@ -1,4 +1,4 @@
-__ignore_layer_list = ["num_batches_tracked"]
+__ignore_layer_list = ["num_batches_tracked", "running_mean", "running_var"]
 
 
 def is_ignored_layer(layer_name):
