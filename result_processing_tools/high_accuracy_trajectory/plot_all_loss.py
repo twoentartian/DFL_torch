@@ -19,7 +19,7 @@ if __name__ == '__main__':
                 df = pd.read_csv(file_path)
                 high_loss_count = (df['0'] > high_loss_threshold).sum()
                 if high_loss_count > 0:
-                    print(f"warning: in {file}, counter of loss>{high_loss_threshold} is {high_loss_count}")
+                    print(f"warning: in {file_path}, counter of loss>{high_loss_threshold} is {high_loss_count}")
                 row = len(df.index)
                 down_sample_rate = (row-1) // samples_per_df + 1
                 df_down_sampled = df.iloc[::down_sample_rate, :]
