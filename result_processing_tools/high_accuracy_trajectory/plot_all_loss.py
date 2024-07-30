@@ -12,7 +12,7 @@ if __name__ == '__main__':
     high_loss_threshold = 1
 
     # Walk through the current directory and its subdirectories
-    for root, dirs, files in os.walk('..'):
+    for root, dirs, files in os.walk('.'):
         for file in files:
             if file == "loss.csv":
                 file_path = os.path.join(root, file)

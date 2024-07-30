@@ -29,7 +29,7 @@ def plot_column(data, column_name):
 data = {}
 
 # Walk through the current directory and its subdirectories
-for root, dirs, files in os.walk('..'):
+for root, dirs, files in os.walk('.'):
     for file in files:
         if file == "weight_difference_l2.csv":
             file_path = os.path.join(root, file)
