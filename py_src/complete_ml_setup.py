@@ -2,21 +2,21 @@ import torch
 
 from py_src import ml_setup
 
-class PredefinedCompleteMlSetup:
-    def __init__(self, arg_ml_setup, optimizer, epochs):
-        self.ml_setup = arg_ml_setup
-        self.optimizer = optimizer
-        self.epochs = epochs
 
+class FastTrainingSetup(object):
     @staticmethod
-    def get_lenet5():
-        arg_ml_setup = ml_setup.mnist_lenet5()
-        optimizer = torch.optim.SGD(arg_ml_setup.model.parameters(), lr=0.001)
-        return PredefinedCompleteMlSetup(arg_ml_setup, optimizer, 20)
+    def get_optimizer_lr_scheduler_epoch(arg_ml_setup: ml_setup, model):
+        if arg_ml_setup.model_name == 'lenet5':
+            epochs = 20
+            optimizer = torch.optim.SGD(model.parameters(), lr=0.001)
+            return optimizer, None, epochs
+        elif arg_ml_setup.model_name == 'resnet18':
+            epochs = 30
+            optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.9, weight_decay=5e-4)
+            steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
+            lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, 0.1, steps_per_epoch=steps_per_epoch, epochs=epochs)
+            return optimizer, lr_scheduler, epochs
 
-    @staticmethod
-    def get_resnet18():
-        arg_ml_setup = ml_setup.resnet18_cifar10()
-        optimizer = torch.optim.SGD(arg_ml_setup.model.parameters(), lr=0.001)
-        return PredefinedCompleteMlSetup(arg_ml_setup, optimizer, 100)
+        else:
+            raise NotImplementedError
 

@@ -22,6 +22,7 @@ class MlSetup:
         self.learning_rate = None
         self.dataset_label = None
         self.weights_init_func = None
+        self.get_lr_scheduler_func = None
 
     def self_validate(self):
         pass  # do nothing for now
@@ -80,25 +81,28 @@ def lenet5():
 
 
 """ MNIST + LeNet5 """
-def mnist_lenet5():
-    mnist_lenet5 = MlSetup()
-    mnist_lenet5.model = lenet5()
-    mnist_lenet5.model_name = "lenet5"
-    mnist_lenet5.training_data, mnist_lenet5.testing_data, mnist_lenet5.dataset_label = dataset_mnist()
-    mnist_lenet5.criterion = torch.nn.CrossEntropyLoss()
-    mnist_lenet5.training_batch_size = 64
-    mnist_lenet5.learning_rate = 0.001
-    mnist_lenet5.weights_init_func = weights_init_xavier
-    return mnist_lenet5
+def lenet5_mnist():
+    lenet5_mnist = MlSetup()
+    lenet5_mnist.model = lenet5()
+    lenet5_mnist.model_name = "lenet5"
+    lenet5_mnist.training_data, lenet5_mnist.testing_data, lenet5_mnist.dataset_label = dataset_mnist()
+    lenet5_mnist.criterion = torch.nn.CrossEntropyLoss()
+    lenet5_mnist.training_batch_size = 64
+    lenet5_mnist.learning_rate = 0.001
+    lenet5_mnist.weights_init_func = weights_init_xavier
+    return lenet5_mnist
 
 
 """ CIFAR10 + ResNet18 """
 def resnet18_cifar10():
     resnet18_cifar10 = MlSetup()
     resnet18_cifar10.model = models.resnet18(progress=False, num_classes=10, zero_init_residual=False, groups=1, width_per_group=64, replace_stride_with_dilation=None)
+    resnet18_cifar10.model.conv1 = nn.Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)  # change for cifar10 dataset
+    resnet18_cifar10.model.maxpool = nn.Identity()
     resnet18_cifar10.model_name = "resnet18"
     resnet18_cifar10.training_data, resnet18_cifar10.testing_data, resnet18_cifar10.dataset_label = dataset_cifar10()
     resnet18_cifar10.criterion = torch.nn.CrossEntropyLoss()
-    resnet18_cifar10.training_batch_size = 64
+    resnet18_cifar10.training_batch_size = 256
     resnet18_cifar10.learning_rate = 0.001
+
     return resnet18_cifar10

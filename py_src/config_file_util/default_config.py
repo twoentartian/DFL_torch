@@ -26,7 +26,7 @@ def get_ml_setup():
     get_ml_setup.__ml_setup = None
     if get_ml_setup.__ml_setup is None:
         # get_ml_setup.__ml_setup = ml_setup.resnet18_cifar10()
-        get_ml_setup.__ml_setup = ml_setup.mnist_lenet5()
+        get_ml_setup.__ml_setup = ml_setup.lenet5_mnist()
     return get_ml_setup.__ml_setup
 
 """ or self defined: """

@@ -216,11 +216,9 @@ if __name__ == '__main__':
     # prepare model and dataset
     current_ml_setup = None
     if model_type == 'lenet5':
-        current_ml_setup = ml_setup.mnist_lenet5()
-        current_ml_setup.training_batch_size = 256 # for more accurate loss curve
+        current_ml_setup = ml_setup.lenet5_mnist()
     elif model_type == 'resnet18':
         current_ml_setup = ml_setup.resnet18_cifar10()
-        current_ml_setup.training_batch_size = 256  # for more accurate loss curve
     else:
         raise ValueError(f'Invalid model type: {model_type}')
 

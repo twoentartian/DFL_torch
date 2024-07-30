@@ -26,7 +26,7 @@ def re_initialize_model(model, arg_ml_setup):
         model.apply(arg_ml_setup.weights_init_func)
 
 
-def training_model(output_folder, index, arg_number_of_models, arg_complete_ml_setup: complete_ml_setup.PredefinedCompleteMlSetup, arg_use_cpu: bool, arg_worker_count):
+def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_setup, arg_use_cpu: bool, arg_worker_count):
     thread_per_process = os.cpu_count() // arg_worker_count
     torch.set_num_threads(thread_per_process)
     if arg_use_cpu:
@@ -35,18 +35,16 @@ def training_model(output_folder, index, arg_number_of_models, arg_complete_ml_s
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     digit_number_of_models = len(str(arg_number_of_models))
-    model = copy.deepcopy(arg_complete_ml_setup.ml_setup.model)
+    model = copy.deepcopy(arg_ml_setup.model)
     model.to(device)
-    dataset = copy.deepcopy(arg_complete_ml_setup.ml_setup.training_data)
-    batch_size = arg_complete_ml_setup.ml_setup.training_batch_size
+    dataset = copy.deepcopy(arg_ml_setup.training_data)
+    batch_size = arg_ml_setup.training_batch_size
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
-    criterion = arg_complete_ml_setup.ml_setup.criterion
-    optimizer = copy.deepcopy(arg_complete_ml_setup.optimizer)
-    optimizer.param_groups[0]['params'] = list(model.parameters())
-    epochs = arg_complete_ml_setup.epochs
+    criterion = arg_ml_setup.criterion
+    optimizer, lr_scheduler, epochs = complete_ml_setup.FastTrainingSetup.get_optimizer_lr_scheduler_epoch(arg_ml_setup, model)
 
     # reset random weights
-    re_initialize_model(model, arg_complete_ml_setup.ml_setup)
+    re_initialize_model(model, arg_ml_setup)
 
     model.train()
     print(f"INDEX[{index}] begin training")
@@ -60,9 +58,14 @@ def training_model(output_folder, index, arg_number_of_models, arg_complete_ml_s
             loss = criterion(outputs, label)
             loss.backward()
             optimizer.step()
+            if lr_scheduler is not None:
+                lr_scheduler.step()
             train_loss += loss.item()
             count += 1
-        print(f"INDEX[{index}] epoch[{epoch}] loss={train_loss/count}")
+        lrs = []
+        for param_group in optimizer.param_groups:
+            lrs.append(param_group['lr'])
+        print(f"INDEX[{index}] epoch[{epoch}] loss={train_loss/count} lrs={lrs}")
     print(f"INDEX[{index}] finish training")
 
     torch.save(model.state_dict(), os.path.join(output_folder, f"{str(index).zfill(digit_number_of_models)}.pt"))
@@ -87,11 +90,11 @@ if __name__ == "__main__":
     use_cpu = args.cpu
 
     # prepare model and dataset
-    current_complete_ml_setup = None
+    current_ml_setup = None
     if model_type == 'lenet5':
-        current_complete_ml_setup = complete_ml_setup.PredefinedCompleteMlSetup.get_lenet5()
+        current_ml_setup = ml_setup.lenet5_mnist()
     elif model_type == 'resnet18':
-        current_complete_ml_setup = complete_ml_setup.PredefinedCompleteMlSetup.get_resnet18()
+        current_ml_setup = ml_setup.resnet18_cifar10()
     else:
         raise ValueError(f'Invalid model type: {model_type}')
 
@@ -102,7 +105,7 @@ if __name__ == "__main__":
     # training
     if worker_count > number_of_models:
         worker_count = number_of_models
-    args = [(output_folder_path, i, number_of_models, current_complete_ml_setup, use_cpu, worker_count) for i in range(number_of_models)]
+    args = [(output_folder_path, i, number_of_models, current_ml_setup, use_cpu, worker_count) for i in range(number_of_models)]
     with concurrent.futures.ProcessPoolExecutor(max_workers=worker_count) as executor:
         futures = [executor.submit(training_model, *arg) for arg in args]
         for future in concurrent.futures.as_completed(futures):
