@@ -18,6 +18,7 @@ force_use_cpu = False
 """do you want to put all models in GPU or only keep model stat in memory and share a model in gpu?"""
 """None | False: let simulator decide"""
 override_use_model_stat = None
+override_allocate_all_models = True
 
 """"""""" Global Machine learning related parameters """""""""""
 """ predefined: """
@@ -25,7 +26,7 @@ def get_ml_setup():
     get_ml_setup.__ml_setup = None
     if get_ml_setup.__ml_setup is None:
         # get_ml_setup.__ml_setup = ml_setup.resnet18_cifar10()
-        get_ml_setup.__ml_setup = ml_setup.mnist_lenet5()
+        get_ml_setup.__ml_setup = ml_setup.lenet5_mnist()
     return get_ml_setup.__ml_setup
 
 """ or self defined: """

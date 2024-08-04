@@ -5,7 +5,6 @@ from py_src.simulation_runtime_parameters import RuntimeParameters, SimulationPh
 
 class ServiceVarianceRecorder(Service):
     def __init__(self, interval, phase=SimulationPhase.END_OF_TICK, record_node=None) -> None:
-        import os
         super().__init__()
         self.save_path = None
         self.save_files = {}
@@ -22,24 +21,46 @@ class ServiceVarianceRecorder(Service):
 
     def initialize(self, parameters: RuntimeParameters, output_path, *args, **kwargs):
         assert parameters.phase == SimulationPhase.INITIALIZING
-        self.save_path = os.path.join(output_path, "variance")
-        os.mkdir(self.save_path)
+
+        node_names = []
+        model_stats = []
         for node_name, target_node in parameters.node_container.items():
             if self._is_current_node_recorded(node_name):
                 self.known_nodes_to_record.add(node_name)
-                file = open(os.path.join(self.save_path, f"{node_name}.csv"), "w+")
-                self._write_header(target_node.get_model_stat(), file)
-                self.save_files[node_name] = file
+                node_names.append(node_name)
+                model_stats.append(target_node.get_model_stat())
+        self.initialize_without_runtime_parameters(node_names, model_stats, output_path)
 
     def trigger(self, parameters: RuntimeParameters, *args, **kwargs):
         if parameters.current_tick % self.interval != 0:
             return      # skip is not time yet
 
         if parameters.phase == self.record_phase:
+            node_names = []
+            model_stats = []
             for node_name in self.known_nodes_to_record:
                 file = self.save_files[node_name]
                 model_stat = parameters.node_container[node_name].get_model_stat()
-                self._write_row(parameters.current_tick, model_stat, file)
+                node_names.append(node_name)
+                model_stats.append(model_stat)
+            self.trigger_without_runtime_parameters(parameters.current_tick, node_names, model_stats)
+
+    def initialize_without_runtime_parameters(self, node_names, model_stats, output_path):
+        assert len(node_names) == len(model_stats)
+        self.save_path = os.path.join(output_path, "variance")
+        os.mkdir(self.save_path)
+        for index, node_name in enumerate(node_names):
+            model_stat = model_stats[index]
+            file = open(os.path.join(self.save_path, f"{node_name}.csv"), "w+")
+            self._write_header(model_stat, file)
+            self.save_files[node_name] = file
+
+    def trigger_without_runtime_parameters(self, tick, node_names, model_stats):
+        assert len(node_names) == len(model_stats)
+        for index, node_name in enumerate(node_names):
+            model_stat = model_stats[index]
+            file = self.save_files[node_name]
+            self._write_row(tick, model_stat, file)
 
     def _is_current_node_recorded(self, node_name) -> bool:
         record_current_node = True

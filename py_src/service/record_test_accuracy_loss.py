@@ -31,21 +31,26 @@ class ServiceTestAccuracyLossRecorder(Service):
     def initialize(self, parameters: RuntimeParameters, output_path, config_file=None, ml_setup=None, cuda_env=None, *args, **kwargs):
         assert parameters.phase == SimulationPhase.INITIALIZING
         assert ml_setup is not None
+
+        node_names = []
+        for node_name, target_node in parameters.node_container.items():
+            node_names.append(node_name)
+
+        self.initialize_without_runtime_parameters(output_path, node_names, ml_setup.model, ml_setup.criterion, ml_setup.testing_data, config_file, cuda_env)
+
+    def initialize_without_runtime_parameters(self, output_path, node_names, model, criterion, test_dataset, config_file=None, cuda_env=None):
         self.accuracy_file = open(os.path.join(output_path, f"{self.accuracy_file_name}"), "w+")
         self.loss_file = open(os.path.join(output_path, f"{self.loss_file_name}"), "w+")
-        self.node_order = []
-        for node_name, target_node in parameters.node_container.items():
-            self.node_order.append(node_name)
+        self.node_order = node_names
         node_order_str = [str(i) for i in self.node_order]
         header = ",".join(["tick", "phase", *node_order_str])
         self.accuracy_file.write(header + "\n")
         self.loss_file.write(header + "\n")
         # set model
-        self.test_model = copy.deepcopy(ml_setup.model)
-        self.criterion = ml_setup.criterion
+        self.test_model = copy.deepcopy(model)
+        self.criterion = criterion
 
         # set testing dataset
-        test_dataset = ml_setup.testing_data
         labels = np.array([test_dataset[i][1] for i in range(len(test_dataset))])
         unique_labels = set(labels)
         n_labels = len(unique_labels)
@@ -71,35 +76,43 @@ class ServiceTestAccuracyLossRecorder(Service):
     def trigger(self, parameters: RuntimeParameters, *args, **kwargs):
         if parameters.current_tick % self.interval != 0:
             return
-        row_accuracy = []
-        row_loss = []
         if parameters.phase in self.phase_to_record:
+            node_names_and_model_stats = {}
             for node_name in self.node_order:
-                test_data = None
-                test_labels = None
-                for d, l in self.test_dataset:
-                    test_data = d
-                    test_labels = l
-                    break
-                if self.is_using_cuda:
-                    test_data, test_labels = test_data.cuda(), test_labels.cuda()
                 target_node = parameters.node_container[node_name]
                 model_stat = target_node.get_model_stat()
-                self.test_model.load_state_dict(model_stat)
-                self.test_model.eval()
-                outputs = self.test_model(test_data)
-                loss = self.criterion(outputs, test_labels)
-                _, predicted = torch.max(outputs, 1)
-                correct_predictions = (predicted == test_labels).sum().item()
-                accuracy = correct_predictions / len(test_labels)
-                row_accuracy.append(str(accuracy))
-                row_loss.append('%.4f' % loss.item())
-            row_accuracy_str = ",".join([str(parameters.current_tick), parameters.phase.name, *row_accuracy])
-            row_loss_str = ",".join([str(parameters.current_tick), parameters.phase.name, *row_loss])
-            self.accuracy_file.write(row_accuracy_str + "\n")
-            self.accuracy_file.flush()
-            self.loss_file.write(row_loss_str + "\n")
-            self.loss_file.flush()
+                node_names_and_model_stats[node_name] = model_stat
+            self.trigger_without_runtime_parameters(parameters.current_tick, node_names_and_model_stats, parameters.phase.name)
+
+    def trigger_without_runtime_parameters(self, tick, node_names_and_model_stats, phase_str=None):
+        row_accuracy = []
+        row_loss = []
+        for node_name in self.node_order:
+            test_data = None
+            test_labels = None
+            for d, l in self.test_dataset:
+                test_data = d
+                test_labels = l
+                break
+            if self.is_using_cuda:
+                test_data, test_labels = test_data.cuda(), test_labels.cuda()
+            model_stat = node_names_and_model_stats[node_name]
+            self.test_model.load_state_dict(model_stat)
+            self.test_model.eval()
+            outputs = self.test_model(test_data)
+            loss = self.criterion(outputs, test_labels)
+            _, predicted = torch.max(outputs, 1)
+            correct_predictions = (predicted == test_labels).sum().item()
+            accuracy = correct_predictions / len(test_labels)
+            row_accuracy.append(str(accuracy))
+            row_loss.append('%.4f' % loss.item())
+        row_accuracy_str = ",".join([str(tick), str(phase_str), *row_accuracy])
+        row_loss_str = ",".join([str(tick), str(phase_str), *row_loss])
+        self.accuracy_file.write(row_accuracy_str + "\n")
+        self.accuracy_file.flush()
+        self.loss_file.write(row_loss_str + "\n")
+        self.loss_file.flush()
+
 
     def __del__(self):
         self.accuracy_file.flush()
