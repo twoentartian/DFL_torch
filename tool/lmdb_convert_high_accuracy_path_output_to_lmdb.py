@@ -19,7 +19,7 @@ def process_func(arg_model_stat_folder, output_path=None):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Move all model stats in the output folder of find_high_accuracy_path to a lmdb database')
     parser.add_argument("folder", type=str, help="the output folder of find_high_accuracy_path")
-    parser.add_argument("-c", '--cores', type=int, default=os.cpu_count(), help='specify how many models to train in parallel')
+    parser.add_argument("-c", '--parallel', type=int, default=os.cpu_count(), help='specify how many models to train in parallel')
 
     args = parser.parse_args()
 
