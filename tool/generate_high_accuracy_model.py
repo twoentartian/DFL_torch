@@ -85,7 +85,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     number_of_models = args.number_of_models
-    worker_count = args.cores
+    worker_count = args.parallel
     model_type = args.model_type
     use_cpu = args.cpu
 

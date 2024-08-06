@@ -225,7 +225,7 @@ if __name__ == '__main__':
     paths_to_find_count = len(paths_to_find)
     logger.info(f"totally {paths_to_find_count} paths to process: {paths_to_find}")
 
-    worker_count = args.cores
+    worker_count = args.parallel
     model_type = args.model_type
 
     # prepare model and dataset

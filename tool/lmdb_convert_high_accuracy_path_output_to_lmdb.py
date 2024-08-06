@@ -24,7 +24,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     root_folder = args.folder
-    worker_count = args.cores
+    worker_count = args.parallel
 
     all_entries = os.listdir(root_folder)
     folders = [entry for entry in all_entries if os.path.isdir(os.path.join(root_folder, entry))]
