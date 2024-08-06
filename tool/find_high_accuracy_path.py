@@ -117,8 +117,11 @@ def process_file_func(output_folder_path, start_model_path, end_model_path, arg_
     weight_diff_service.initialize_without_runtime_parameters(all_model_stats, output_folder_path)
     variance_service = record_variance.ServiceVarianceRecorder(1)
     variance_service.initialize_without_runtime_parameters(all_node_names, all_model_stats, output_folder_path)
-    record_model_service = record_model_stat.ModelStatRecorder(1)
-    record_model_service.initialize_without_runtime_parameters([0], output_folder_path, save_format=arg_save_format)
+    if arg_save_format != 'none':
+        record_model_service = record_model_stat.ModelStatRecorder(1)
+        record_model_service.initialize_without_runtime_parameters([0], output_folder_path, save_format=arg_save_format)
+    else:
+        record_model_service = None
     record_test_accuracy_loss_service = record_test_accuracy_loss.ServiceTestAccuracyLossRecorder(1, 100, use_fixed_testing_dataset=True)
     record_test_accuracy_loss_service.initialize_without_runtime_parameters(output_folder_path, [0], start_model, criterion, training_dataset)
 
@@ -178,7 +181,8 @@ def process_file_func(output_folder_path, start_model_path, end_model_path, arg_
         all_model_stats = [start_model_stat, end_model_state_dict]
         weight_diff_service.trigger_without_runtime_parameters(current_tick, all_model_stats)
         variance_service.trigger_without_runtime_parameters(current_tick, all_node_names, all_model_stats)
-        record_model_service.trigger_without_runtime_parameters(current_tick, [0], [start_model_stat])
+        if record_model_service is not None:
+            record_model_service.trigger_without_runtime_parameters(current_tick, [0], [start_model_stat])
         record_test_accuracy_loss_service.trigger_without_runtime_parameters(current_tick, {0: start_model_stat})
 
         current_tick += 1
@@ -199,7 +203,7 @@ if __name__ == '__main__':
     parser.add_argument("-a", "--adoptive_step_size", type=float, default=0.0005)
     parser.add_argument("--training_round", type=int, default=1)
     parser.add_argument("--lr", type=float, default=0.001)
-    parser.add_argument("--save_format", type=str, default='lmdb', choices=['file', 'lmdb'])
+    parser.add_argument("--save_format", type=str, default='lmdb', choices=['none', 'file', 'lmdb'])
     parser.add_argument("--cpu", action='store_true', help='force using CPU for training')
 
     args = parser.parse_args()
