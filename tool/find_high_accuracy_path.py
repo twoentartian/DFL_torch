@@ -238,7 +238,7 @@ if __name__ == '__main__':
         raise ValueError(f'Invalid model type: {model_type}')
 
     # create output folder
-    output_folder_path = os.path.join(os.curdir, f"{__file__}_{datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")}")
+    output_folder_path = os.path.join(os.curdir, f"{__file__}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S_%f')}")
     os.mkdir(output_folder_path)
     info_file = open(os.path.join(output_folder_path, "info.txt"), 'x')
     info_file.write(f"{args}")
