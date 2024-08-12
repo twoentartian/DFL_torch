@@ -8,6 +8,18 @@ draw_only_first_node = False
 enable_draw_every_tick = False
 draw_every_tick = 500
 
+# __ignore_layer_list = ["num_batches_tracked", "running_mean", "running_var"]
+__ignore_layer_list = []
+
+
+def is_ignored_layer(layer_name):
+    output = False
+    for i in __ignore_layer_list:
+        if i in layer_name:
+            output = True
+            break
+    return output
+
 
 def calculate_herd_effect_delay(arg_accuracy_df: pandas.DataFrame):
     average_accuracy: pandas.Series = arg_accuracy_df.mean(axis=1)
@@ -106,6 +118,8 @@ if __name__ == '__main__':
             axs[plot_index].axvline(x=herd_effect_delay, color='r', label=f'herd effect delay={herd_effect_delay}')
         for col in weight_diff_df.columns:
             if numpy.sum(weight_diff_df[col]) == 0:
+                continue
+            if is_ignored_layer(col):
                 continue
             axs[plot_index].plot(weight_diff_x, weight_diff_df[col], label=col)
 
