@@ -79,7 +79,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Generate some high accuracy models')
     parser.add_argument("-n", "--number_of_models", type=int, default=1)
-    parser.add_argument("-c", '--cpu', type=int, default=os.cpu_count(), help='specify the number of CPU cores to use')
+    parser.add_argument("-c", '--core', type=int, default=os.cpu_count(), help='specify the number of CPU cores to use')
     parser.add_argument("-t", "--thread", type=int, default=1, help='specify how many models to train in parallel')
     parser.add_argument("-m", "--model_type", type=str, default='lenet5', choices=['lenet5', 'resnet18'])
     parser.add_argument("--cpu", action='store_true', help='force using CPU for training')
@@ -90,7 +90,7 @@ if __name__ == "__main__":
     worker_count = args.thread
     total_cpu_cores = args.cpu
     model_type = args.model_type
-    use_cpu = args.cpu
+    use_cpu = args.core
 
     # prepare model and dataset
     current_ml_setup = None

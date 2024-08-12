@@ -236,7 +236,7 @@ if __name__ == '__main__':
     parser.add_argument("start_folder", type=str, help="folder containing starting models")
     parser.add_argument("end_folder", type=str, help="folder containing destination models")
     parser.add_argument("--mapping_mode", type=str, default='auto', choices=['auto', 'all_to_all', 'each_to_each', 'one_to_all', 'all_to_one'])
-    parser.add_argument("-c", '--cpu', type=int, default=os.cpu_count(), help='specify the number of CPU cores to use')
+    parser.add_argument("-c", '--core', type=int, default=os.cpu_count(), help='specify the number of CPU cores to use')
     parser.add_argument("-t", "--thread", type=int, default=1, help='specify how many models to train in parallel')
     parser.add_argument("-m", "--model_type", type=str, default='auto', choices=['auto', 'lenet5', 'resnet18'])
     parser.add_argument("-T", "--max_tick", type=int, default=10000)
@@ -269,7 +269,7 @@ if __name__ == '__main__':
     logger.info(f"totally {paths_to_find_count} paths to process: {paths_to_find}")
 
     worker_count = args.thread
-    total_cpu_count = args.cpu
+    total_cpu_count = args.core
     model_type = args.model_type
 
     # load info.json
