@@ -2,6 +2,7 @@ import os
 import argparse
 import logging
 import sys
+import json
 import torch
 import torch.optim as optim
 import concurrent.futures
@@ -14,6 +15,8 @@ from py_src import ml_setup, model_average, model_variance_correct, special_torc
 from py_src.service import record_weights_difference, record_test_accuracy_loss, record_variance, record_model_stat
 
 logger = logging.getLogger("find_high_accuracy_path")
+
+INFO_FILE_NAME = 'info.json'
 
 def set_logging(base_logger, task_name):
     class ExitOnExceptionHandler(logging.StreamHandler):
@@ -39,8 +42,8 @@ def get_files_to_process(arg_start_folder, arg_end_folder, arg_mode):
     if not os.path.isdir(arg_end_folder):
         logger.critical(f"{arg_end_folder} does not exist")
 
-    files_in_start_folder = sorted(set(os.listdir(arg_start_folder)))
-    files_in_end_folder = sorted(set(os.listdir(arg_end_folder)))
+    files_in_start_folder = sorted(set(temp_file for temp_file in os.listdir(arg_start_folder) if temp_file.endswith('.pt')))
+    files_in_end_folder = sorted(set(temp_file for temp_file in os.listdir(arg_end_folder) if temp_file.endswith('.pt')))
     if arg_mode == "auto":
         if len(files_in_start_folder) == len(files_in_end_folder):
             arg_mode = "each_to_each"
@@ -197,13 +200,13 @@ if __name__ == '__main__':
     parser.add_argument("end_folder", type=str, help="folder containing destination models")
     parser.add_argument("--mapping_mode", type=str, default='auto', choices=['auto', 'all_to_all', 'each_to_each', 'one_to_all', 'all_to_one'])
     parser.add_argument("-c", '--parallel', type=int, default=os.cpu_count(), help='specify how many models to train in parallel')
-    parser.add_argument("-m", "--model_type", type=str, default='lenet5', choices=['lenet5', 'resnet18'])
+    parser.add_argument("-m", "--model_type", type=str, default='auto', choices=['auto', 'lenet5', 'resnet18'])
     parser.add_argument("-t", "--max_tick", type=int, default=10000)
     parser.add_argument("-s", "--step_size", type=float, default=0.001)
     parser.add_argument("-a", "--adoptive_step_size", type=float, default=0.0005)
     parser.add_argument("--training_round", type=int, default=1)
     parser.add_argument("--lr", type=float, default=0.001)
-    parser.add_argument("--save_format", type=str, default='lmdb', choices=['none', 'file', 'lmdb'])
+    parser.add_argument("--save_format", type=str, default='none', choices=['none', 'file', 'lmdb'])
     parser.add_argument("--cpu", action='store_true', help='force using CPU for training')
 
     args = parser.parse_args()
@@ -212,8 +215,8 @@ if __name__ == '__main__':
     logger.info("logging setup complete")
 
     start_folder = args.start_folder
-    mode = args.mapping_mode
     end_folder = args.end_folder
+    mode = args.mapping_mode
     max_tick = args.max_tick
     step_size = args.step_size
     adoptive_step_size = args.adoptive_step_size
@@ -228,6 +231,18 @@ if __name__ == '__main__':
     worker_count = args.parallel
     model_type = args.model_type
 
+    # load info.json
+    with open(os.path.join(start_folder, INFO_FILE_NAME)) as f:
+        start_folder_info = json.load(f)
+    with open(os.path.join(end_folder, INFO_FILE_NAME)) as f:
+        end_folder_info = json.load(f)
+    assert start_folder_info['model_type'] == end_folder_info['model_type']
+
+    if model_type == 'auto':
+        model_type = start_folder_info['model_type']
+    else:
+        assert model_type == start_folder_info['model_type']
+
     # prepare model and dataset
     current_ml_setup = None
     if model_type == 'lenet5':
@@ -240,7 +255,7 @@ if __name__ == '__main__':
     # create output folder
     output_folder_path = os.path.join(os.curdir, f"{__file__}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S_%f')}")
     os.mkdir(output_folder_path)
-    info_file = open(os.path.join(output_folder_path, "info.txt"), 'x')
+    info_file = open(os.path.join(output_folder_path, "arguments.txt"), 'x')
     info_file.write(f"{args}")
     info_file.flush()
     info_file.close()

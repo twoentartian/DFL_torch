@@ -4,6 +4,7 @@ import os
 import sys
 import random
 import copy
+import json
 import numpy as np
 from datetime import datetime
 import concurrent.futures
@@ -101,6 +102,15 @@ if __name__ == "__main__":
     # create output folder
     output_folder_path = os.path.join(os.curdir, f"{__file__}_{datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")}")
     os.mkdir(output_folder_path)
+
+    # write info file
+    info_content = {}
+    info_content['model_type'] = model_type
+    info_content['model_count'] = number_of_models
+    info_content['generated_by_cpu'] = use_cpu
+    json_data = json.dumps(info_content)
+    with open(os.path.join(output_folder_path, 'info.json'), 'w') as f:
+        f.write(json_data)
 
     # training
     if worker_count > number_of_models:
