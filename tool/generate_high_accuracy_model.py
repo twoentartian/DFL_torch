@@ -27,8 +27,8 @@ def re_initialize_model(model, arg_ml_setup):
         model.apply(arg_ml_setup.weights_init_func)
 
 
-def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_setup, arg_use_cpu: bool, arg_worker_count):
-    thread_per_process = os.cpu_count() // arg_worker_count
+def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_setup, arg_use_cpu: bool, arg_worker_count, arg_total_cpu_count):
+    thread_per_process = arg_total_cpu_count // arg_worker_count
     torch.set_num_threads(thread_per_process)
     if arg_use_cpu:
         device = torch.device("cpu")
@@ -79,14 +79,16 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Generate some high accuracy models')
     parser.add_argument("-n", "--number_of_models", type=int, default=1)
-    parser.add_argument("-c", '--parallel', type=int, default=os.cpu_count(), help='specify how many models to train in parallel')
+    parser.add_argument("-c", '--cpu', type=int, default=os.cpu_count(), help='specify the number of CPU cores to use')
+    parser.add_argument("-t", "--thread", type=int, default=1, help='specify how many models to train in parallel')
     parser.add_argument("-m", "--model_type", type=str, default='lenet5', choices=['lenet5', 'resnet18'])
     parser.add_argument("--cpu", action='store_true', help='force using CPU for training')
 
     args = parser.parse_args()
 
     number_of_models = args.number_of_models
-    worker_count = args.parallel
+    worker_count = args.thread
+    total_cpu_cores = args.cpu
     model_type = args.model_type
     use_cpu = args.cpu
 
@@ -115,7 +117,7 @@ if __name__ == "__main__":
     # training
     if worker_count > number_of_models:
         worker_count = number_of_models
-    args = [(output_folder_path, i, number_of_models, current_ml_setup, use_cpu, worker_count) for i in range(number_of_models)]
+    args = [(output_folder_path, i, number_of_models, current_ml_setup, use_cpu, worker_count, total_cpu_cores) for i in range(number_of_models)]
     with concurrent.futures.ProcessPoolExecutor(max_workers=worker_count) as executor:
         futures = [executor.submit(training_model, *arg) for arg in args]
         for future in concurrent.futures.as_completed(futures):

@@ -91,13 +91,13 @@ class InverseLRScheduler(optim.lr_scheduler.LRScheduler):
         return [base_lr / (1 + self.gamma * self.last_epoch) for base_lr in self.base_lrs]
 
 
-def process_file_func(output_folder_path, start_model_path, end_model_path, arg_ml_setup, arg_lr, arg_max_tick, arg_training_round, arg_rebuild_normalization_round, arg_step_size, arg_adoptive_step_size, arg_worker_count, arg_save_format, arg_use_cpu):
+def process_file_func(output_folder_path, start_model_path, end_model_path, arg_ml_setup, arg_lr, arg_max_tick, arg_training_round, arg_rebuild_normalization_round, arg_step_size, arg_adoptive_step_size, arg_worker_count, arg_total_cpu_count, arg_save_format, arg_use_cpu):
     if arg_use_cpu:
         device = torch.device("cpu")
     else:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    thread_per_process = os.cpu_count() // arg_worker_count
+    thread_per_process = arg_total_cpu_count // arg_worker_count
     torch.set_num_threads(thread_per_process)
 
     start_file_name = get_file_name_without_extension(start_model_path)
@@ -236,9 +236,10 @@ if __name__ == '__main__':
     parser.add_argument("start_folder", type=str, help="folder containing starting models")
     parser.add_argument("end_folder", type=str, help="folder containing destination models")
     parser.add_argument("--mapping_mode", type=str, default='auto', choices=['auto', 'all_to_all', 'each_to_each', 'one_to_all', 'all_to_one'])
-    parser.add_argument("-c", '--parallel', type=int, default=os.cpu_count(), help='specify how many models to train in parallel')
+    parser.add_argument("-c", '--cpu', type=int, default=os.cpu_count(), help='specify the number of CPU cores to use')
+    parser.add_argument("-t", "--thread", type=int, default=1, help='specify how many models to train in parallel')
     parser.add_argument("-m", "--model_type", type=str, default='auto', choices=['auto', 'lenet5', 'resnet18'])
-    parser.add_argument("-t", "--max_tick", type=int, default=10000)
+    parser.add_argument("-T", "--max_tick", type=int, default=10000)
     parser.add_argument("-s", "--step_size", type=float, default=0.001)
     parser.add_argument("-a", "--adoptive_step_size", type=float, default=0.0005)
     parser.add_argument("--training_round", type=int, default=1)
@@ -267,7 +268,8 @@ if __name__ == '__main__':
     paths_to_find_count = len(paths_to_find)
     logger.info(f"totally {paths_to_find_count} paths to process: {paths_to_find}")
 
-    worker_count = args.parallel
+    worker_count = args.thread
+    total_cpu_count = args.cpu
     model_type = args.model_type
 
     # load info.json
@@ -303,7 +305,7 @@ if __name__ == '__main__':
     if worker_count > paths_to_find_count:
         worker_count = paths_to_find_count
     logger.info(f"worker: {worker_count}")
-    args = [(output_folder_path, start_file, end_file, current_ml_setup, learning_rate, max_tick, training_round, rebuild_normalization_round, step_size, adoptive_step_size, worker_count, save_format, use_cpu) for (start_file, end_file) in paths_to_find]
+    args = [(output_folder_path, start_file, end_file, current_ml_setup, learning_rate, max_tick, training_round, rebuild_normalization_round, step_size, adoptive_step_size, worker_count, total_cpu_count, save_format, use_cpu) for (start_file, end_file) in paths_to_find]
     with concurrent.futures.ProcessPoolExecutor(max_workers=worker_count) as executor:
         futures = [executor.submit(process_file_func, *arg) for arg in args]
         for future in concurrent.futures.as_completed(futures):
