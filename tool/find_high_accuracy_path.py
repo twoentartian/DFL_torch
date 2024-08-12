@@ -17,6 +17,15 @@ from py_src.service import record_weights_difference, record_test_accuracy_loss,
 logger = logging.getLogger("find_high_accuracy_path")
 
 INFO_FILE_NAME = 'info.json'
+NORMALIZATION_LAYER_KEYWORD = ['bn']
+
+def __is_normalization_layer(layer_name):
+    output = False
+    for i in NORMALIZATION_LAYER_KEYWORD:
+        if i in layer_name:
+            output = True
+            break
+    return output
 
 def set_logging(base_logger, task_name):
     class ExitOnExceptionHandler(logging.StreamHandler):
@@ -82,7 +91,7 @@ class InverseLRScheduler(optim.lr_scheduler.LRScheduler):
         return [base_lr / (1 + self.gamma * self.last_epoch) for base_lr in self.base_lrs]
 
 
-def process_file_func(output_folder_path, start_model_path, end_model_path, arg_ml_setup, arg_lr, arg_max_tick, arg_training_round, arg_step_size, arg_adoptive_step_size, arg_worker_count, arg_save_format, arg_use_cpu):
+def process_file_func(output_folder_path, start_model_path, end_model_path, arg_ml_setup, arg_lr, arg_max_tick, arg_training_round, arg_rebuild_normalization_round, arg_step_size, arg_adoptive_step_size, arg_worker_count, arg_save_format, arg_use_cpu):
     if arg_use_cpu:
         device = torch.device("cpu")
     else:
@@ -102,6 +111,7 @@ def process_file_func(output_folder_path, start_model_path, end_model_path, arg_
     # load models
     cpu_device = torch.device("cpu")
     start_model = copy.deepcopy(arg_ml_setup.model)
+    initial_model_stat = start_model.state_dict()
     start_model_stat_dict = torch.load(start_model_path, map_location=cpu_device)
     end_model_state_dict = torch.load(end_model_path, map_location=cpu_device)
     start_model.load_state_dict(start_model_stat_dict)
@@ -175,6 +185,33 @@ def process_file_func(output_folder_path, start_model_path, end_model_path, arg_
             loss_val = loss.item()
             if training_index == arg_training_round:
                 break
+            assert training_index < arg_training_round
+        """rebuilding normalization"""
+        if arg_rebuild_normalization_round != 0:
+            start_model_stat = start_model.state_dict()
+            # reset normalization layers
+            for layer_name, layer_weights in start_model_stat.items():
+                if __is_normalization_layer(layer_name):
+                    start_model_stat[layer_name] = initial_model_stat[layer_name]
+            start_model.load_state_dict(start_model_stat)
+            for (rebuilding_normalization_index, (data, label)) in enumerate(dataloader):
+                data, label = data.to(device), label.to(device)
+                optimizer.zero_grad(set_to_none=True)
+                output = start_model(data)
+                loss = criterion(output, label)
+                loss.backward()
+                optimizer.step()
+                loss_val = loss.item()
+                # reset all layers except normalization
+                current_model_stat = start_model.state_dict()
+                for layer_name, layer_weights in current_model_stat.items():
+                    if not __is_normalization_layer(layer_name):
+                        current_model_stat[layer_name] = start_model_stat[layer_name]
+                start_model.load_state_dict(current_model_stat)
+                if rebuilding_normalization_index == arg_rebuild_normalization_round:
+                    break
+                assert (rebuilding_normalization_index < arg_rebuild_normalization_round)
+
         start_model_stat = start_model.state_dict()
         cuda.CudaEnv.model_state_dict_to(start_model_stat, cpu_device)
         """scale variance back, due to SGD variance drift"""
@@ -205,6 +242,7 @@ if __name__ == '__main__':
     parser.add_argument("-s", "--step_size", type=float, default=0.001)
     parser.add_argument("-a", "--adoptive_step_size", type=float, default=0.0005)
     parser.add_argument("--training_round", type=int, default=1)
+    parser.add_argument("--rebuild_norm_round", type=int, default=0)
     parser.add_argument("--lr", type=float, default=0.001)
     parser.add_argument("--save_format", type=str, default='none', choices=['none', 'file', 'lmdb'])
     parser.add_argument("--cpu", action='store_true', help='force using CPU for training')
@@ -221,6 +259,7 @@ if __name__ == '__main__':
     step_size = args.step_size
     adoptive_step_size = args.adoptive_step_size
     training_round = args.training_round
+    rebuild_normalization_round = args.rebuild_norm_round
     learning_rate = args.lr
     use_cpu = args.cpu
     paths_to_find = get_files_to_process(args.start_folder, args.end_folder, mode)
@@ -264,7 +303,7 @@ if __name__ == '__main__':
     if worker_count > paths_to_find_count:
         worker_count = paths_to_find_count
     logger.info(f"worker: {worker_count}")
-    args = [(output_folder_path, start_file, end_file, current_ml_setup, learning_rate, max_tick, training_round, step_size, adoptive_step_size, worker_count, save_format, use_cpu) for (start_file, end_file) in paths_to_find]
+    args = [(output_folder_path, start_file, end_file, current_ml_setup, learning_rate, max_tick, training_round, rebuild_normalization_round, step_size, adoptive_step_size, worker_count, save_format, use_cpu) for (start_file, end_file) in paths_to_find]
     with concurrent.futures.ProcessPoolExecutor(max_workers=worker_count) as executor:
         futures = [executor.submit(process_file_func, *arg) for arg in args]
         for future in concurrent.futures.as_completed(futures):
