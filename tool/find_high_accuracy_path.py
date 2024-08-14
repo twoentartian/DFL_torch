@@ -115,12 +115,23 @@ def process_file_func(output_folder_path, start_model_path, end_model_path, arg_
     start_model_stat_dict = torch.load(start_model_path, map_location=cpu_device)
     end_model_state_dict = torch.load(end_model_path, map_location=cpu_device)
     start_model.load_state_dict(start_model_stat_dict)
+    # assert start_model_state_dict != end_model_state_dict
+    for key in start_model_stat_dict.keys():
+        assert not torch.equal(start_model_stat_dict[key], end_model_state_dict[key]), f'starting model({start_model_path}) is same as ending model({end_model_path})'
+        break
 
     # load training data
     training_dataset = arg_ml_setup.training_data
     dataloader = DataLoader(training_dataset, batch_size=arg_ml_setup.training_batch_size, shuffle=True)
     criterion = arg_ml_setup.criterion
     optimizer = torch.optim.SGD(start_model.parameters(), lr=arg_lr)
+    if arg_rebuild_normalization_round != 0:
+        dataset_rebuild_norm_size = arg_rebuild_normalization_round * arg_ml_setup.training_batch_size
+        indices = torch.randperm(len(training_dataset))[:dataset_rebuild_norm_size]
+        sampler = torch.utils.data.SubsetRandomSampler(indices)
+        dataloader_for_rebuilding_norm = DataLoader(training_dataset, batch_size=arg_ml_setup.training_batch_size, sampler=sampler)
+    else:
+        dataloader_for_rebuilding_norm = None
 
     # services
     all_node_names = [0, 1]
@@ -194,7 +205,7 @@ def process_file_func(output_folder_path, start_model_path, end_model_path, arg_
                 if __is_normalization_layer(layer_name):
                     start_model_stat[layer_name] = initial_model_stat[layer_name]
             start_model.load_state_dict(start_model_stat)
-            for (rebuilding_normalization_index, (data, label)) in enumerate(dataloader):
+            for (rebuilding_normalization_index, (data, label)) in enumerate(dataloader_for_rebuilding_norm):
                 data, label = data.to(device), label.to(device)
                 optimizer.zero_grad(set_to_none=True)
                 output = start_model(data)
