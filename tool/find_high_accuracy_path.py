@@ -223,8 +223,6 @@ def process_file_func(output_folder_path, start_model_path, end_model_path, arg_
                 start_model.load_state_dict(current_model_stat)
                 if rebuilding_normalization_index == arg_rebuild_normalization_round:
                     break
-                # if rebuilding_loss_val < training_loss_val:
-                #     break
                 print(f"debug: rebuild_loss={rebuilding_loss_val}")
                 assert (rebuilding_normalization_index < arg_rebuild_normalization_round)
             print(f"[{start_file_name}--{end_file_name}] current tick: {current_tick}, rebuilding finished at {rebuilding_normalization_index} rounds, rebuilding loss = {rebuilding_loss_val}")
