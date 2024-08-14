@@ -163,7 +163,6 @@ def process_file_func(output_folder_path, start_model_path, end_model_path, arg_
         loss = criterion(output, label)
         loss.backward()
         optimizer.step()
-        loss_val = loss.item()
         if training_index == 100:
             break
     start_model.load_state_dict(start_model_stat)
@@ -183,20 +182,21 @@ def process_file_func(output_folder_path, start_model_path, end_model_path, arg_
             start_model_stat[layer_name] = model_variance_correct.VarianceCorrector.scale_tensor_to_variance(start_model_stat[layer_name], single_layer_variance)
         """training"""
         start_model.load_state_dict(start_model_stat)
-        loss_val = None
+        training_loss_val = None
         start_model.train()
         start_model.to(device)
         for (training_index, (data, label)) in enumerate(dataloader):
             data, label = data.to(device), label.to(device)
             optimizer.zero_grad(set_to_none=True)
             output = start_model(data)
-            loss = criterion(output, label)
-            loss.backward()
+            training_loss = criterion(output, label)
+            training_loss.backward()
             optimizer.step()
-            loss_val = loss.item()
+            training_loss_val = training_loss.item()
             if training_index == arg_training_round:
                 break
             assert training_index < arg_training_round
+        print(f"[{start_file_name}--{end_file_name}] current tick: {current_tick}, training loss = {training_loss_val}")
         """rebuilding normalization"""
         if arg_rebuild_normalization_round != 0:
             start_model_stat = start_model.state_dict()
@@ -205,14 +205,16 @@ def process_file_func(output_folder_path, start_model_path, end_model_path, arg_
                 if __is_normalization_layer(layer_name):
                     start_model_stat[layer_name] = initial_model_stat[layer_name]
             start_model.load_state_dict(start_model_stat)
-            for (rebuilding_normalization_index, (data, label)) in enumerate(dataloader_for_rebuilding_norm):
+            rebuilding_normalization_index = None
+            rebuilding_loss_val = None
+            for (rebuilding_normalization_index, (data, label)) in enumerate(dataloader):
                 data, label = data.to(device), label.to(device)
                 optimizer.zero_grad(set_to_none=True)
                 output = start_model(data)
-                loss = criterion(output, label)
-                loss.backward()
+                rebuilding_loss = criterion(output, label)
+                rebuilding_loss.backward()
                 optimizer.step()
-                loss_val = loss.item()
+                rebuilding_loss_val = rebuilding_loss.item()
                 # reset all layers except normalization
                 current_model_stat = start_model.state_dict()
                 for layer_name, layer_weights in current_model_stat.items():
@@ -221,7 +223,14 @@ def process_file_func(output_folder_path, start_model_path, end_model_path, arg_
                 start_model.load_state_dict(current_model_stat)
                 if rebuilding_normalization_index == arg_rebuild_normalization_round:
                     break
+                # if rebuilding_loss_val < training_loss_val:
+                #     break
+                print(f"debug: rebuild_loss={rebuilding_loss_val}")
                 assert (rebuilding_normalization_index < arg_rebuild_normalization_round)
+            print(f"[{start_file_name}--{end_file_name}] current tick: {current_tick}, rebuilding finished at {rebuilding_normalization_index} rounds, rebuilding loss = {rebuilding_loss_val}")
+
+            # remove norm layer variance
+            target_variance = {k: v for k, v in target_variance.items() if not __is_normalization_layer(k)}
 
         start_model_stat = start_model.state_dict()
         cuda.CudaEnv.model_state_dict_to(start_model_stat, cpu_device)
@@ -237,7 +246,7 @@ def process_file_func(output_folder_path, start_model_path, end_model_path, arg_
         record_test_accuracy_loss_service.trigger_without_runtime_parameters(current_tick, {0: start_model_stat})
 
         current_tick += 1
-        print(f"[{start_file_name}--{end_file_name}] current tick: {current_tick}, training loss = {loss_val}")
+
 
 
 if __name__ == '__main__':
