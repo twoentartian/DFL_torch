@@ -91,7 +91,7 @@ class InverseLRScheduler(optim.lr_scheduler.LRScheduler):
         return [base_lr / (1 + self.gamma * self.last_epoch) for base_lr in self.base_lrs]
 
 
-def process_file_func(output_folder_path, start_model_path, end_model_path, arg_ml_setup, arg_lr, arg_max_tick, arg_training_round, arg_rebuild_normalization_round, arg_step_size, arg_adoptive_step_size, arg_worker_count, arg_total_cpu_count, arg_save_format, arg_use_cpu):
+def process_file_func(output_folder_path, start_model_path, end_model_path, arg_ml_setup, arg_lr, arg_max_tick, arg_training_round, arg_rebuild_normalization_round, arg_rebuild_normalization_round_min, arg_step_size, arg_adoptive_step_size, arg_worker_count, arg_total_cpu_count, arg_save_format, arg_use_cpu):
     if arg_use_cpu:
         device = torch.device("cpu")
     else:
@@ -207,7 +207,7 @@ def process_file_func(output_folder_path, start_model_path, end_model_path, arg_
             start_model.load_state_dict(start_model_stat)
             rebuilding_normalization_index = None
             rebuilding_loss_val = None
-            for (rebuilding_normalization_index, (data, label)) in enumerate(dataloader):
+            for (rebuilding_normalization_index, (data, label)) in enumerate(dataloader_for_rebuilding_norm):
                 data, label = data.to(device), label.to(device)
                 optimizer.zero_grad(set_to_none=True)
                 output = start_model(data)
@@ -223,8 +223,9 @@ def process_file_func(output_folder_path, start_model_path, end_model_path, arg_
                 start_model.load_state_dict(current_model_stat)
                 if rebuilding_normalization_index == arg_rebuild_normalization_round:
                     break
-                # if rebuilding_loss_val < training_loss_val:
-                #     break
+                if rebuilding_normalization_index >= arg_rebuild_normalization_round_min:
+                    if rebuilding_loss_val < training_loss_val:
+                        break
                 print(f"debug: rebuild_loss={rebuilding_loss_val}")
                 assert (rebuilding_normalization_index < arg_rebuild_normalization_round)
             print(f"[{start_file_name}--{end_file_name}] current tick: {current_tick}, rebuilding finished at {rebuilding_normalization_index} rounds, rebuilding loss = {rebuilding_loss_val}")
@@ -248,7 +249,6 @@ def process_file_func(output_folder_path, start_model_path, end_model_path, arg_
         current_tick += 1
 
 
-
 if __name__ == '__main__':
     torch.multiprocessing.set_start_method('spawn')
 
@@ -263,7 +263,8 @@ if __name__ == '__main__':
     parser.add_argument("-s", "--step_size", type=float, default=0.001)
     parser.add_argument("-a", "--adoptive_step_size", type=float, default=0.0005)
     parser.add_argument("--training_round", type=int, default=1)
-    parser.add_argument("--rebuild_norm_round", type=int, default=0)
+    parser.add_argument("--rebuild_norm_round", type=int, default=0, help='train for x rounds to rebuild the norm layers')
+    parser.add_argument("--rebuild_norm_round_min", type=int, default=10, help='train for at least x rounds until the loss is small enough to skip')
     parser.add_argument("--lr", type=float, default=0.001)
     parser.add_argument("--save_format", type=str, default='none', choices=['none', 'file', 'lmdb'])
     parser.add_argument("--cpu", action='store_true', help='force using CPU for training')
@@ -281,6 +282,7 @@ if __name__ == '__main__':
     adoptive_step_size = args.adoptive_step_size
     training_round = args.training_round
     rebuild_normalization_round = args.rebuild_norm_round
+    rebuild_normalization_round_min = args.rebuild_norm_round_min
     learning_rate = args.lr
     use_cpu = args.cpu
     paths_to_find = get_files_to_process(args.start_folder, args.end_folder, mode)
@@ -325,7 +327,7 @@ if __name__ == '__main__':
     if worker_count > paths_to_find_count:
         worker_count = paths_to_find_count
     logger.info(f"worker: {worker_count}")
-    args = [(output_folder_path, start_file, end_file, current_ml_setup, learning_rate, max_tick, training_round, rebuild_normalization_round, step_size, adoptive_step_size, worker_count, total_cpu_count, save_format, use_cpu) for (start_file, end_file) in paths_to_find]
+    args = [(output_folder_path, start_file, end_file, current_ml_setup, learning_rate, max_tick, training_round, rebuild_normalization_round, rebuild_normalization_round_min, step_size, adoptive_step_size, worker_count, total_cpu_count, save_format, use_cpu) for (start_file, end_file) in paths_to_find]
     with concurrent.futures.ProcessPoolExecutor(max_workers=worker_count) as executor:
         futures = [executor.submit(process_file_func, *arg) for arg in args]
         for future in concurrent.futures.as_completed(futures):
