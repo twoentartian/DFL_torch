@@ -91,7 +91,7 @@ class InverseLRScheduler(optim.lr_scheduler.LRScheduler):
         return [base_lr / (1 + self.gamma * self.last_epoch) for base_lr in self.base_lrs]
 
 
-def process_file_func(output_folder_path, start_model_path, end_model_path, arg_ml_setup, arg_lr, arg_max_tick, arg_training_round, arg_rebuild_normalization_round, arg_rebuild_normalization_round_min, arg_step_size, arg_adoptive_step_size, arg_worker_count, arg_total_cpu_count, arg_save_format, arg_use_cpu):
+def process_file_func(arg_output_folder_path, start_model_path, end_model_path, arg_ml_setup, arg_lr, arg_max_tick, arg_training_round, arg_rebuild_normalization_round, arg_step_size, arg_adoptive_step_size, arg_worker_count, arg_total_cpu_count, arg_save_format, arg_use_cpu):
     if arg_use_cpu:
         device = torch.device("cpu")
     else:
@@ -102,11 +102,11 @@ def process_file_func(output_folder_path, start_model_path, end_model_path, arg_
 
     start_file_name = get_file_name_without_extension(start_model_path)
     end_file_name = get_file_name_without_extension(end_model_path)
-    output_folder_path = os.path.join(output_folder_path, f"{start_file_name}-{end_file_name}")
-    if os.path.exists(output_folder_path):
-        logger.critical(f"{output_folder_path} already exists")
+    arg_output_folder_path = os.path.join(arg_output_folder_path, f"{start_file_name}-{end_file_name}")
+    if os.path.exists(arg_output_folder_path):
+        print(f"{arg_output_folder_path} already exists")
     else:
-        os.makedirs(output_folder_path)
+        os.makedirs(arg_output_folder_path)
 
     # load models
     cpu_device = torch.device("cpu")
@@ -138,16 +138,16 @@ def process_file_func(output_folder_path, start_model_path, end_model_path, arg_
     all_model_stats = [start_model_stat_dict, end_model_state_dict]
 
     weight_diff_service = record_weights_difference.ServiceWeightsDifferenceRecorder(1)
-    weight_diff_service.initialize_without_runtime_parameters(all_model_stats, output_folder_path)
+    weight_diff_service.initialize_without_runtime_parameters(all_model_stats, arg_output_folder_path)
     variance_service = record_variance.ServiceVarianceRecorder(1)
-    variance_service.initialize_without_runtime_parameters(all_node_names, all_model_stats, output_folder_path)
+    variance_service.initialize_without_runtime_parameters(all_node_names, all_model_stats, arg_output_folder_path)
     if arg_save_format != 'none':
         record_model_service = record_model_stat.ModelStatRecorder(1)
-        record_model_service.initialize_without_runtime_parameters([0], output_folder_path, save_format=arg_save_format)
+        record_model_service.initialize_without_runtime_parameters([0], arg_output_folder_path, save_format=arg_save_format)
     else:
         record_model_service = None
     record_test_accuracy_loss_service = record_test_accuracy_loss.ServiceTestAccuracyLossRecorder(1, 100, use_fixed_testing_dataset=True)
-    record_test_accuracy_loss_service.initialize_without_runtime_parameters(output_folder_path, [0], start_model, criterion, training_dataset)
+    record_test_accuracy_loss_service.initialize_without_runtime_parameters(arg_output_folder_path, [0], start_model, criterion, training_dataset)
 
     # begin finding path
     """pre training"""
@@ -223,9 +223,6 @@ def process_file_func(output_folder_path, start_model_path, end_model_path, arg_
                 start_model.load_state_dict(current_model_stat)
                 if rebuilding_normalization_index == arg_rebuild_normalization_round:
                     break
-                if rebuilding_normalization_index >= arg_rebuild_normalization_round_min:
-                    if rebuilding_loss_val < training_loss_val:
-                        break
                 print(f"debug: rebuild_loss={rebuilding_loss_val}")
                 assert (rebuilding_normalization_index < arg_rebuild_normalization_round)
             print(f"[{start_file_name}--{end_file_name}] current tick: {current_tick}, rebuilding finished at {rebuilding_normalization_index} rounds, rebuilding loss = {rebuilding_loss_val}")
@@ -264,7 +261,6 @@ if __name__ == '__main__':
     parser.add_argument("-a", "--adoptive_step_size", type=float, default=0.0005)
     parser.add_argument("--training_round", type=int, default=1)
     parser.add_argument("--rebuild_norm_round", type=int, default=0, help='train for x rounds to rebuild the norm layers')
-    parser.add_argument("--rebuild_norm_round_min", type=int, default=10, help='train for at least x rounds until the loss is small enough to skip')
     parser.add_argument("--lr", type=float, default=0.001)
     parser.add_argument("--save_format", type=str, default='none', choices=['none', 'file', 'lmdb'])
     parser.add_argument("--cpu", action='store_true', help='force using CPU for training')
@@ -282,7 +278,6 @@ if __name__ == '__main__':
     adoptive_step_size = args.adoptive_step_size
     training_round = args.training_round
     rebuild_normalization_round = args.rebuild_norm_round
-    rebuild_normalization_round_min = args.rebuild_norm_round_min
     learning_rate = args.lr
     use_cpu = args.cpu
     paths_to_find = get_files_to_process(args.start_folder, args.end_folder, mode)
@@ -327,7 +322,7 @@ if __name__ == '__main__':
     if worker_count > paths_to_find_count:
         worker_count = paths_to_find_count
     logger.info(f"worker: {worker_count}")
-    args = [(output_folder_path, start_file, end_file, current_ml_setup, learning_rate, max_tick, training_round, rebuild_normalization_round, rebuild_normalization_round_min, step_size, adoptive_step_size, worker_count, total_cpu_count, save_format, use_cpu) for (start_file, end_file) in paths_to_find]
+    args = [(output_folder_path, start_file, end_file, current_ml_setup, learning_rate, max_tick, training_round, rebuild_normalization_round, step_size, adoptive_step_size, worker_count, total_cpu_count, save_format, use_cpu) for (start_file, end_file) in paths_to_find]
     with concurrent.futures.ProcessPoolExecutor(max_workers=worker_count) as executor:
         futures = [executor.submit(process_file_func, *arg) for arg in args]
         for future in concurrent.futures.as_completed(futures):
