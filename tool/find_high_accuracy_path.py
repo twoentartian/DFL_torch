@@ -282,7 +282,6 @@ if __name__ == '__main__':
     adoptive_step_size = args.adoptive_step_size
     training_round = args.training_round
     rebuild_normalization_round = args.rebuild_norm_round
-    rebuild_normalization_round_min = args.rebuild_norm_round_min
     learning_rate = args.lr
     use_cpu = args.cpu
     paths_to_find = get_files_to_process(args.start_folder, args.end_folder, mode)
