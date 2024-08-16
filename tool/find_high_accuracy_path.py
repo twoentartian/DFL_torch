@@ -150,9 +150,54 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
     record_test_accuracy_loss_service.initialize_without_runtime_parameters(arg_output_folder_path, [0], start_model, criterion, training_dataset)
 
     # begin finding path
+    """rebuilding normalization for start and end points"""
+    if arg_rebuild_normalization_round != 0:
+        start_model.load_state_dict(start_model_stat_dict)
+        start_model.train()
+        start_model.to(device)
+        for (rebuilding_normalization_index, (data, label)) in enumerate(dataloader_for_rebuilding_norm):
+            data, label = data.to(device), label.to(device)
+            optimizer.zero_grad(set_to_none=True)
+            output = start_model(data)
+            rebuilding_loss = criterion(output, label)
+            rebuilding_loss.backward()
+            optimizer.step()
+            # reset all layers except normalization
+            current_model_stat = start_model.state_dict()
+            for layer_name, layer_weights in current_model_stat.items():
+                if not __is_normalization_layer(layer_name):
+                    current_model_stat[layer_name] = start_model_stat_dict[layer_name]
+            start_model.load_state_dict(current_model_stat)
+            if rebuilding_normalization_index == arg_rebuild_normalization_round:
+                break
+        start_model_stat_dict = start_model.state_dict()
+        cuda.CudaEnv.model_state_dict_to(start_model_stat_dict, cpu_device)
+
+        start_model.load_state_dict(end_model_state_dict)
+        start_model.train()
+        start_model.to(device)
+        for (rebuilding_normalization_index, (data, label)) in enumerate(dataloader_for_rebuilding_norm):
+            data, label = data.to(device), label.to(device)
+            optimizer.zero_grad(set_to_none=True)
+            output = start_model(data)
+            rebuilding_loss = criterion(output, label)
+            rebuilding_loss.backward()
+            optimizer.step()
+            # reset all layers except normalization
+            current_model_stat = start_model.state_dict()
+            for layer_name, layer_weights in current_model_stat.items():
+                if not __is_normalization_layer(layer_name):
+                    current_model_stat[layer_name] = end_model_state_dict[layer_name]
+            start_model.load_state_dict(current_model_stat)
+            if rebuilding_normalization_index == arg_rebuild_normalization_round:
+                break
+        end_model_state_dict = start_model.state_dict()
+        cuda.CudaEnv.model_state_dict_to(end_model_state_dict, cpu_device)
+
     """pre training"""
     print(f"[{start_file_name}--{end_file_name}] pre training")
-    start_model_stat = start_model.state_dict()
+    start_model_stat = start_model_stat_dict
+    start_model.load_state_dict(start_model_stat)
     cuda.CudaEnv.model_state_dict_to(start_model_stat, cpu_device)
     start_model.train()
     start_model.to(device)
