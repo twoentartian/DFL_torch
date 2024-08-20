@@ -36,9 +36,9 @@ class ModelAverager:
         raise NotImplementedError
 
     @staticmethod
-    def _iadd_two_model(src, addition, weight_src: float = 1.0, weight_addition: float = 1.0):
+    def _iadd_two_model(src, addition, weight_src: float = 1.0, weight_addition: float = 1.0, check_same_keys=True):
         with torch.no_grad():
-            assert set(src.keys()) == set(addition.keys())
+            assert (not check_same_keys) or (set(src.keys()) == set(addition.keys()))
             for layer_name in src.keys():
                 if weight_src == 1.0 and weight_addition == 1.0:
                     src[layer_name] += addition[layer_name]
@@ -60,26 +60,31 @@ class StandardModelAverager(ModelAverager):
         with torch.no_grad():
             if self.model_buffer is None:
                 self.model_buffer = copy.deepcopy(model_stat)
+                # remove ignored layers
+                for layer_name in list(self.model_buffer.keys()):
+                    if special_torch_layers.is_ignored_layer_averaging(layer_name):
+                        del self.model_buffer[layer_name]
             else:
-                self.model_buffer = ModelAverager._iadd_two_model(self.model_buffer, model_stat)
+                self.model_buffer = ModelAverager._iadd_two_model(self.model_buffer, model_stat, check_same_keys=False)
             self.model_counter += 1
             # variance correction
             if self.variance_corrector is not None:
                 self.variance_corrector.add_variance(model_stat)
 
-    def get_model(self, *args, **kwargs):
+    def get_model(self, self_model, *args, **kwargs):
         with torch.no_grad():
-            for layer_name, layer_weights in self.model_buffer.items():
-                # if special_torch_layers.is_ignored_layer(layer_name):
-                #     continue
-                layer_weights /= self.model_counter
-            output = self.model_buffer
+            output = copy.deepcopy(self_model)
+            for layer_name, layer_weights in output.items():
+                if layer_name not in self.model_buffer.keys():
+                    continue
+                output[layer_name] = self.model_buffer[layer_name] / self.model_counter
+
             # variance correction
             if self.variance_corrector is not None:
                 target_variance = self.variance_corrector.get_variance()
                 for layer_name, single_layer_variance in target_variance.items():
-                    # if special_torch_layers.is_ignored_layer(layer_name):
-                    #     continue
+                    if special_torch_layers.is_ignored_layer_variance_correction(layer_name):
+                        continue
                     output[layer_name] = VarianceCorrector.scale_tensor_to_variance(output[layer_name], single_layer_variance)
             self.model_buffer = None
             self.model_counter = 0
@@ -101,8 +106,12 @@ class ConservativeModelAverager(ModelAverager):
         with torch.no_grad():
             if self.model_buffer is None:
                 self.model_buffer = copy.deepcopy(model_stat)
+                # remove ignored layers
+                for layer_name in list(self.model_buffer.keys()):
+                    if special_torch_layers.is_ignored_layer_averaging(layer_name):
+                        del self.model_buffer[layer_name]
             else:
-                self.model_buffer = ModelAverager._iadd_two_model(self.model_buffer, model_stat)
+                self.model_buffer = ModelAverager._iadd_two_model(self.model_buffer, model_stat, check_same_keys=False)
             self.model_counter += 1
             # variance correction
             if self.variance_corrector is not None:
@@ -110,18 +119,18 @@ class ConservativeModelAverager(ModelAverager):
 
     def get_model(self, self_model, *args, **kwargs):
         with torch.no_grad():
-            for layer_name, layer_weights in self.model_buffer.items():
-                # if special_torch_layers.is_ignored_layer(layer_name):
-                #     continue
-                layer_weights /= self.model_counter
-            output = self.model_buffer
-            output = ModelAverager._iadd_two_model(output, self_model, weight_src=self.conservative, weight_addition=1 - self.conservative)
+            output = copy.deepcopy(self_model)
+            for layer_name, layer_weights in output.items():
+                if layer_name not in self.model_buffer.keys():
+                    continue
+                output[layer_name] = self.model_buffer[layer_name] / self.model_counter
+            output = ModelAverager._iadd_two_model(self_model, output, weight_src=self.conservative, weight_addition=1 - self.conservative)
             # variance correction
             if self.variance_corrector is not None:
                 target_variance = self.variance_corrector.get_variance(self_model, self.conservative)
                 for layer_name, single_layer_variance in target_variance:
-                    # if special_torch_layers.is_ignored_layer(layer_name):
-                    #     continue
+                    if special_torch_layers.is_ignored_layer_variance_correction(layer_name):
+                        continue
                     output[layer_name] = VarianceCorrector.scale_tensor_to_variance(output[layer_name], single_layer_variance)
             self.model_buffer = None
             self.model_counter = 0
