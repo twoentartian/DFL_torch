@@ -3,6 +3,7 @@ import argparse
 import logging
 import sys
 import json
+from typing import Final
 import torch
 import torch.optim as optim
 import concurrent.futures
@@ -18,6 +19,9 @@ logger = logging.getLogger("find_high_accuracy_path")
 
 INFO_FILE_NAME = 'info.json'
 NORMALIZATION_LAYER_KEYWORD = ['bn']
+
+ENABLE_DEDICATED_TRAINING_DATASET_FOR_REBUILDING_NORM: Final[bool] = True
+ENABLE_REBUILD_NORM_FOR_STARTING_ENDING_MODEL: Final[bool] = True
 
 def __is_normalization_layer(layer_name):
     output = False
@@ -113,11 +117,11 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
     start_model = copy.deepcopy(arg_ml_setup.model)
     initial_model_stat = start_model.state_dict()
     start_model_stat_dict = torch.load(start_model_path, map_location=cpu_device)
-    end_model_state_dict = torch.load(end_model_path, map_location=cpu_device)
+    end_model_stat_dict = torch.load(end_model_path, map_location=cpu_device)
     start_model.load_state_dict(start_model_stat_dict)
-    # assert start_model_state_dict != end_model_state_dict
+    # assert start_model_state_dict != end_model_stat_dict
     for key in start_model_stat_dict.keys():
-        assert not torch.equal(start_model_stat_dict[key], end_model_state_dict[key]), f'starting model({start_model_path}) is same as ending model({end_model_path})'
+        assert not torch.equal(start_model_stat_dict[key], end_model_stat_dict[key]), f'starting model({start_model_path}) is same as ending model({end_model_path})'
         break
 
     # load training data
@@ -126,16 +130,19 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
     criterion = arg_ml_setup.criterion
     optimizer = torch.optim.SGD(start_model.parameters(), lr=arg_lr)
     if arg_rebuild_normalization_round != 0:
-        dataset_rebuild_norm_size = arg_rebuild_normalization_round * arg_ml_setup.training_batch_size
-        indices = torch.randperm(len(training_dataset))[:dataset_rebuild_norm_size]
-        sampler = torch.utils.data.SubsetRandomSampler(indices)
-        dataloader_for_rebuilding_norm = DataLoader(training_dataset, batch_size=arg_ml_setup.training_batch_size, sampler=sampler)
+        if ENABLE_DEDICATED_TRAINING_DATASET_FOR_REBUILDING_NORM:
+            dataset_rebuild_norm_size = arg_rebuild_normalization_round * arg_ml_setup.training_batch_size
+            indices = torch.randperm(len(training_dataset))[:dataset_rebuild_norm_size]
+            sampler = torch.utils.data.SubsetRandomSampler(indices)
+            dataloader_for_rebuilding_norm = DataLoader(training_dataset, batch_size=arg_ml_setup.training_batch_size, sampler=sampler)
+        else:
+            dataloader_for_rebuilding_norm = dataloader  # use the training dataloader
     else:
         dataloader_for_rebuilding_norm = None
 
     # services
     all_node_names = [0, 1]
-    all_model_stats = [start_model_stat_dict, end_model_state_dict]
+    all_model_stats = [start_model_stat_dict, end_model_stat_dict]
 
     weight_diff_service = record_weights_difference.ServiceWeightsDifferenceRecorder(1)
     weight_diff_service.initialize_without_runtime_parameters(all_model_stats, arg_output_folder_path)
@@ -151,48 +158,34 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
 
     # begin finding path
     """rebuilding normalization for start and end points"""
-    if arg_rebuild_normalization_round != 0:
-        start_model.load_state_dict(start_model_stat_dict)
-        start_model.train()
-        start_model.to(device)
-        for (rebuilding_normalization_index, (data, label)) in enumerate(dataloader_for_rebuilding_norm):
-            data, label = data.to(device), label.to(device)
-            optimizer.zero_grad(set_to_none=True)
-            output = start_model(data)
-            rebuilding_loss = criterion(output, label)
-            rebuilding_loss.backward()
-            optimizer.step()
-            # reset all layers except normalization
-            current_model_stat = start_model.state_dict()
-            for layer_name, layer_weights in current_model_stat.items():
-                if not __is_normalization_layer(layer_name):
-                    current_model_stat[layer_name] = start_model_stat_dict[layer_name]
-            start_model.load_state_dict(current_model_stat)
-            if rebuilding_normalization_index == arg_rebuild_normalization_round:
-                break
-        start_model_stat_dict = start_model.state_dict()
-        cuda.CudaEnv.model_state_dict_to(start_model_stat_dict, cpu_device)
+    if ENABLE_REBUILD_NORM_FOR_STARTING_ENDING_MODEL:
+        if arg_rebuild_normalization_round != 0:
+            start_model.train()
+            start_model.to(device)
 
-        start_model.load_state_dict(end_model_state_dict)
-        start_model.train()
-        start_model.to(device)
-        for (rebuilding_normalization_index, (data, label)) in enumerate(dataloader_for_rebuilding_norm):
-            data, label = data.to(device), label.to(device)
-            optimizer.zero_grad(set_to_none=True)
-            output = start_model(data)
-            rebuilding_loss = criterion(output, label)
-            rebuilding_loss.backward()
-            optimizer.step()
-            # reset all layers except normalization
-            current_model_stat = start_model.state_dict()
-            for layer_name, layer_weights in current_model_stat.items():
-                if not __is_normalization_layer(layer_name):
-                    current_model_stat[layer_name] = end_model_state_dict[layer_name]
-            start_model.load_state_dict(current_model_stat)
-            if rebuilding_normalization_index == arg_rebuild_normalization_round:
-                break
-        end_model_state_dict = start_model.state_dict()
-        cuda.CudaEnv.model_state_dict_to(end_model_state_dict, cpu_device)
+            def rebuild_norm(model_state):
+                start_model.load_state_dict(model_state)
+                for (rebuilding_normalization_index, (data, label)) in enumerate(dataloader):
+                    data, label = data.to(device), label.to(device)
+                    optimizer.zero_grad(set_to_none=True)
+                    output = start_model(data)
+                    rebuilding_loss = criterion(output, label)
+                    rebuilding_loss.backward()
+                    optimizer.step()
+                    # reset all layers except normalization
+                    current_model_stat = start_model.state_dict()
+                    for layer_name, layer_weights in current_model_stat.items():
+                        if not __is_normalization_layer(layer_name):
+                            current_model_stat[layer_name] = model_state[layer_name]
+                    start_model.load_state_dict(current_model_stat)
+                    if rebuilding_normalization_index == arg_rebuild_normalization_round:
+                        break
+                output_model_state = start_model.state_dict()
+                cuda.CudaEnv.model_state_dict_to(output_model_state, cpu_device)
+                return output_model_state
+
+            start_model_stat_dict = rebuild_norm(start_model_stat_dict)
+            end_model_stat_dict = rebuild_norm(end_model_stat_dict)
 
     """pre training"""
     print(f"[{start_file_name}--{end_file_name}] pre training")
@@ -218,7 +211,7 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
         variance_record = model_variance_correct.VarianceCorrector(model_variance_correct.VarianceCorrectionType.FollowOthers)
         variance_record.add_variance(start_model_stat)
         """move tensor"""
-        start_model_stat = model_average.move_model_state_toward(start_model_stat, end_model_state_dict, arg_step_size, arg_adoptive_step_size)
+        start_model_stat = model_average.move_model_state_toward(start_model_stat, end_model_stat_dict, arg_step_size, arg_adoptive_step_size)
         """rescale variance"""
         target_variance = variance_record.get_variance()
         for layer_name, single_layer_variance in target_variance.items():
@@ -281,7 +274,7 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
         start_model_stat = model_variance_correct.VarianceCorrector.scale_model_stat_to_variance(start_model_stat, target_variance)
 
         # service
-        all_model_stats = [start_model_stat, end_model_state_dict]
+        all_model_stats = [start_model_stat, end_model_stat_dict]
         weight_diff_service.trigger_without_runtime_parameters(current_tick, all_model_stats)
         variance_service.trigger_without_runtime_parameters(current_tick, all_node_names, all_model_stats)
         if record_model_service is not None:
