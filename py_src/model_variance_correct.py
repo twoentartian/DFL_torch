@@ -22,7 +22,7 @@ class VarianceCorrector:
                 for name, param in model_stat.items():
                     self.variance_record[name] = 0.0
             for name, param in model_stat.items():
-                if special_torch_layers.is_ignored_layer(name):
+                if special_torch_layers.is_ignored_layer_variance_correction(name):
                     continue
                 variance = torch.var(param).item()
                 self.variance_record[name] += variance
@@ -72,7 +72,7 @@ class VarianceCorrector:
     def scale_model_stat_to_variance(model_stat, target_variance):
         output_model_stat = copy.deepcopy(model_stat)
         for layer_name, single_layer_variance in target_variance.items():
-            if special_torch_layers.is_ignored_layer(layer_name):
+            if special_torch_layers.is_ignored_layer_variance_correction(layer_name):
                 continue
             output_model_stat[layer_name] = VarianceCorrector.scale_tensor_to_variance(model_stat[layer_name], single_layer_variance)
         return output_model_stat

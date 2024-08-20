@@ -215,7 +215,7 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
         """rescale variance"""
         target_variance = variance_record.get_variance()
         for layer_name, single_layer_variance in target_variance.items():
-            if special_torch_layers.is_ignored_layer(layer_name):
+            if special_torch_layers.is_ignored_layer_averaging(layer_name):
                 continue
             start_model_stat[layer_name] = model_variance_correct.VarianceCorrector.scale_tensor_to_variance(start_model_stat[layer_name], single_layer_variance)
         """training"""

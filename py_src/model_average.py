@@ -15,7 +15,7 @@ def move_tensor_toward(src_tensor, dest_tensor, step, adoptive_step):
 def move_model_state_toward(src_model_stat, dest_model_stat, step, adoptive_step):
     output_stat = copy.deepcopy(src_model_stat)
     for layer_name in src_model_stat.keys():
-        if special_torch_layers.is_ignored_layer(layer_name):
+        if special_torch_layers.is_ignored_layer_averaging(layer_name):
             continue
         src_tensor = src_model_stat[layer_name]
         dst_tensor = dest_model_stat[layer_name]
@@ -70,16 +70,16 @@ class StandardModelAverager(ModelAverager):
     def get_model(self, *args, **kwargs):
         with torch.no_grad():
             for layer_name, layer_weights in self.model_buffer.items():
-                if special_torch_layers.is_ignored_layer(layer_name):
-                    continue
+                # if special_torch_layers.is_ignored_layer(layer_name):
+                #     continue
                 layer_weights /= self.model_counter
             output = self.model_buffer
             # variance correction
             if self.variance_corrector is not None:
                 target_variance = self.variance_corrector.get_variance()
                 for layer_name, single_layer_variance in target_variance.items():
-                    if special_torch_layers.is_ignored_layer(layer_name):
-                        continue
+                    # if special_torch_layers.is_ignored_layer(layer_name):
+                    #     continue
                     output[layer_name] = VarianceCorrector.scale_tensor_to_variance(output[layer_name], single_layer_variance)
             self.model_buffer = None
             self.model_counter = 0
@@ -111,8 +111,8 @@ class ConservativeModelAverager(ModelAverager):
     def get_model(self, self_model, *args, **kwargs):
         with torch.no_grad():
             for layer_name, layer_weights in self.model_buffer.items():
-                if special_torch_layers.is_ignored_layer(layer_name):
-                    continue
+                # if special_torch_layers.is_ignored_layer(layer_name):
+                #     continue
                 layer_weights /= self.model_counter
             output = self.model_buffer
             output = ModelAverager._iadd_two_model(output, self_model, weight_src=self.conservative, weight_addition=1 - self.conservative)
@@ -120,8 +120,8 @@ class ConservativeModelAverager(ModelAverager):
             if self.variance_corrector is not None:
                 target_variance = self.variance_corrector.get_variance(self_model, self.conservative)
                 for layer_name, single_layer_variance in target_variance:
-                    if special_torch_layers.is_ignored_layer(layer_name):
-                        continue
+                    # if special_torch_layers.is_ignored_layer(layer_name):
+                    #     continue
                     output[layer_name] = VarianceCorrector.scale_tensor_to_variance(output[layer_name], single_layer_variance)
             self.model_buffer = None
             self.model_counter = 0
