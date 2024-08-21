@@ -150,15 +150,20 @@ def simulation_phase_averaging(runtime_parameters: RuntimeParameters, logger, mp
             send_reqs.append(req)
 
         received_data = {}
-        while len(received_data.keys()) < (MPI_size - 1):
-            status = MPI.Status()
-            rmsg = large_comm.mprobe(status=status)
-            tag = status.Get_tag()
-            sender = status.Get_source()
-            assert tag == mpi_data_payload.MpiMessageTag.ModelStateData.value
-            rreq = rmsg.irecv()
-            robj = rreq.wait()
-            received_data[sender] = robj
+        for sender_rank in range(MPI_size):
+            if sender_rank == MPI_rank:
+                continue
+            robj = large_comm.recv(None, sender_rank, tag=mpi_data_payload.MpiMessageTag.ModelStateData.value)
+            received_data[sender_rank] = robj
+        # while len(received_data.keys()) < (MPI_size - 1):
+        #     status = MPI.Status()
+        #     rmsg = large_comm.mprobe(status=status)
+        #     tag = status.Get_tag()
+        #     sender = status.Get_source()
+        #     assert tag == mpi_data_payload.MpiMessageTag.ModelStateData.value
+        #     rreq = rmsg.irecv()
+        #     robj = rreq.wait()
+        #     received_data[sender] = robj
 
         # add models from MPI to average buffer
         for sender_mpi_rank, mpi_data_pack in received_data.items():
