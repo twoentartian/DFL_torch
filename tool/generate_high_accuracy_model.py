@@ -83,6 +83,7 @@ if __name__ == "__main__":
     parser.add_argument("-t", "--thread", type=int, default=1, help='specify how many models to train in parallel')
     parser.add_argument("-m", "--model_type", type=str, default='lenet5', choices=['lenet5', 'resnet18'])
     parser.add_argument("--cpu", action='store_true', help='force using CPU for training')
+    parser.add_argument("-o", "--output_folder_name", default=None ,help='specify the output folder name')
 
     args = parser.parse_args()
 
@@ -91,6 +92,7 @@ if __name__ == "__main__":
     total_cpu_cores = args.core
     model_type = args.model_type
     use_cpu = args.cpu
+    output_folder_name = args.output_folder_name
 
     # prepare model and dataset
     current_ml_setup = None
@@ -102,7 +104,10 @@ if __name__ == "__main__":
         raise ValueError(f'Invalid model type: {model_type}')
 
     # create output folder
-    output_folder_path = os.path.join(os.curdir, f"{__file__}_{datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")}")
+    if output_folder_name is None:
+        output_folder_path = os.path.join(os.curdir, f"{__file__}_{datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")}")
+    else:
+        output_folder_path = os.path.join(os.curdir, output_folder_name)
     os.mkdir(output_folder_path)
 
     # write info file
