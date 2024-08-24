@@ -88,9 +88,9 @@ if __name__ == "__main__":
 
     number_of_models = args.number_of_models
     worker_count = args.thread
-    total_cpu_cores = args.cpu
+    total_cpu_cores = args.core
     model_type = args.model_type
-    use_cpu = args.core
+    use_cpu = args.cpu
 
     # prepare model and dataset
     current_ml_setup = None
