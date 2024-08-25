@@ -12,7 +12,7 @@ from datetime import datetime
 from torch.utils.data import DataLoader
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from py_src import ml_setup, model_average, model_variance_correct, special_torch_layers, cuda
+from py_src import ml_setup, model_average, model_variance_correct, special_torch_layers, cuda, util
 from py_src.service import record_weights_difference, record_test_accuracy_loss, record_variance, record_model_stat
 
 logger = logging.getLogger("find_high_accuracy_path")
@@ -22,6 +22,7 @@ NORMALIZATION_LAYER_KEYWORD = ['bn']
 
 ENABLE_DEDICATED_TRAINING_DATASET_FOR_REBUILDING_NORM: Final[bool] = True
 ENABLE_REBUILD_NORM_FOR_STARTING_ENDING_MODEL: Final[bool] = True
+ENABLE_NAN_CHECKING: Final[bool] = True
 
 def __is_normalization_layer(layer_name):
     output = False
@@ -212,12 +213,16 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
         variance_record.add_variance(start_model_stat)
         """move tensor"""
         start_model_stat = model_average.move_model_state_toward(start_model_stat, end_model_stat_dict, arg_step_size, arg_adoptive_step_size)
+        if ENABLE_NAN_CHECKING:
+            util.check_for_nans_in_state_dict(start_model_stat)
         """rescale variance"""
         target_variance = variance_record.get_variance()
         for layer_name, single_layer_variance in target_variance.items():
             if special_torch_layers.is_ignored_layer_averaging(layer_name):
                 continue
             start_model_stat[layer_name] = model_variance_correct.VarianceCorrector.scale_tensor_to_variance(start_model_stat[layer_name], single_layer_variance)
+        if ENABLE_NAN_CHECKING:
+            util.check_for_nans_in_state_dict(start_model_stat)
         """training"""
         start_model.load_state_dict(start_model_stat)
         training_loss_val = None
@@ -270,8 +275,12 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
 
         start_model_stat = start_model.state_dict()
         cuda.CudaEnv.model_state_dict_to(start_model_stat, cpu_device)
+        if ENABLE_NAN_CHECKING:
+            util.check_for_nans_in_state_dict(start_model_stat)
         """scale variance back, due to SGD variance drift"""
         start_model_stat = model_variance_correct.VarianceCorrector.scale_model_stat_to_variance(start_model_stat, target_variance)
+        if ENABLE_NAN_CHECKING:
+            util.check_for_nans_in_state_dict(start_model_stat)
 
         # service
         all_model_stats = [start_model_stat, end_model_stat_dict]
