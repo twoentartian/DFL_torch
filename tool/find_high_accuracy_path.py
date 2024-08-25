@@ -302,6 +302,7 @@ if __name__ == '__main__':
     parser.add_argument("--lr", type=float, default=0.001)
     parser.add_argument("--save_format", type=str, default='none', choices=['none', 'file', 'lmdb'])
     parser.add_argument("--cpu", action='store_true', help='force using CPU for training')
+    parser.add_argument("-o", "--output_folder_name", default=None, help='specify the output folder name')
 
     args = parser.parse_args()
 
@@ -349,7 +350,10 @@ if __name__ == '__main__':
         raise ValueError(f'Invalid model type: {model_type}')
 
     # create output folder
-    output_folder_path = os.path.join(os.curdir, f"{__file__}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S_%f')}")
+    if args.output_folder_name is None:
+        output_folder_path = os.path.join(os.curdir, f"{__file__}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S_%f')}")
+    else:
+        output_folder_path = os.path.join(os.curdir, args.output_folder_name)
     os.mkdir(output_folder_path)
     info_file = open(os.path.join(output_folder_path, "arguments.txt"), 'x')
     info_file.write(f"{args}")
