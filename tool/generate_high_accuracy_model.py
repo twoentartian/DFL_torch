@@ -83,7 +83,7 @@ if __name__ == "__main__":
     parser.add_argument("-t", "--thread", type=int, default=1, help='specify how many models to train in parallel')
     parser.add_argument("-m", "--model_type", type=str, default='lenet5', choices=['lenet5', 'resnet18'])
     parser.add_argument("--cpu", action='store_true', help='force using CPU for training')
-    parser.add_argument("-o", "--output_folder_name", default=None ,help='specify the output folder name')
+    parser.add_argument("-o", "--output_folder_name", default=None, help='specify the output folder name')
 
     args = parser.parse_args()
 

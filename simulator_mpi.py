@@ -18,10 +18,13 @@ MPI_rank = MPI_comm.Get_rank()
 MPI_size = MPI_comm.Get_size()
 
 
-def main(config_file_path):
+def main(config_file_path, output_folder_name):
     # create output dir
     if MPI_rank == 0:
-        output_folder_path = os.path.join(os.curdir, datetime.now().strftime("MPI_%Y-%m-%d_%H-%M-%S_%f"))
+        if output_folder_name is None:
+            output_folder_path = os.path.join(os.curdir, datetime.now().strftime("MPI_%Y-%m-%d_%H-%M-%S_%f"))
+        else:
+            output_folder_path = os.path.join(os.curdir, output_folder_name)
         os.mkdir(output_folder_path)
         backup_path = os.path.join(output_folder_path, internal_names.default_backup_folder_name)
         os.mkdir(backup_path)
@@ -200,6 +203,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='MPI-based DFL simulator (torch version)')
     parser.add_argument('--config', type=str, default="./simulator_config.py", help='path to config file, default: "./simulator_config.py')
+    parser.add_argument("-o", "--output_folder_name", default=None, help='specify the output folder name')
     args = parser.parse_args()
 
-    main(args.config)
+    main(args.config, args.output_folder_name)
