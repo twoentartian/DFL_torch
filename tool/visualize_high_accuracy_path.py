@@ -35,7 +35,7 @@ def load_models_from_lmdb(lmdb_path, arg_node_name):
                 continue
             tick = int(items[1])
             buffer = io.BytesIO(value)
-            state_dict = torch.load(buffer)
+            state_dict = torch.load(buffer, map_location=torch.device('cpu'))
             tick_and_models[tick] = state_dict
     return tick_and_models
 
@@ -125,13 +125,29 @@ def deduplicate_weights(weights_trajectory, shrink_ratio: float | None = None):
         return weights_trajectory_reduced[::sample_rate], index_reduced[::sample_rate]
 
 
+def check_lmdb_exists(path):
+    return os.path.exists(os.path.join(path, "data.mdb")) and os.path.exists(os.path.join(path, "lock.mdb"))
+
+
 def visualize_single_path(arg_path_folder, arg_output_folder, arg_node_name: int, methods, dimension=None, arg_remove_duplicate_points=True):
     if dimension is None:
         dimension = [2, 3]
     assert os.path.exists(arg_path_folder)
 
-    lmdb_path = os.path.join(arg_path_folder, "model_stat.lmdb")
-    assert os.path.exists(lmdb_path)
+    while True:
+        lmdb_path_1 = os.path.join(arg_path_folder, "model_stat.lmdb")
+        if check_lmdb_exists(lmdb_path_1):
+            print(f"find lmdb: {lmdb_path_1}")
+            lmdb_path = lmdb_path_1
+            break
+        lmdb_path_2 = arg_path_folder
+        if check_lmdb_exists(lmdb_path_2):
+            print(f"find lmdb: {lmdb_path_2}")
+            lmdb_path = lmdb_path_2
+            break
+        print(f"lmdb not found in these paths: {[lmdb_path_1, lmdb_path_2]}")
+        exit(-1)
+
     tick_and_models = load_models_from_lmdb(lmdb_path, arg_node_name)
     sample_model = tick_and_models[next(iter(tick_and_models))]
     ticks_ordered = sorted(tick_and_models.keys())
@@ -337,7 +353,9 @@ if __name__ == '__main__':
     torch.multiprocessing.set_start_method('spawn')
 
     parser = argparse.ArgumentParser(description='Visualize high accuracy paths')
-    parser.add_argument("mode", type=str, choices=['single_path_all_weights', 'all_path', 'single_path'])
+    parser.add_argument("mode", type=str, choices=['single_path_all_weights', 'all_path', 'single_path'], help="single_path_all_weights: draw the weights change for all weights."
+                                                                                                               "all_path: reduce the dimension and plot the path for all models in this path, suitable for paths generated 'find_high_accuracy_path'"
+                                                                                                               "single_path: draw path for single model path, provide a lmdb database path or a path containing a lmdb folder with name 'model_stat.lmdb'")
     parser.add_argument("path_folder", type=str, help="high accuracy path data folder")
     parser.add_argument("-m", "--dimension_reduce_method", type=str, nargs='+', choices=['umap', 'tsne', 'pca'], help="the method to reduce dimension to 2 or 3")
     parser.add_argument("-l", "--layer", type=str, nargs='+', help="only plot these layers, default: plot all layers")
@@ -357,7 +375,7 @@ if __name__ == '__main__':
     if args.disable_2d:
         plot_dimensions.remove(2)
     assert len(plot_dimensions) > 0
-    dimension_reduction_methods = args.dimension_reduce
+    dimension_reduction_methods = args.dimension_reduce_method
     if 'all_path' in mode or 'single_path' in mode:
         assert dimension_reduction_methods is not None
     only_layers = args.layer

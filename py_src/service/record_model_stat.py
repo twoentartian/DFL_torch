@@ -45,11 +45,14 @@ class ModelStatRecorder(Service):
                 model_stats.append(model_stat)
             self.trigger_without_runtime_parameters(parameters.current_tick, node_names, model_stats)
 
-    def initialize_without_runtime_parameters(self, node_names, output_path, save_format="lmdb"):
+    def initialize_without_runtime_parameters(self, node_names, output_path, save_format="lmdb", lmdb_db_name=None):
         assert save_format in ["lmdb", "file"], "save_format must be one of 'lmdb', 'file'"
         self.save_format = save_format
         if self.save_format == "lmdb":
-            self.save_path = os.path.join(output_path, "model_stat.lmdb")
+            if lmdb_db_name is None:
+                self.save_path = os.path.join(output_path, "model_stat.lmdb")
+            else:
+                self.save_path = os.path.join(output_path, f"{lmdb_db_name}.lmdb")
         elif self.save_format == "file":
             self.save_path = os.path.join(output_path, "model_stat")
         os.mkdir(self.save_path)
