@@ -12,7 +12,7 @@ def move_tensor_toward(src_tensor, dest_tensor, step, adoptive_step):
     move_tensor = angle_tensor * real_step
     return src_tensor + move_tensor
 
-def move_model_state_toward(src_model_stat, dest_model_stat, step, adoptive_step):
+def move_model_state_toward(src_model_stat, dest_model_stat, step, adoptive_step, enable_merge_bias_with_weight=False):
     output_stat = copy.deepcopy(src_model_stat)
     layers_already_process = set()
     for layer_name in src_model_stat.keys():
@@ -21,8 +21,9 @@ def move_model_state_toward(src_model_stat, dest_model_stat, step, adoptive_step
         if special_torch_layers.is_ignored_layer_averaging(layer_name):
             continue
 
+        current_layer_processed = False
         # process associated bias tensor with weight tensor
-        if 'weight' in layer_name:
+        if enable_merge_bias_with_weight and ('weight' in layer_name):
             bias_layer_name = layer_name.replace('weight', 'bias')
             if bias_layer_name in src_model_stat.keys():
                 # process bias layer and weight layer
@@ -38,11 +39,13 @@ def move_model_state_toward(src_model_stat, dest_model_stat, step, adoptive_step
                 output_bias_tensor = output_bias_tensor.reshape(src_model_bias.shape)
                 output_stat[layer_name] = output_weight_tensor
                 output_stat[bias_layer_name] = output_bias_tensor
-            else:
-                layers_already_process.add(layer_name)
-                src_tensor = src_model_stat[layer_name]
-                dst_tensor = dest_model_stat[layer_name]
-                output_stat[layer_name] = move_tensor_toward(src_tensor, dst_tensor, step, adoptive_step)
+                current_layer_processed = True
+
+        if not current_layer_processed:
+            layers_already_process.add(layer_name)
+            src_tensor = src_model_stat[layer_name]
+            dst_tensor = dest_model_stat[layer_name]
+            output_stat[layer_name] = move_tensor_toward(src_tensor, dst_tensor, step, adoptive_step)
     return output_stat
 
 class ModelAverager:
