@@ -22,7 +22,8 @@ NORMALIZATION_LAYER_KEYWORD = ['bn']
 
 ENABLE_DEDICATED_TRAINING_DATASET_FOR_REBUILDING_NORM: Final[bool] = True
 ENABLE_REBUILD_NORM_FOR_STARTING_ENDING_MODEL: Final[bool] = True
-ENABLE_NAN_CHECKING: Final[bool] = True
+ENABLE_NAN_CHECKING: Final[bool] = False
+ENABLE_PRE_TRAINING: Final[bool] = True
 
 def __is_normalization_layer(layer_name):
     output = False
@@ -188,23 +189,26 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
             start_model_stat_dict = rebuild_norm(start_model_stat_dict)
             end_model_stat_dict = rebuild_norm(end_model_stat_dict)
 
-    """pre training"""
-    print(f"[{start_file_name}--{end_file_name}] pre training")
     start_model_stat = start_model_stat_dict
-    start_model.load_state_dict(start_model_stat)
-    cuda.CudaEnv.model_state_dict_to(start_model_stat, cpu_device)
-    start_model.train()
-    start_model.to(device)
-    for (training_index, (data, label)) in enumerate(dataloader):
-        data, label = data.to(device), label.to(device)
-        optimizer.zero_grad(set_to_none=True)
-        output = start_model(data)
-        loss = criterion(output, label)
-        loss.backward()
-        optimizer.step()
-        if training_index == 100:
-            break
-    start_model.load_state_dict(start_model_stat)
+
+    """pre training"""
+    if ENABLE_PRE_TRAINING:
+        print(f"[{start_file_name}--{end_file_name}] pre training")
+        start_model.load_state_dict(start_model_stat)
+        cuda.CudaEnv.model_state_dict_to(start_model_stat, cpu_device)
+        start_model.train()
+        start_model.to(device)
+        for (training_index, (data, label)) in enumerate(dataloader):
+            data, label = data.to(device), label.to(device)
+            optimizer.zero_grad(set_to_none=True)
+            output = start_model(data)
+            loss = criterion(output, label)
+            loss.backward()
+            optimizer.step()
+            if training_index == 100:
+                break
+        # start_model.load_state_dict(start_model_stat)
+        start_model_stat = start_model.state_dict()
 
     current_tick = 0
     while current_tick < arg_max_tick:
@@ -212,7 +216,7 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
         variance_record = model_variance_correct.VarianceCorrector(model_variance_correct.VarianceCorrectionType.FollowOthers)
         variance_record.add_variance(start_model_stat)
         """move tensor"""
-        start_model_stat = model_average.move_model_state_toward(start_model_stat, end_model_stat_dict, arg_step_size, arg_adoptive_step_size)
+        start_model_stat = model_average.move_model_state_toward(start_model_stat, end_model_stat_dict, arg_step_size, arg_adoptive_step_size, True)
         if ENABLE_NAN_CHECKING:
             util.check_for_nans_in_state_dict(start_model_stat)
         """rescale variance"""
