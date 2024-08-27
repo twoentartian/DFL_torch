@@ -319,6 +319,7 @@ if __name__ == '__main__':
     parser.add_argument("--save_format", type=str, default='none', choices=['none', 'file', 'lmdb'])
     parser.add_argument("--cpu", action='store_true', help='force using CPU for training')
     parser.add_argument("-o", "--output_folder_name", default=None, help='specify the output folder name')
+    parser.add_argument("--use_predefined_optimal", action='store_true', help='use predefined optimal parameters')
 
     args = parser.parse_args()
 
@@ -355,6 +356,19 @@ if __name__ == '__main__':
         model_type = start_folder_info['model_type']
     else:
         assert model_type == start_folder_info['model_type']
+
+    if args.use_predefined_optimal:
+        if model_type == 'lenet5':
+            learning_rate = 0.01
+            max_tick = 30000
+            step_size = 0.001
+            adoptive_step_size = 0
+            training_round = 2
+            rebuild_normalization_round = 0
+        elif model_type == 'resnet18':
+            raise NotImplementedError
+        else:
+            raise NotImplementedError
 
     # prepare model and dataset
     current_ml_setup = None
