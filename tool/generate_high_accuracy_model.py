@@ -82,7 +82,8 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
             record_model_service.trigger_without_runtime_parameters(epoch, [0], [model_stat])
     print(f"INDEX[{index}] finish training")
 
-    torch.save(model.state_dict(), os.path.join(output_folder, f"{str(index).zfill(digit_number_of_models)}.pt"))
+    torch.save(model.state_dict(), os.path.join(output_folder, f"{str(index).zfill(digit_number_of_models)}.model.pt"))
+    torch.save(optimizer.state_dict(), os.path.join(output_folder, f"{str(index).zfill(digit_number_of_models)}.optimizer.pt"))
     del model, dataset, dataloader, criterion, optimizer
     torch.cuda.empty_cache()
 
@@ -97,7 +98,7 @@ if __name__ == "__main__":
     parser.add_argument("-m", "--model_type", type=str, default='lenet5', choices=['lenet5', 'resnet18'])
     parser.add_argument("--cpu", action='store_true', help='force using CPU for training')
     parser.add_argument("-o", "--output_folder_name", default=None, help='specify the output folder name')
-    parser.add_argument("--save_format", type=str, default='none', choices=['none', 'file', 'lmdb'])
+    parser.add_argument("--save_format", type=str, default='none', choices=['none', 'file', 'lmdb'], help='which format to save the training states')
 
     args = parser.parse_args()
 

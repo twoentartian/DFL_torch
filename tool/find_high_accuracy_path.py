@@ -23,7 +23,7 @@ NORMALIZATION_LAYER_KEYWORD = ['bn']
 ENABLE_DEDICATED_TRAINING_DATASET_FOR_REBUILDING_NORM: Final[bool] = True
 ENABLE_REBUILD_NORM_FOR_STARTING_ENDING_MODEL: Final[bool] = True
 ENABLE_NAN_CHECKING: Final[bool] = False
-ENABLE_PRE_TRAINING: Final[bool] = True
+ENABLE_PRE_TRAINING: Final[bool] = False
 
 def __is_normalization_layer(layer_name):
     output = False
@@ -32,6 +32,7 @@ def __is_normalization_layer(layer_name):
             output = True
             break
     return output
+
 
 def set_logging(base_logger, task_name):
     class ExitOnExceptionHandler(logging.StreamHandler):
@@ -57,8 +58,8 @@ def get_files_to_process(arg_start_folder, arg_end_folder, arg_mode):
     if not os.path.isdir(arg_end_folder):
         logger.critical(f"{arg_end_folder} does not exist")
 
-    files_in_start_folder = sorted(set(temp_file for temp_file in os.listdir(arg_start_folder) if temp_file.endswith('.pt')))
-    files_in_end_folder = sorted(set(temp_file for temp_file in os.listdir(arg_end_folder) if temp_file.endswith('.pt')))
+    files_in_start_folder = sorted(set(temp_file for temp_file in os.listdir(arg_start_folder) if temp_file.endswith('model.pt')))
+    files_in_end_folder = sorted(set(temp_file for temp_file in os.listdir(arg_end_folder) if temp_file.endswith('model.pt')))
     if arg_mode == "auto":
         if len(files_in_start_folder) == len(files_in_end_folder):
             arg_mode = "each_to_each"
@@ -83,10 +84,6 @@ def get_files_to_process(arg_start_folder, arg_end_folder, arg_mode):
 
     return sorted(output_paths)
 
-def get_file_name_without_extension(file_path):
-    base_name = os.path.basename(file_path)  # Get the file name with extension
-    file_name, _ = os.path.splitext(base_name)  # Split the name and extension
-    return file_name
 
 class InverseLRScheduler(optim.lr_scheduler.LRScheduler):
     def __init__(self, optimizer, gamma, last_epoch=-1, verbose=False):
@@ -106,8 +103,13 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
     thread_per_process = arg_total_cpu_count // arg_worker_count
     torch.set_num_threads(thread_per_process)
 
-    start_file_name = get_file_name_without_extension(start_model_path)
-    end_file_name = get_file_name_without_extension(end_model_path)
+    start_file_name = os.path.basename(start_model_path).replace('.model.pt', '')
+    end_file_name = os.path.basename(end_model_path).replace('.model.pt', '')
+
+    # check optimizer
+    start_optimizer_path = start_model_path.replace('model.pt', 'optimizer.pt')
+    assert os.path.exists(start_optimizer_path), f'starting optimizer {start_optimizer_path} is missing'
+
     arg_output_folder_path = os.path.join(arg_output_folder_path, f"{start_file_name}-{end_file_name}")
     if os.path.exists(arg_output_folder_path):
         print(f"{arg_output_folder_path} already exists")
@@ -121,6 +123,7 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
     start_model_stat_dict = torch.load(start_model_path, map_location=cpu_device)
     end_model_stat_dict = torch.load(end_model_path, map_location=cpu_device)
     start_model.load_state_dict(start_model_stat_dict)
+    start_model_optimizer_stat = torch.load(start_optimizer_path, map_location=cpu_device) # load optimizer
     # assert start_model_state_dict != end_model_stat_dict
     for key in start_model_stat_dict.keys():
         assert not torch.equal(start_model_stat_dict[key], end_model_stat_dict[key]), f'starting model({start_model_path}) is same as ending model({end_model_path})'
@@ -131,6 +134,7 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
     dataloader = DataLoader(training_dataset, batch_size=arg_ml_setup.training_batch_size, shuffle=True)
     criterion = arg_ml_setup.criterion
     optimizer = torch.optim.SGD(start_model.parameters(), lr=arg_lr)
+    optimizer.load_state_dict(start_model_optimizer_stat)
     if arg_rebuild_normalization_round != 0:
         if ENABLE_DEDICATED_TRAINING_DATASET_FOR_REBUILDING_NORM:
             dataset_rebuild_norm_size = arg_rebuild_normalization_round * arg_ml_setup.training_batch_size
@@ -207,8 +211,7 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
             optimizer.step()
             if training_index == 100:
                 break
-        # start_model.load_state_dict(start_model_stat)
-        start_model_stat = start_model.state_dict()
+        start_model.load_state_dict(start_model_stat)
 
     current_tick = 0
     while current_tick < arg_max_tick:
@@ -309,7 +312,7 @@ if __name__ == '__main__':
     parser.add_argument("-m", "--model_type", type=str, default='auto', choices=['auto', 'lenet5', 'resnet18'])
     parser.add_argument("-T", "--max_tick", type=int, default=10000)
     parser.add_argument("-s", "--step_size", type=float, default=0.001)
-    parser.add_argument("-a", "--adoptive_step_size", type=float, default=0.0005)
+    parser.add_argument("-a", "--adoptive_step_size", type=float, default=0)
     parser.add_argument("--training_round", type=int, default=1)
     parser.add_argument("--rebuild_norm_round", type=int, default=0, help='train for x rounds to rebuild the norm layers')
     parser.add_argument("--lr", type=float, default=0.001)
