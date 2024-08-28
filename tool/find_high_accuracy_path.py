@@ -168,6 +168,7 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
         if arg_rebuild_normalization_round != 0:
             start_model.train()
             start_model.to(device)
+            cuda.CudaEnv.optimizer_to(optimizer, device)
 
             def rebuild_norm(model_state):
                 start_model.load_state_dict(model_state)
@@ -202,6 +203,7 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
         cuda.CudaEnv.model_state_dict_to(start_model_stat, cpu_device)
         start_model.train()
         start_model.to(device)
+        cuda.CudaEnv.optimizer_to(optimizer, device)
         for (training_index, (data, label)) in enumerate(dataloader):
             data, label = data.to(device), label.to(device)
             optimizer.zero_grad(set_to_none=True)
@@ -235,6 +237,7 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
         training_loss_val = None
         start_model.train()
         start_model.to(device)
+        cuda.CudaEnv.optimizer_to(optimizer, device)
         for (training_index, (data, label)) in enumerate(dataloader):
             data, label = data.to(device), label.to(device)
             optimizer.zero_grad(set_to_none=True)
