@@ -16,7 +16,12 @@ class FastTrainingSetup(object):
             steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
             lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, 0.1, steps_per_epoch=steps_per_epoch, epochs=epochs)
             return optimizer, lr_scheduler, epochs
-
+        elif arg_ml_setup.model_name == 'resnet18_gn':
+            epochs = 30
+            optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.9, weight_decay=5e-4)
+            steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
+            lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, 0.1, steps_per_epoch=steps_per_epoch, epochs=epochs)
+            return optimizer, lr_scheduler, epochs
         else:
             raise NotImplementedError
 

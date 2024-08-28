@@ -21,7 +21,7 @@ INFO_FILE_NAME = 'info.json'
 NORMALIZATION_LAYER_KEYWORD = ['bn']
 
 ENABLE_DEDICATED_TRAINING_DATASET_FOR_REBUILDING_NORM: Final[bool] = True
-ENABLE_REBUILD_NORM_FOR_STARTING_ENDING_MODEL: Final[bool] = True
+ENABLE_REBUILD_NORM_FOR_STARTING_ENDING_MODEL: Final[bool] = False
 ENABLE_NAN_CHECKING: Final[bool] = False
 ENABLE_PRE_TRAINING: Final[bool] = False
 
@@ -276,7 +276,6 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
                 start_model.load_state_dict(current_model_stat)
                 if rebuilding_normalization_index == arg_rebuild_normalization_round:
                     break
-                print(f"debug: rebuild_loss={rebuilding_loss_val}")
                 assert (rebuilding_normalization_index < arg_rebuild_normalization_round)
             print(f"[{start_file_name}--{end_file_name}] current tick: {current_tick}, rebuilding finished at {rebuilding_normalization_index} rounds, rebuilding loss = {rebuilding_loss_val}")
 
@@ -378,7 +377,10 @@ if __name__ == '__main__':
     if model_type == 'lenet5':
         current_ml_setup = ml_setup.lenet5_mnist()
     elif model_type == 'resnet18':
-        current_ml_setup = ml_setup.resnet18_cifar10()
+        if start_folder_info['norm_method'] == 'auto':
+            current_ml_setup = ml_setup.resnet18_cifar10()
+        elif start_folder_info['norm_method'] == 'gn':
+            current_ml_setup = ml_setup.resnet18_cifar10(enable_replace_bn_with_group_norm=True)
     else:
         raise ValueError(f'Invalid model type: {model_type}')
 

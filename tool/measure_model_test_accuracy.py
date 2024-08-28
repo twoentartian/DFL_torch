@@ -51,7 +51,7 @@ def testing_model(model, current_ml_setup):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Measure model test accuracy and loss.')
     parser.add_argument("model_file", type=str)
-    parser.add_argument("-m", "--model_type", type=str, default='lenet5', choices=['lenet5', 'resnet18'])
+    parser.add_argument("-m", "--model_type", type=str, default='lenet5', choices=['auto', 'lenet5', 'resnet18', 'resnet18_gn'])
 
     args = parser.parse_args()
 
@@ -63,6 +63,8 @@ if __name__ == "__main__":
         current_ml_setup = ml_setup.lenet5_mnist()
     elif model_type == 'resnet18':
         current_ml_setup = ml_setup.resnet18_cifar10()
+    elif model_type == 'resnet18_gn':
+        current_ml_setup = ml_setup.resnet18_cifar10(enable_replace_bn_with_group_norm=True)
     else:
         raise ValueError(f'Invalid model type: {model_type}')
 

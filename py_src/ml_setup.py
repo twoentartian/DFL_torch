@@ -4,12 +4,22 @@ import torch.nn.functional as F
 import numpy as np
 from torchvision import transforms, models, datasets
 
+def replace_bn_with_ln(model):
+    for name, module in model.named_children():
+        if isinstance(module, nn.BatchNorm2d):
+            # Replace BatchNorm2d with LayerNorm
+            layer_norm = nn.LayerNorm(module.num_features, elementwise_affine=True)
+            setattr(model, name, layer_norm)
+        else:
+            # Recursively replace in submodules
+            replace_bn_with_ln(module)
 
 def weights_init_xavier(m):
     if isinstance(m, nn.Conv2d):
         torch.nn.init.xavier_uniform_(m.weight.data)
     if isinstance(m, nn.Linear):
         torch.nn.init.xavier_uniform_(m.weight.data)
+
 
 class MlSetup:
     def __init__(self):
@@ -23,6 +33,8 @@ class MlSetup:
         self.dataset_label = None
         self.weights_init_func = None
         self.get_lr_scheduler_func = None
+
+        self.has_normalization_layer = None
 
     def self_validate(self):
         pass  # do nothing for now
@@ -90,19 +102,37 @@ def lenet5_mnist():
     lenet5_mnist.training_batch_size = 64
     lenet5_mnist.learning_rate = 0.001
     lenet5_mnist.weights_init_func = weights_init_xavier
+    lenet5_mnist.has_normalization_layer = False
     return lenet5_mnist
 
 
 """ CIFAR10 + ResNet18 """
-def resnet18_cifar10():
-    resnet18_cifar10 = MlSetup()
-    resnet18_cifar10.model = models.resnet18(progress=False, num_classes=10, zero_init_residual=False, groups=1, width_per_group=64, replace_stride_with_dilation=None)
-    resnet18_cifar10.model.conv1 = nn.Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)  # change for cifar10 dataset
-    resnet18_cifar10.model.maxpool = nn.Identity()
-    resnet18_cifar10.model_name = "resnet18"
-    resnet18_cifar10.training_data, resnet18_cifar10.testing_data, resnet18_cifar10.dataset_label = dataset_cifar10()
-    resnet18_cifar10.criterion = torch.nn.CrossEntropyLoss()
-    resnet18_cifar10.training_batch_size = 256
-    resnet18_cifar10.learning_rate = 0.001
 
-    return resnet18_cifar10
+
+class GroupNorm(nn.Module):
+    def __init__(self, num_channels):
+        super(GroupNorm, self).__init__()
+        self.norm = nn.GroupNorm(num_groups=2, num_channels=num_channels, eps=1e-5, affine=True)
+
+    def forward(self, x):
+        x = self.norm(x)
+        return x
+
+def resnet18_cifar10(enable_replace_bn_with_group_norm=False):
+
+
+    output_resnet18_cifar10 = MlSetup()
+    if enable_replace_bn_with_group_norm:
+        output_resnet18_cifar10.model = models.resnet18(progress=False, num_classes=10, zero_init_residual=False, groups=1, width_per_group=64, replace_stride_with_dilation=None, norm_layer=GroupNorm)
+        output_resnet18_cifar10.model_name = "resnet18_gn"
+    else:
+        output_resnet18_cifar10.model = models.resnet18(progress=False, num_classes=10, zero_init_residual=False, groups=1, width_per_group=64, replace_stride_with_dilation=None)
+        output_resnet18_cifar10.model_name = "resnet18"
+    output_resnet18_cifar10.model.conv1 = nn.Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)  # change for cifar10 dataset
+    output_resnet18_cifar10.model.maxpool = nn.Identity()
+    output_resnet18_cifar10.training_data, output_resnet18_cifar10.testing_data, output_resnet18_cifar10.dataset_label = dataset_cifar10()
+    output_resnet18_cifar10.criterion = torch.nn.CrossEntropyLoss()
+    output_resnet18_cifar10.training_batch_size = 256
+    output_resnet18_cifar10.learning_rate = 0.001
+    output_resnet18_cifar10.has_normalization_layer = True
+    return output_resnet18_cifar10

@@ -96,6 +96,7 @@ if __name__ == "__main__":
     parser.add_argument("-c", '--core', type=int, default=os.cpu_count(), help='specify the number of CPU cores to use')
     parser.add_argument("-t", "--thread", type=int, default=1, help='specify how many models to train in parallel')
     parser.add_argument("-m", "--model_type", type=str, default='lenet5', choices=['lenet5', 'resnet18'])
+    parser.add_argument("--norm_method", type=str, default='auto', choices=['auto', 'bn', 'ln', 'gn'])
     parser.add_argument("--cpu", action='store_true', help='force using CPU for training')
     parser.add_argument("-o", "--output_folder_name", default=None, help='specify the output folder name')
     parser.add_argument("--save_format", type=str, default='none', choices=['none', 'file', 'lmdb'], help='which format to save the training states')
@@ -109,13 +110,19 @@ if __name__ == "__main__":
     use_cpu = args.cpu
     output_folder_name = args.output_folder_name
     save_format = args.save_format
+    norm_method = args.norm_method
 
     # prepare model and dataset
     current_ml_setup = None
     if model_type == 'lenet5':
         current_ml_setup = ml_setup.lenet5_mnist()
     elif model_type == 'resnet18':
-        current_ml_setup = ml_setup.resnet18_cifar10()
+        if norm_method == 'auto':
+            current_ml_setup = ml_setup.resnet18_cifar10()
+        elif norm_method == 'gn':
+            current_ml_setup = ml_setup.resnet18_cifar10(enable_replace_bn_with_group_norm=True)
+        else:
+            raise NotImplementedError(f'{norm_method} is not implemented for {model_type} yet')
     else:
         raise ValueError(f'Invalid model type: {model_type}')
 
@@ -131,6 +138,8 @@ if __name__ == "__main__":
     info_content['model_type'] = model_type
     info_content['model_count'] = number_of_models
     info_content['generated_by_cpu'] = use_cpu
+    if current_ml_setup.has_normalization_layer:
+        info_content['norm_method'] = norm_method
     json_data = json.dumps(info_content)
     with open(os.path.join(output_folder_path, 'info.json'), 'w') as f:
         f.write(json_data)
