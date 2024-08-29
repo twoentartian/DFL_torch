@@ -19,6 +19,7 @@ logger = logging.getLogger("find_high_accuracy_path")
 
 INFO_FILE_NAME = 'info.json'
 NORMALIZATION_LAYER_KEYWORD = ['bn']
+MAX_CPU_COUNT: Final[int] = 32
 
 ENABLE_DEDICATED_TRAINING_DATASET_FOR_REBUILDING_NORM: Final[bool] = True
 ENABLE_REBUILD_NORM_FOR_STARTING_ENDING_MODEL: Final[bool] = False
@@ -345,8 +346,8 @@ if __name__ == '__main__':
 
     worker_count = args.thread
     total_cpu_count = args.core
-    if total_cpu_count > 32:
-        total_cpu_count = 32
+    if total_cpu_count > MAX_CPU_COUNT:
+        total_cpu_count = MAX_CPU_COUNT
     model_type = args.model_type
 
     # load info.json
@@ -369,7 +370,9 @@ if __name__ == '__main__':
             adoptive_step_size = 0
             training_round = 2
             rebuild_normalization_round = 0
-        elif model_type == 'resnet18':
+        elif model_type == 'resnet18_bn':
+            raise NotImplementedError
+        elif model_type == 'resnet18_gn':
             raise NotImplementedError
         else:
             raise NotImplementedError
@@ -378,11 +381,10 @@ if __name__ == '__main__':
     current_ml_setup = None
     if model_type == 'lenet5':
         current_ml_setup = ml_setup.lenet5_mnist()
-    elif model_type == 'resnet18':
-        if start_folder_info['norm_method'] == 'auto':
-            current_ml_setup = ml_setup.resnet18_cifar10()
-        elif start_folder_info['norm_method'] == 'gn':
-            current_ml_setup = ml_setup.resnet18_cifar10(enable_replace_bn_with_group_norm=True)
+    elif model_type == 'resnet18_bn':
+        current_ml_setup = ml_setup.resnet18_cifar10()
+    elif model_type == 'resnet18_gn':
+        current_ml_setup = ml_setup.resnet18_cifar10(enable_replace_bn_with_group_norm=True)
     else:
         raise ValueError(f'Invalid model type: {model_type}')
 
