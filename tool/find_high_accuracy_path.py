@@ -345,6 +345,8 @@ if __name__ == '__main__':
 
     worker_count = args.thread
     total_cpu_count = args.core
+    if total_cpu_count > 32:
+        total_cpu_count = 32
     model_type = args.model_type
 
     # load info.json
