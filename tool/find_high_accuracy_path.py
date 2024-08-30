@@ -392,7 +392,8 @@ if __name__ == '__main__':
 
     # create output folder
     if args.output_folder_name is None:
-        output_folder_path = os.path.join(os.curdir, f"{__file__}_{datetime.now().strftime('%Y-%m-%d_%H-%M-%S_%f')}")
+        time_now_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")
+        output_folder_path = os.path.join(os.curdir, f"{__file__}_{time_now_str}")
     else:
         output_folder_path = os.path.join(os.curdir, args.output_folder_name)
     os.mkdir(output_folder_path)

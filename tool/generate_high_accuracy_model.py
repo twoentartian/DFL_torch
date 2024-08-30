@@ -35,7 +35,6 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
         device = torch.device("cpu")
     else:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
     digit_number_of_models = len(str(arg_number_of_models))
     model = copy.deepcopy(arg_ml_setup.model)
     model.to(device)
@@ -132,7 +131,8 @@ if __name__ == "__main__":
 
     # create output folder
     if output_folder_name is None:
-        output_folder_path = os.path.join(os.curdir, f"{__file__}_{datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")}")
+        time_now_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")
+        output_folder_path = os.path.join(os.curdir, f"{__file__}_{time_now_str}")
     else:
         output_folder_path = os.path.join(os.curdir, output_folder_name)
     os.mkdir(output_folder_path)
