@@ -17,10 +17,10 @@ class MpiMessageTag(IntEnum):
 
 
 class MpiData(object):
-    def __init__(self, src_node, model_stat, dst_node):
+    def __init__(self, src_node, serialized_model_stat, dst_node):
         self.src_node = src_node
         self.dst_node = dst_node
-        self.model_stat_data = serialize_model_stat(model_stat)
+        self.model_stat_data = serialized_model_stat
 
     def get_model_stat(self):
         return deserialize_model_stat(self.model_stat_data)
@@ -39,8 +39,8 @@ class MpiDataPack(object):
     def get_pack_sender_rank(self):
         return self.pack_sender_rank
 
-    def add_mpi_data(self, src_node, model_stat, dst_node):
-        new_data = MpiData(src_node, model_stat, dst_node)
+    def add_mpi_data(self, src_node, model_stat_ser, dst_node):
+        new_data = MpiData(src_node, model_stat_ser, dst_node)
         self.elements.append(new_data)
 
     def get_mpi_data(self):

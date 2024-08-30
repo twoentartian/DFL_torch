@@ -116,6 +116,7 @@ def simulation_phase_averaging(runtime_parameters: RuntimeParameters, logger, mp
 
             # get model stat
             model_stat = node_target.get_model_stat()
+            model_stat_serialized = None
             for k, v in model_stat.items():
                 model_stat[k] = v.cpu()
             # send model to peers
@@ -129,9 +130,11 @@ def simulation_phase_averaging(runtime_parameters: RuntimeParameters, logger, mp
                         if averaged:
                             nodes_averaged.add(neighbor)
                     else:
-                        # the target node is other MPI processes
+                        # the target node is in other MPI processes
                         dst_mpi_rank = nodes_map_to_rank[neighbor]
-                        mpi_data_pack_and_dst[dst_mpi_rank].add_mpi_data(node_name, model_stat, neighbor)
+                        if model_stat_serialized is None:
+                            model_stat_serialized = mpi_data_payload.serialize_model_stat(model_stat)
+                        mpi_data_pack_and_dst[dst_mpi_rank].add_mpi_data(node_name, model_stat_serialized, neighbor)
                 else:
                     averaged = send_model_stat_to_receiver(runtime_parameters, neighbor, model_stat)
                     if averaged:
@@ -155,15 +158,6 @@ def simulation_phase_averaging(runtime_parameters: RuntimeParameters, logger, mp
                 continue
             robj = large_comm.recv(None, sender_rank, tag=mpi_data_payload.MpiMessageTag.ModelStateData.value)
             received_data[sender_rank] = robj
-        # while len(received_data.keys()) < (MPI_size - 1):
-        #     status = MPI.Status()
-        #     rmsg = large_comm.mprobe(status=status)
-        #     tag = status.Get_tag()
-        #     sender = status.Get_source()
-        #     assert tag == mpi_data_payload.MpiMessageTag.ModelStateData.value
-        #     rreq = rmsg.irecv()
-        #     robj = rreq.wait()
-        #     received_data[sender] = robj
 
         # add models from MPI to average buffer
         for sender_mpi_rank, mpi_data_pack in received_data.items():
