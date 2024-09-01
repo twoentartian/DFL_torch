@@ -2,6 +2,7 @@ import argparse
 import torch
 import os
 import sys
+import json
 from torch.utils.data import DataLoader
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -51,22 +52,22 @@ def testing_model(model, current_ml_setup):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Measure model test accuracy and loss.')
     parser.add_argument("model_file", type=str)
-    parser.add_argument("-m", "--model_type", type=str, default='lenet5', choices=['auto', 'lenet5', 'resnet18', 'resnet18_gn'])
+    parser.add_argument("-m", "--model_type", type=str, default='auto', choices=['auto', 'lenet5', 'resnet18_bn', 'resnet18_gn'])
 
     args = parser.parse_args()
 
     model_file_path = args.model_file
     model_type = args.model_type
 
-    current_ml_setup = None
-    if model_type == 'lenet5':
-        current_ml_setup = ml_setup.lenet5_mnist()
-    elif model_type == 'resnet18':
-        current_ml_setup = ml_setup.resnet18_cifar10()
-    elif model_type == 'resnet18_gn':
-        current_ml_setup = ml_setup.resnet18_cifar10(enable_replace_bn_with_group_norm=True)
-    else:
-        raise ValueError(f'Invalid model type: {model_type}')
+    if model_type == 'auto':
+        folder_path = os.path.dirname(model_file_path)
+        model_info_file = os.path.join(folder_path, 'info.json')
+        assert os.path.exists(model_info_file), f"model info file {model_info_file} does not exist, please specify model type with -m"
+        with open(model_info_file) as f:
+            model_info = json.load(f)
+        model_type = model_info['model_type']
+
+    current_ml_setup = ml_setup.get_ml_setup_from_model_type(model_type)
 
     if not os.path.exists(model_file_path):
         print(f"file not found. {model_file_path}")
