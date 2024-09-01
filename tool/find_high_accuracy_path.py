@@ -22,7 +22,7 @@ INFO_FILE_NAME = 'info.json'
 MAX_CPU_COUNT: Final[int] = 32
 
 ENABLE_DEDICATED_TRAINING_DATASET_FOR_REBUILDING_NORM: Final[bool] = True
-ENABLE_REBUILD_NORM_FOR_STARTING_ENDING_MODEL: Final[bool] = False
+ENABLE_REBUILD_NORM_FOR_STARTING_ENDING_MODEL: Final[bool] = True
 ENABLE_NAN_CHECKING: Final[bool] = False
 ENABLE_PRE_TRAINING: Final[bool] = False
 
@@ -87,7 +87,7 @@ class InverseLRScheduler(optim.lr_scheduler.LRScheduler):
         return [base_lr / (1 + self.gamma * self.last_epoch) for base_lr in self.base_lrs]
 
 
-def process_file_func(arg_output_folder_path, start_model_path, end_model_path, arg_ml_setup, arg_lr, arg_max_tick, arg_training_round, arg_rebuild_normalization_round, arg_step_size, arg_adoptive_step_size, layer_skip_average, arg_worker_count, arg_total_cpu_count, arg_save_format, arg_use_cpu):
+def process_file_func(arg_output_folder_path, start_model_path, end_model_path, arg_ml_setup, arg_lr, arg_lr_rebuild_norm, arg_max_tick, arg_training_round, arg_rebuild_normalization_round, arg_step_size, arg_adoptive_step_size, layer_skip_average, arg_worker_count, arg_total_cpu_count, arg_save_format, arg_use_cpu):
     if arg_use_cpu:
         device = torch.device("cpu")
     else:
@@ -130,14 +130,23 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
     optimizer.load_state_dict(start_model_optimizer_stat)
     if arg_rebuild_normalization_round != 0:
         if ENABLE_DEDICATED_TRAINING_DATASET_FOR_REBUILDING_NORM:
+            epoch_for_rebuilding_norm = 1
+            dataset_for_rebuilding_norm = arg_ml_setup.training_data_for_rebuilding_normalization
             dataset_rebuild_norm_size = arg_rebuild_normalization_round * arg_ml_setup.training_batch_size
-            indices = torch.randperm(len(training_dataset))[:dataset_rebuild_norm_size]
-            sampler = torch.utils.data.SubsetRandomSampler(indices)
-            dataloader_for_rebuilding_norm = DataLoader(training_dataset, batch_size=arg_ml_setup.training_batch_size, sampler=sampler)
+            if dataset_rebuild_norm_size > len(dataset_for_rebuilding_norm):
+                ratio = int(dataset_rebuild_norm_size // len(dataset_for_rebuilding_norm) + 1)
+                assert dataset_rebuild_norm_size % ratio == 0
+                dataset_rebuild_norm_size = dataset_rebuild_norm_size // ratio
+                epoch_for_rebuilding_norm = epoch_for_rebuilding_norm * ratio
+            indices = torch.randperm(len(dataset_for_rebuilding_norm))[:dataset_rebuild_norm_size]
+            sub_dataset = torch.utils.data.Subset(dataset_for_rebuilding_norm, indices.tolist())
+            dataloader_for_rebuilding_norm = DataLoader(sub_dataset, batch_size=arg_ml_setup.training_batch_size)
         else:
             dataloader_for_rebuilding_norm = dataloader  # use the training dataloader
+            epoch_for_rebuilding_norm = 1
     else:
         dataloader_for_rebuilding_norm = None
+        epoch_for_rebuilding_norm = None
 
     # services
     all_node_names = [0, 1]
@@ -165,21 +174,23 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
 
             def rebuild_norm(model_state):
                 start_model.load_state_dict(model_state)
-                for (rebuilding_normalization_index, (data, label)) in enumerate(dataloader):
-                    data, label = data.to(device), label.to(device)
-                    optimizer.zero_grad(set_to_none=True)
-                    output = start_model(data)
-                    rebuilding_loss = criterion(output, label)
-                    rebuilding_loss.backward()
-                    optimizer.step()
-                    # reset all layers except normalization
-                    current_model_stat = start_model.state_dict()
-                    for layer_name, layer_weights in current_model_stat.items():
-                        if not special_torch_layers.is_normalization_layer(arg_ml_setup.model_name, layer_name):
-                            current_model_stat[layer_name] = model_state[layer_name]
-                    start_model.load_state_dict(current_model_stat)
-                    if rebuilding_normalization_index == arg_rebuild_normalization_round:
-                        break
+                rebuilding_normalization_count = 0
+                for epoch in range(epoch_for_rebuilding_norm):
+                    for (rebuilding_normalization_index, (data, label)) in enumerate(dataloader_for_rebuilding_norm):
+                        data, label = data.to(device), label.to(device)
+                        optimizer.zero_grad(set_to_none=True)
+                        output = start_model(data)
+                        rebuilding_loss = criterion(output, label)
+                        rebuilding_loss.backward()
+                        optimizer.step()
+                        # reset all layers except normalization
+                        current_model_stat = start_model.state_dict()
+                        for layer_name, layer_weights in current_model_stat.items():
+                            if not special_torch_layers.is_normalization_layer(arg_ml_setup.model_name, layer_name):
+                                current_model_stat[layer_name] = model_state[layer_name]
+                        start_model.load_state_dict(current_model_stat)
+                        rebuilding_normalization_count += 1
+                assert rebuilding_normalization_count == arg_rebuild_normalization_round
                 output_model_state = start_model.state_dict()
                 cuda.CudaEnv.model_state_dict_to(output_model_state, cpu_device)
                 return output_model_state
@@ -246,29 +257,33 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
         """rebuilding normalization"""
         if arg_rebuild_normalization_round != 0:
             start_model_stat = start_model.state_dict()
+            optimizer_rebuild_norm = torch.optim.SGD(start_model.parameters(), lr=arg_lr_rebuild_norm)
             # reset normalization layers
             for layer_name, layer_weights in start_model_stat.items():
                 if special_torch_layers.is_normalization_layer(arg_ml_setup.model_name, layer_name):
                     start_model_stat[layer_name] = initial_model_stat[layer_name]
             start_model.load_state_dict(start_model_stat)
-            rebuilding_normalization_index = None
+            rebuilding_normalization_iter_count = 0
             rebuilding_loss_val = None
-            for (rebuilding_normalization_index, (data, label)) in enumerate(dataloader_for_rebuilding_norm):
-                data, label = data.to(device), label.to(device)
-                optimizer.zero_grad(set_to_none=True)
-                output = start_model(data)
-                rebuilding_loss = criterion(output, label)
-                rebuilding_loss.backward()
-                optimizer.step()
-                rebuilding_loss_val = rebuilding_loss.item()
-                # reset all layers except normalization
-                current_model_stat = start_model.state_dict()
-                for layer_name, layer_weights in current_model_stat.items():
-                    if not special_torch_layers.is_normalization_layer(arg_ml_setup.model_name, layer_name):
-                        current_model_stat[layer_name] = start_model_stat[layer_name]
-                start_model.load_state_dict(current_model_stat)
-                assert (rebuilding_normalization_index < arg_rebuild_normalization_round)
-            print(f"[{start_file_name}--{end_file_name}] current tick: {current_tick}, rebuilding finished at {rebuilding_normalization_index} rounds, rebuilding loss = {rebuilding_loss_val}")
+
+            for epoch in range(epoch_for_rebuilding_norm):
+                for (rebuilding_normalization_index, (data, label)) in enumerate(dataloader_for_rebuilding_norm):
+                    data, label = data.to(device), label.to(device)
+                    optimizer_rebuild_norm.zero_grad(set_to_none=True)
+                    output = start_model(data)
+                    rebuilding_loss = criterion(output, label)
+                    rebuilding_loss.backward()
+                    optimizer_rebuild_norm.step()
+                    rebuilding_loss_val = rebuilding_loss.item()
+                    # reset all layers except normalization
+                    current_model_stat = start_model.state_dict()
+                    for layer_name, layer_weights in current_model_stat.items():
+                        if not special_torch_layers.is_normalization_layer(arg_ml_setup.model_name, layer_name):
+                            current_model_stat[layer_name] = start_model_stat[layer_name]
+                    start_model.load_state_dict(current_model_stat)
+                    rebuilding_normalization_iter_count += 1
+            assert rebuilding_normalization_iter_count == arg_rebuild_normalization_round, f"{rebuilding_normalization_iter_count} != {arg_rebuild_normalization_round}, dataset len: {len(dataloader_for_rebuilding_norm)}"
+            print(f"[{start_file_name}--{end_file_name}] current tick: {current_tick}, rebuilding finished at {rebuilding_normalization_iter_count} rounds, rebuilding loss = {rebuilding_loss_val}")
 
             # remove norm layer variance
             target_variance = {k: v for k, v in target_variance.items() if not special_torch_layers.is_normalization_layer(arg_ml_setup.model_name, k)}
@@ -310,6 +325,7 @@ if __name__ == '__main__':
     parser.add_argument("-r", "--rebuild_norm_round", type=int, default=0, help='train for x rounds to rebuild the norm layers')
     parser.add_argument("--layer_skip_average", type=str, nargs='+')
     parser.add_argument("--lr", type=float, default=0.001)
+    parser.add_argument("--lr_rebuild_norm", type=float, default=0.001)
     parser.add_argument("--save_format", type=str, default='none', choices=['none', 'file', 'lmdb'])
     parser.add_argument("--cpu", action='store_true', help='force using CPU for training')
     parser.add_argument("-o", "--output_folder_name", default=None, help='specify the output folder name')
@@ -329,6 +345,7 @@ if __name__ == '__main__':
     training_round = args.training_round
     rebuild_normalization_round = args.rebuild_norm_round
     learning_rate = args.lr
+    learning_rate_rebuild_norm = args.lr_rebuild_norm
     use_cpu = args.cpu
     paths_to_find = get_files_to_process(args.start_folder, args.end_folder, mode)
     save_format = args.save_format
@@ -397,7 +414,7 @@ if __name__ == '__main__':
     if worker_count > paths_to_find_count:
         worker_count = paths_to_find_count
     logger.info(f"worker: {worker_count}")
-    args = [(output_folder_path, start_file, end_file, current_ml_setup, learning_rate, max_tick, training_round, rebuild_normalization_round, step_size, adoptive_step_size, layer_skip_average, worker_count, total_cpu_count, save_format, use_cpu) for (start_file, end_file) in paths_to_find]
+    args = [(output_folder_path, start_file, end_file, current_ml_setup, learning_rate, learning_rate_rebuild_norm, max_tick, training_round, rebuild_normalization_round, step_size, adoptive_step_size, layer_skip_average, worker_count, total_cpu_count, save_format, use_cpu) for (start_file, end_file) in paths_to_find]
     with concurrent.futures.ProcessPoolExecutor(max_workers=worker_count) as executor:
         futures = [executor.submit(process_file_func, *arg) for arg in args]
         for future in concurrent.futures.as_completed(futures):
