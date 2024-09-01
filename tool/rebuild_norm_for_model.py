@@ -55,7 +55,7 @@ if __name__ == '__main__':
 
     parser.add_argument("-c", '--core', type=int, default=os.cpu_count(), help='specify the number of CPU cores to use')
     parser.add_argument("-r", "--rebuild_norm_round", type=int, default=50)
-    parser.add_argument("-t", "--rebuild_count", type=int, default=2)
+    parser.add_argument("-t", "--rebuild_count", type=int, default=1)
     parser.add_argument("-m", "--model_type", type=str, default='auto', choices=['auto', 'lenet5', 'resnet18_bn', 'resnet18_gn'])
     parser.add_argument("--lr", type=float, default=0.001)
     parser.add_argument("-o", "--output_folder_name", default=None, help='specify the output folder name')
@@ -109,15 +109,14 @@ if __name__ == '__main__':
     assert os.path.exists(optimizer_stat_path), f'starting optimizer {optimizer_stat_path} is missing'
 
     dataset_rebuild_norm_size = rebuild_round * current_ml_setup.training_batch_size
-    indices = torch.randperm(len(current_ml_setup.training_data))[:dataset_rebuild_norm_size]
-    index_dataset = IndexedDataset(current_ml_setup.training_data)
+    indices = torch.randperm(len(current_ml_setup.training_data_for_rebuilding_normalization))[:dataset_rebuild_norm_size]
+    index_dataset = IndexedDataset(current_ml_setup.training_data_for_rebuilding_normalization)
     sub_dataset = torch.utils.data.Subset(index_dataset, indices.tolist())
+    dataloader_for_rebuilding_norm = DataLoader(sub_dataset, batch_size=current_ml_setup.training_batch_size)
     criterion = current_ml_setup.criterion
 
     for rebuild_count_index in range(rebuild_count):
         optimizer = torch.optim.SGD(target_model.parameters(), lr=lr)
-        optimizer_stat = torch.load(optimizer_stat_path, map_location=cpu_device)
-        optimizer.load_state_dict(optimizer_stat)
         cuda.CudaEnv.optimizer_to(optimizer, device)
 
         starting_model_stat = torch.load(model_path, map_location=cpu_device)
@@ -134,7 +133,6 @@ if __name__ == '__main__':
         rebuilding_loss_val = None
 
         # rebuild norm
-        dataloader_for_rebuilding_norm = DataLoader(sub_dataset, batch_size=current_ml_setup.training_batch_size)
         for (rebuilding_normalization_index, (data, label, indices)) in enumerate(dataloader_for_rebuilding_norm):
             if rebuilding_normalization_index == 0:
                 data_numpy = data.numpy()
