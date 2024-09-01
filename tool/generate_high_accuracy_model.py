@@ -112,22 +112,9 @@ if __name__ == "__main__":
     norm_method = args.norm_method
 
     # prepare model and dataset
-    current_ml_setup = None
-    output_model_name = None
-    if model_type == 'lenet5':
-        current_ml_setup = ml_setup.lenet5_mnist()
-        output_model_name = 'lenet5'
-    elif model_type == 'resnet18':
-        if norm_method == 'auto':
-            current_ml_setup = ml_setup.resnet18_cifar10()
-            output_model_name = 'resnet18_bn'
-        elif norm_method == 'gn':
-            current_ml_setup = ml_setup.resnet18_cifar10(enable_replace_bn_with_group_norm=True)
-            output_model_name = 'resnet18_gn'
-        else:
-            raise NotImplementedError(f'{norm_method} is not implemented for {model_type} yet')
-    else:
-        raise ValueError(f'Invalid model type: {model_type}')
+    current_ml_setup = ml_setup.get_ml_setup_from_config(model_type, norm_method)
+
+    output_model_name = current_ml_setup.model_name
 
     # create output folder
     if output_folder_name is None:

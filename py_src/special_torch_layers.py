@@ -18,3 +18,17 @@ def is_keyword_in_layer_name(layer_name, keywords):
             break
     return output
 
+
+__normalization_layer_layer_keyword = {'lenet5': None, 'resnet18_bn': ['bn'], 'resnet18_gn': ['bn']}
+def is_normalization_layer(model_name, layer_name):
+    output = False
+    if model_name not in __normalization_layer_layer_keyword.keys():
+        raise NotImplementedError(f"{model_name} not found in NORMALIZATION_LAYER_KEYWORD: {__normalization_layer_layer_keyword}")
+    keywords = __normalization_layer_layer_keyword[model_name]
+    if keywords is None:
+        return False
+    for i in keywords:
+        if i in layer_name:
+            output = True
+            break
+    return output

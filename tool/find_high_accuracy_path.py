@@ -18,21 +18,13 @@ from py_src.service import record_weights_difference, record_test_accuracy_loss,
 logger = logging.getLogger("find_high_accuracy_path")
 
 INFO_FILE_NAME = 'info.json'
-NORMALIZATION_LAYER_KEYWORD = ['bn']
+
 MAX_CPU_COUNT: Final[int] = 32
 
 ENABLE_DEDICATED_TRAINING_DATASET_FOR_REBUILDING_NORM: Final[bool] = True
 ENABLE_REBUILD_NORM_FOR_STARTING_ENDING_MODEL: Final[bool] = False
 ENABLE_NAN_CHECKING: Final[bool] = False
 ENABLE_PRE_TRAINING: Final[bool] = False
-
-def __is_normalization_layer(layer_name):
-    output = False
-    for i in NORMALIZATION_LAYER_KEYWORD:
-        if i in layer_name:
-            output = True
-            break
-    return output
 
 
 def set_logging(base_logger, task_name):
@@ -183,7 +175,7 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
                     # reset all layers except normalization
                     current_model_stat = start_model.state_dict()
                     for layer_name, layer_weights in current_model_stat.items():
-                        if not __is_normalization_layer(layer_name):
+                        if not special_torch_layers.is_normalization_layer(arg_ml_setup.model_name, layer_name):
                             current_model_stat[layer_name] = model_state[layer_name]
                     start_model.load_state_dict(current_model_stat)
                     if rebuilding_normalization_index == arg_rebuild_normalization_round:
@@ -256,7 +248,7 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
             start_model_stat = start_model.state_dict()
             # reset normalization layers
             for layer_name, layer_weights in start_model_stat.items():
-                if __is_normalization_layer(layer_name):
+                if special_torch_layers.is_normalization_layer(arg_ml_setup.model_name, layer_name):
                     start_model_stat[layer_name] = initial_model_stat[layer_name]
             start_model.load_state_dict(start_model_stat)
             rebuilding_normalization_index = None
@@ -272,16 +264,14 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
                 # reset all layers except normalization
                 current_model_stat = start_model.state_dict()
                 for layer_name, layer_weights in current_model_stat.items():
-                    if not __is_normalization_layer(layer_name):
+                    if not special_torch_layers.is_normalization_layer(arg_ml_setup.model_name, layer_name):
                         current_model_stat[layer_name] = start_model_stat[layer_name]
                 start_model.load_state_dict(current_model_stat)
-                if rebuilding_normalization_index == arg_rebuild_normalization_round:
-                    break
                 assert (rebuilding_normalization_index < arg_rebuild_normalization_round)
             print(f"[{start_file_name}--{end_file_name}] current tick: {current_tick}, rebuilding finished at {rebuilding_normalization_index} rounds, rebuilding loss = {rebuilding_loss_val}")
 
             # remove norm layer variance
-            target_variance = {k: v for k, v in target_variance.items() if not __is_normalization_layer(k)}
+            target_variance = {k: v for k, v in target_variance.items() if not special_torch_layers.is_normalization_layer(arg_ml_setup.model_name, k)}
 
         start_model_stat = start_model.state_dict()
         cuda.CudaEnv.model_state_dict_to(start_model_stat, cpu_device)
@@ -312,7 +302,7 @@ if __name__ == '__main__':
     parser.add_argument("--mapping_mode", type=str, default='auto', choices=['auto', 'all_to_all', 'each_to_each', 'one_to_all', 'all_to_one'])
     parser.add_argument("-c", '--core', type=int, default=os.cpu_count(), help='specify the number of CPU cores to use')
     parser.add_argument("-t", "--thread", type=int, default=1, help='specify how many models to train in parallel')
-    parser.add_argument("-m", "--model_type", type=str, default='auto', choices=['auto', 'lenet5', 'resnet18'])
+    parser.add_argument("-m", "--model_type", type=str, default='auto', choices=['auto', 'lenet5', 'resnet18_bn', 'resnet18_gn'])
     parser.add_argument("-T", "--max_tick", type=int, default=10000)
     parser.add_argument("-s", "--step_size", type=float, default=0.001)
     parser.add_argument("-a", "--adoptive_step_size", type=float, default=0)
@@ -364,6 +354,7 @@ if __name__ == '__main__':
     else:
         assert model_type == start_folder_info['model_type']
 
+    # predefine optimal parameters
     if args.use_predefined_optimal:
         if model_type == 'lenet5':
             learning_rate = 0.01
@@ -380,7 +371,7 @@ if __name__ == '__main__':
             raise NotImplementedError
 
     # prepare model and dataset
-    current_ml_setup = None
+    current_ml_setup = ml_setup.get_ml_setup_from_model_type(model_type)
     if model_type == 'lenet5':
         current_ml_setup = ml_setup.lenet5_mnist()
     elif model_type == 'resnet18_bn':

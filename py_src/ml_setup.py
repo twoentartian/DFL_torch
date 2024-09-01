@@ -1,7 +1,9 @@
 import torch
+from enum import Enum
 import torch.nn as nn
-import torch.nn.functional as F
+import torch.nn.functional as nnF
 import numpy as np
+import torchvision.transforms.functional as visionF
 from torchvision import transforms, models, datasets
 
 def replace_bn_with_ln(model):
@@ -26,6 +28,7 @@ class MlSetup:
         self.model = None
         self.model_name = None
         self.training_data = None
+        self.training_data_for_rebuilding_normalization = None
         self.testing_data = None
         self.criterion = None
         self.training_batch_size = None
@@ -39,11 +42,15 @@ class MlSetup:
     def self_validate(self):
         pass  # do nothing for now
 
+
 """ CIFAR10 """
-def dataset_cifar10():
+def dataset_cifar10(random_crop_flip=True):
     dataset_path = './data/cifar10'
     stats = ((0.49139968, 0.48215841, 0.44653091), (0.24703223, 0.24348513, 0.26158784))
-    transforms_cifar_train = transforms.Compose([transforms.ToTensor(), transforms.RandomCrop(32, padding=4, padding_mode='reflect'), transforms.RandomHorizontalFlip(p=0.5), transforms.Normalize(*stats)])
+    if random_crop_flip:
+        transforms_cifar_train = transforms.Compose([transforms.ToTensor(), transforms.RandomCrop(32, padding=4, padding_mode='reflect'), transforms.RandomHorizontalFlip(p=0.5), transforms.Normalize(*stats)])
+    else:
+        transforms_cifar_train = transforms.Compose([transforms.ToTensor(), transforms.Normalize(*stats)])
     transforms_cifar_test = transforms.Compose([transforms.ToTensor(), transforms.Normalize(*stats)])
     cifar10_train = datasets.CIFAR10(root=dataset_path, train=True, download=True, transform=transforms_cifar_train)
     cifar10_test = datasets.CIFAR10(root=dataset_path, train=False, download=True, transform=transforms_cifar_test)
@@ -76,11 +83,11 @@ class LeNet5(nn.Module):
         self.fc3 = nn.Linear(84, 10)
 
     def forward(self, x):
-        x = F.max_pool2d(F.relu(self.conv1(x)), (2, 2))
-        x = F.max_pool2d(F.relu(self.conv2(x)), (2, 2))
+        x = nnF.max_pool2d(nnF.relu(self.conv1(x)), (2, 2))
+        x = nnF.max_pool2d(nnF.relu(self.conv2(x)), (2, 2))
         x = x.view(-1, self.num_flat_features(x))
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
+        x = nnF.relu(self.fc1(x))
+        x = nnF.relu(self.fc2(x))
         x = self.fc3(x)
         return x
 
@@ -98,6 +105,7 @@ def lenet5_mnist():
     lenet5_mnist.model = lenet5()
     lenet5_mnist.model_name = "lenet5"
     lenet5_mnist.training_data, lenet5_mnist.testing_data, lenet5_mnist.dataset_label = dataset_mnist()
+    lenet5_mnist.training_data_for_rebuilding_normalization = None
     lenet5_mnist.criterion = torch.nn.CrossEntropyLoss()
     lenet5_mnist.training_batch_size = 64
     lenet5_mnist.learning_rate = 0.001
@@ -119,20 +127,61 @@ class GroupNorm(nn.Module):
         return x
 
 def resnet18_cifar10(enable_replace_bn_with_group_norm=False):
-
-
     output_resnet18_cifar10 = MlSetup()
     if enable_replace_bn_with_group_norm:
         output_resnet18_cifar10.model = models.resnet18(progress=False, num_classes=10, zero_init_residual=False, groups=1, width_per_group=64, replace_stride_with_dilation=None, norm_layer=GroupNorm)
         output_resnet18_cifar10.model_name = "resnet18_gn"
     else:
         output_resnet18_cifar10.model = models.resnet18(progress=False, num_classes=10, zero_init_residual=False, groups=1, width_per_group=64, replace_stride_with_dilation=None)
-        output_resnet18_cifar10.model_name = "resnet18"
+        output_resnet18_cifar10.model_name = "resnet18_bn"
     output_resnet18_cifar10.model.conv1 = nn.Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)  # change for cifar10 dataset
     output_resnet18_cifar10.model.maxpool = nn.Identity()
-    output_resnet18_cifar10.training_data, output_resnet18_cifar10.testing_data, output_resnet18_cifar10.dataset_label = dataset_cifar10()
+    output_resnet18_cifar10.training_data, output_resnet18_cifar10.testing_data, output_resnet18_cifar10.dataset_label = dataset_cifar10(random_crop_flip=True)
+    output_resnet18_cifar10.training_data_for_rebuilding_normalization, _, _ = dataset_cifar10(random_crop_flip=False)
     output_resnet18_cifar10.criterion = torch.nn.CrossEntropyLoss()
     output_resnet18_cifar10.training_batch_size = 256
     output_resnet18_cifar10.learning_rate = 0.001
     output_resnet18_cifar10.has_normalization_layer = True
     return output_resnet18_cifar10
+
+
+
+
+""" Helper function """
+class ModelType(Enum):
+    lenet5 = 0
+    resnet18 = 1
+
+class NormType(Enum):
+    auto = 0
+    bn = 1
+    gn = 2
+
+def get_ml_setup_from_config(model_type: str, norm_type: str = 'auto'):
+    model_type = ModelType[model_type]
+    norm_type = NormType[norm_type]
+    if model_type == ModelType.lenet5:
+        output_ml_setup = lenet5_mnist()
+    elif model_type == ModelType.resnet18:
+        if norm_type == NormType.auto:
+            output_ml_setup = resnet18_cifar10()
+        elif norm_type == NormType.gn:
+            output_ml_setup = resnet18_cifar10(enable_replace_bn_with_group_norm=True)
+        else:
+            raise NotImplementedError(f'{norm_type} is not implemented for {model_type} yet')
+    else:
+        raise ValueError(f'Invalid model type: {model_type}')
+    return output_ml_setup
+
+
+def get_ml_setup_from_model_type(model_name):
+    if model_name == 'lenet5':
+        output_ml_setup = lenet5_mnist()
+    elif model_name == 'resnet18_bn':
+        output_ml_setup = resnet18_cifar10()
+    elif model_name == 'resnet18_gn':
+        output_ml_setup = resnet18_cifar10(enable_replace_bn_with_group_norm=True)
+    else:
+        raise ValueError(f'Invalid model type: {model_name}')
+    return output_ml_setup
+
