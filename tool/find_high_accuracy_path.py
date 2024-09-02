@@ -28,7 +28,7 @@ ENABLE_NAN_CHECKING: Final[bool] = False
 ENABLE_PRE_TRAINING: Final[bool] = False
 
 
-def set_logging(base_logger, task_name):
+def set_logging(base_logger, task_name, log_file_path=None):
     class ExitOnExceptionHandler(logging.StreamHandler):
         def emit(self, record):
             if record.levelno == logging.CRITICAL:
@@ -43,6 +43,12 @@ def set_logging(base_logger, task_name):
     base_logger.setLevel(logging.DEBUG)
     base_logger.addHandler(console)
     base_logger.addHandler(ExitOnExceptionHandler())
+
+    if log_file_path is not None:
+        file = logging.FileHandler(log_file_path)
+        file.setLevel(logging.DEBUG)
+        file.setFormatter(formatter)
+        logger.addHandler(file)
 
     del console, formatter
 
@@ -89,6 +95,15 @@ class InverseLRScheduler(optim.lr_scheduler.LRScheduler):
 
 
 def process_file_func(arg_output_folder_path, start_model_path, end_model_path, arg_ml_setup, arg_lr, arg_lr_rebuild_norm, arg_max_tick, arg_training_round, arg_rebuild_normalization_round, arg_step_size, arg_adoptive_step_size, layer_skip_average, arg_worker_count, arg_total_cpu_count, arg_save_format, arg_use_cpu):
+    start_file_name = os.path.basename(start_model_path).replace('.model.pt', '')
+    end_file_name = os.path.basename(end_model_path).replace('.model.pt', '')
+
+    # logger
+    task_name = f"{start_file_name}-{end_file_name}"
+    child_logger = logging.getLogger(f"find_high_accuracy_path.{task_name}")
+    set_logging(child_logger, task_name, log_file_path=os.path.join(arg_output_folder_path, "info.log"))
+    child_logger.info("logging setup complete")
+
     if arg_use_cpu:
         device = torch.device("cpu")
     else:
@@ -97,16 +112,13 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
     thread_per_process = arg_total_cpu_count // arg_worker_count
     torch.set_num_threads(thread_per_process)
 
-    start_file_name = os.path.basename(start_model_path).replace('.model.pt', '')
-    end_file_name = os.path.basename(end_model_path).replace('.model.pt', '')
-
     # check optimizer
     start_optimizer_path = start_model_path.replace('model.pt', 'optimizer.pt')
     assert os.path.exists(start_optimizer_path), f'starting optimizer {start_optimizer_path} is missing'
 
     arg_output_folder_path = os.path.join(arg_output_folder_path, f"{start_file_name}-{end_file_name}")
     if os.path.exists(arg_output_folder_path):
-        print(f"{arg_output_folder_path} already exists")
+        child_logger.warning(f"{arg_output_folder_path} already exists")
     else:
         os.makedirs(arg_output_folder_path)
 
@@ -203,7 +215,7 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
 
     """pre training"""
     if ENABLE_PRE_TRAINING:
-        print(f"[{start_file_name}--{end_file_name}] pre training")
+        child_logger.info(f"[{start_file_name}--{end_file_name}] pre training")
         start_model.load_state_dict(start_model_stat)
         cuda.CudaEnv.model_state_dict_to(start_model_stat, cpu_device)
         start_model.train()
@@ -263,7 +275,7 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
             if training_index == arg_training_round:
                 break
             assert training_index < arg_training_round
-        print(f"[{start_file_name}--{end_file_name}] current tick: {current_tick}, training loss = {training_loss_val}")
+        child_logger.info(f"[{start_file_name}--{end_file_name}] current tick: {current_tick}, training loss = {training_loss_val}")
         """rebuilding normalization"""
         if arg_rebuild_normalization_round != 0:
             start_model_stat = start_model.state_dict()
@@ -292,7 +304,7 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
                     start_model.load_state_dict(current_model_stat)
                     rebuilding_normalization_iter_count += 1
             assert rebuilding_normalization_iter_count == arg_rebuild_normalization_round, f"{rebuilding_normalization_iter_count} != {arg_rebuild_normalization_round}, dataset len: {len(dataloader_for_rebuilding_norm)}"
-            print(f"[{start_file_name}--{end_file_name}] current tick: {current_tick}, rebuilding finished at {rebuilding_normalization_iter_count} rounds, rebuilding loss = {rebuilding_loss_val}")
+            child_logger.info(f"[{start_file_name}--{end_file_name}] current tick: {current_tick}, rebuilding finished at {rebuilding_normalization_iter_count} rounds, rebuilding loss = {rebuilding_loss_val}")
 
             # remove norm layer variance
             target_variance = {k: v for k, v in target_variance.items() if not special_torch_layers.is_normalization_layer(arg_ml_setup.model_name, k)}
