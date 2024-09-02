@@ -23,6 +23,7 @@ MAX_CPU_COUNT: Final[int] = 32
 
 ENABLE_DEDICATED_TRAINING_DATASET_FOR_REBUILDING_NORM: Final[bool] = True
 ENABLE_REBUILD_NORM_FOR_STARTING_ENDING_MODEL: Final[bool] = True
+ENABLE_REBUILD_NORM_WITH_SEPARATE_OPTIMIZER: Final[bool] = False
 ENABLE_NAN_CHECKING: Final[bool] = False
 ENABLE_PRE_TRAINING: Final[bool] = False
 
@@ -220,6 +221,15 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
         start_model.load_state_dict(start_model_stat)
 
     current_tick = 0
+
+    if arg_rebuild_normalization_round != 0:
+        if ENABLE_REBUILD_NORM_WITH_SEPARATE_OPTIMIZER:
+            optimizer_rebuild_norm = torch.optim.SGD(start_model.parameters(), lr=arg_lr_rebuild_norm)
+        else:
+            optimizer_rebuild_norm = optimizer
+    else:
+        optimizer_rebuild_norm = None
+
     while current_tick < arg_max_tick:
         """record variance"""
         variance_record = model_variance_correct.VarianceCorrector(model_variance_correct.VarianceCorrectionType.FollowOthers)
@@ -257,7 +267,6 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
         """rebuilding normalization"""
         if arg_rebuild_normalization_round != 0:
             start_model_stat = start_model.state_dict()
-            optimizer_rebuild_norm = torch.optim.SGD(start_model.parameters(), lr=arg_lr_rebuild_norm)
             # reset normalization layers
             for layer_name, layer_weights in start_model_stat.items():
                 if special_torch_layers.is_normalization_layer(arg_ml_setup.model_name, layer_name):
