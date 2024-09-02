@@ -53,6 +53,7 @@ def set_logging(base_logger, task_name, log_file_path=None):
 
     del console, formatter
 
+
 def get_files_to_process(arg_start_folder, arg_end_folder, arg_mode):
     if not os.path.isdir(arg_start_folder):
         logger.critical(f"{arg_start_folder} does not exist")
@@ -86,13 +87,47 @@ def get_files_to_process(arg_start_folder, arg_end_folder, arg_mode):
     return sorted(output_paths)
 
 
-class InverseLRScheduler(optim.lr_scheduler.LRScheduler):
-    def __init__(self, optimizer, gamma, last_epoch=-1, verbose=False):
-        self.gamma = gamma
-        super(InverseLRScheduler, self).__init__(optimizer, last_epoch, verbose)
+def rebuild_norm_layers(model, model_state, initial_model_stat, arg_ml_setup, epoch_of_rebuild, dataloader, rebuild_lr, existing_optimizer, rebuild_on_device=None):
+    # reset normalization layers
+    for layer_name, layer_weights in model_state.items():
+        if special_torch_layers.is_normalization_layer(arg_ml_setup.model_name, layer_name):
+            model_state[layer_name] = initial_model_stat[layer_name]
+    model.load_state_dict(model_state)
 
-    def get_lr(self):
-        return [base_lr / (1 + self.gamma * self.last_epoch) for base_lr in self.base_lrs]
+    if rebuild_on_device is None:
+        rebuild_on_device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    cpu_device = torch.device("cpu")
+
+    model.train()
+    model.to(rebuild_on_device)
+    rebuilding_normalization_count = 0
+    criterion = arg_ml_setup.criterion
+
+    if ENABLE_REBUILD_NORM_WITH_SEPARATE_OPTIMIZER:
+        optimizer_rebuild_norm = torch.optim.SGD(model.parameters(), lr=rebuild_lr)
+    else:
+        optimizer_rebuild_norm = existing_optimizer
+    cuda.CudaEnv.optimizer_to(optimizer_rebuild_norm, rebuild_on_device)
+    rebuilding_loss_val = None
+    for epoch in range(epoch_of_rebuild):
+        for (rebuilding_normalization_index, (data, label)) in enumerate(dataloader):
+            data, label = data.to(rebuild_on_device), label.to(rebuild_on_device)
+            optimizer_rebuild_norm.zero_grad(set_to_none=True)
+            output = model(data)
+            rebuilding_loss = criterion(output, label)
+            rebuilding_loss.backward()
+            rebuilding_loss_val = rebuilding_loss.item()
+            optimizer_rebuild_norm.step()
+            # reset all layers except normalization
+            current_model_stat = model.state_dict()
+            for layer_name, layer_weights in current_model_stat.items():
+                if not special_torch_layers.is_normalization_layer(arg_ml_setup.model_name, layer_name):
+                    current_model_stat[layer_name] = model_state[layer_name]
+            model.load_state_dict(current_model_stat)
+            rebuilding_normalization_count += 1
+    output_model_state = model.state_dict()
+    cuda.CudaEnv.model_state_dict_to(output_model_state, cpu_device)
+    return output_model_state, (rebuilding_normalization_count, rebuilding_loss_val)
 
 
 def process_file_func(arg_output_folder_path, start_model_path, end_model_path, arg_ml_setup, arg_lr, arg_lr_rebuild_norm, arg_max_tick, arg_training_round, arg_rebuild_normalization_round, arg_step_size, arg_adoptive_step_size, layer_skip_average, arg_worker_count, arg_total_cpu_count, arg_save_format, arg_use_cpu):
@@ -130,7 +165,7 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
     start_model_stat_dict = torch.load(start_model_path, map_location=cpu_device)
     end_model_stat_dict = torch.load(end_model_path, map_location=cpu_device)
     start_model.load_state_dict(start_model_stat_dict)
-    start_model_optimizer_stat = torch.load(start_optimizer_path, map_location=cpu_device) # load optimizer
+    start_model_optimizer_stat = torch.load(start_optimizer_path, map_location=cpu_device)  # load optimizer
     # assert start_model_state_dict != end_model_stat_dict
     for key in start_model_stat_dict.keys():
         assert not torch.equal(start_model_stat_dict[key], end_model_stat_dict[key]), f'starting model({start_model_path}) is same as ending model({end_model_path})'
@@ -182,41 +217,12 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
     """rebuilding normalization for start and end points"""
     if ENABLE_REBUILD_NORM_FOR_STARTING_ENDING_MODEL:
         if arg_rebuild_normalization_round != 0:
-            start_model.train()
-            start_model.to(device)
-
-            def rebuild_norm(model_state):
-                start_model.load_state_dict(model_state)
-                rebuilding_normalization_count = 0
-
-                if ENABLE_REBUILD_NORM_WITH_SEPARATE_OPTIMIZER:
-                    optimizer_rebuild_norm = torch.optim.SGD(start_model.parameters(), lr=arg_lr_rebuild_norm)
-                else:
-                    optimizer_rebuild_norm = optimizer
-                cuda.CudaEnv.optimizer_to(optimizer_rebuild_norm, device)
-
-                for epoch in range(epoch_for_rebuilding_norm):
-                    for (rebuilding_normalization_index, (data, label)) in enumerate(dataloader_for_rebuilding_norm):
-                        data, label = data.to(device), label.to(device)
-                        optimizer_rebuild_norm.zero_grad(set_to_none=True)
-                        output = start_model(data)
-                        rebuilding_loss = criterion(output, label)
-                        rebuilding_loss.backward()
-                        optimizer_rebuild_norm.step()
-                        # reset all layers except normalization
-                        current_model_stat = start_model.state_dict()
-                        for layer_name, layer_weights in current_model_stat.items():
-                            if not special_torch_layers.is_normalization_layer(arg_ml_setup.model_name, layer_name):
-                                current_model_stat[layer_name] = model_state[layer_name]
-                        start_model.load_state_dict(current_model_stat)
-                        rebuilding_normalization_count += 1
-                assert rebuilding_normalization_count == arg_rebuild_normalization_round
-                output_model_state = start_model.state_dict()
-                cuda.CudaEnv.model_state_dict_to(output_model_state, cpu_device)
-                return output_model_state
-
-            start_model_stat_dict = rebuild_norm(start_model_stat_dict)
-            end_model_stat_dict = rebuild_norm(end_model_stat_dict)
+            start_model_stat_dict, _ = rebuild_norm_layers(start_model, start_model_stat_dict, initial_model_stat,
+                                                           arg_ml_setup, epoch_for_rebuilding_norm, dataloader_for_rebuilding_norm,
+                                                           arg_lr_rebuild_norm, optimizer, rebuild_on_device=device)
+            end_model_stat_dict, _ = rebuild_norm_layers(start_model, end_model_stat_dict, initial_model_stat,
+                                                         arg_ml_setup, epoch_for_rebuilding_norm, dataloader_for_rebuilding_norm,
+                                                         arg_lr_rebuild_norm, optimizer, rebuild_on_device=device)
 
     start_model_stat = start_model_stat_dict
 
@@ -278,44 +284,14 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
         """rebuilding normalization"""
         if arg_rebuild_normalization_round != 0:
             start_model_stat = start_model.state_dict()
-            # reset normalization layers
-            for layer_name, layer_weights in start_model_stat.items():
-                if special_torch_layers.is_normalization_layer(arg_ml_setup.model_name, layer_name):
-                    start_model_stat[layer_name] = initial_model_stat[layer_name]
-            start_model.load_state_dict(start_model_stat)
-            rebuilding_normalization_iter_count = 0
-            rebuilding_loss_val = None
-
-            # get optimizers
-            if ENABLE_REBUILD_NORM_WITH_SEPARATE_OPTIMIZER:
-                optimizer_rebuild_norm = torch.optim.SGD(start_model.parameters(), lr=arg_lr_rebuild_norm)
-            else:
-                optimizer_rebuild_norm = optimizer
-            cuda.CudaEnv.optimizer_to(optimizer_rebuild_norm, device)
-
-            for epoch in range(epoch_for_rebuilding_norm):
-                for (rebuilding_normalization_index, (data, label)) in enumerate(dataloader_for_rebuilding_norm):
-                    data, label = data.to(device), label.to(device)
-                    optimizer_rebuild_norm.zero_grad(set_to_none=True)
-                    output = start_model(data)
-                    rebuilding_loss = criterion(output, label)
-                    rebuilding_loss.backward()
-                    optimizer_rebuild_norm.step()
-                    rebuilding_loss_val = rebuilding_loss.item()
-                    # reset all layers except normalization
-                    current_model_stat = start_model.state_dict()
-                    for layer_name, layer_weights in current_model_stat.items():
-                        if not special_torch_layers.is_normalization_layer(arg_ml_setup.model_name, layer_name):
-                            current_model_stat[layer_name] = start_model_stat[layer_name]
-                    start_model.load_state_dict(current_model_stat)
-                    rebuilding_normalization_iter_count += 1
-            assert rebuilding_normalization_iter_count == arg_rebuild_normalization_round, f"{rebuilding_normalization_iter_count} != {arg_rebuild_normalization_round}, dataset len: {len(dataloader_for_rebuilding_norm)}"
-            child_logger.info(f"[{start_file_name}--{end_file_name}] current tick: {current_tick}, rebuilding finished at {rebuilding_normalization_iter_count} rounds, rebuilding loss = {rebuilding_loss_val}")
+            start_model_stat, (rebuilding_iter, rebuilding_loss) = rebuild_norm_layers(start_model, start_model_stat, initial_model_stat,
+                                                                                       arg_ml_setup, epoch_for_rebuilding_norm, dataloader_for_rebuilding_norm,
+                                                                                       arg_lr_rebuild_norm, optimizer, rebuild_on_device=device)
+            child_logger.info(f"[{start_file_name}--{end_file_name}] current tick: {current_tick}, rebuilding finished at {rebuilding_iter} rounds, rebuilding loss = {rebuilding_loss}")
 
             # remove norm layer variance
             target_variance = {k: v for k, v in target_variance.items() if not special_torch_layers.is_normalization_layer(arg_ml_setup.model_name, k)}
 
-        start_model_stat = start_model.state_dict()
         cuda.CudaEnv.model_state_dict_to(start_model_stat, cpu_device)
         if ENABLE_NAN_CHECKING:
             util.check_for_nans_in_state_dict(start_model_stat)
@@ -439,4 +415,3 @@ if __name__ == '__main__':
         futures = [executor.submit(process_file_func, *arg) for arg in args]
         for future in concurrent.futures.as_completed(futures):
             result = future.result()
-
