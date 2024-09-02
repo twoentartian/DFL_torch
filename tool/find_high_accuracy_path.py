@@ -24,7 +24,7 @@ MAX_CPU_COUNT: Final[int] = 32
 
 ENABLE_DEDICATED_TRAINING_DATASET_FOR_REBUILDING_NORM: Final[bool] = True
 ENABLE_REBUILD_NORM_FOR_STARTING_ENDING_MODEL: Final[bool] = True
-ENABLE_REBUILD_NORM_WITH_SEPARATE_OPTIMIZER: Final[bool] = False
+ENABLE_REBUILD_NORM_WITH_SEPARATE_OPTIMIZER: Final[bool] = True
 ENABLE_NAN_CHECKING: Final[bool] = False
 ENABLE_PRE_TRAINING: Final[bool] = False
 
@@ -184,19 +184,25 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
         if arg_rebuild_normalization_round != 0:
             start_model.train()
             start_model.to(device)
-            cuda.CudaEnv.optimizer_to(optimizer, device)
 
             def rebuild_norm(model_state):
                 start_model.load_state_dict(model_state)
                 rebuilding_normalization_count = 0
+
+                if ENABLE_REBUILD_NORM_WITH_SEPARATE_OPTIMIZER:
+                    optimizer_rebuild_norm = torch.optim.SGD(start_model.parameters(), lr=arg_lr_rebuild_norm)
+                else:
+                    optimizer_rebuild_norm = optimizer
+                cuda.CudaEnv.optimizer_to(optimizer_rebuild_norm, device)
+
                 for epoch in range(epoch_for_rebuilding_norm):
                     for (rebuilding_normalization_index, (data, label)) in enumerate(dataloader_for_rebuilding_norm):
                         data, label = data.to(device), label.to(device)
-                        optimizer.zero_grad(set_to_none=True)
+                        optimizer_rebuild_norm.zero_grad(set_to_none=True)
                         output = start_model(data)
                         rebuilding_loss = criterion(output, label)
                         rebuilding_loss.backward()
-                        optimizer.step()
+                        optimizer_rebuild_norm.step()
                         # reset all layers except normalization
                         current_model_stat = start_model.state_dict()
                         for layer_name, layer_weights in current_model_stat.items():
@@ -234,14 +240,6 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
         start_model.load_state_dict(start_model_stat)
 
     current_tick = 0
-
-    if arg_rebuild_normalization_round != 0:
-        if ENABLE_REBUILD_NORM_WITH_SEPARATE_OPTIMIZER:
-            optimizer_rebuild_norm = torch.optim.SGD(start_model.parameters(), lr=arg_lr_rebuild_norm)
-        else:
-            optimizer_rebuild_norm = optimizer
-    else:
-        optimizer_rebuild_norm = None
 
     while current_tick < arg_max_tick:
         """record variance"""
@@ -287,6 +285,13 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
             start_model.load_state_dict(start_model_stat)
             rebuilding_normalization_iter_count = 0
             rebuilding_loss_val = None
+
+            # get optimizers
+            if ENABLE_REBUILD_NORM_WITH_SEPARATE_OPTIMIZER:
+                optimizer_rebuild_norm = torch.optim.SGD(start_model.parameters(), lr=arg_lr_rebuild_norm)
+            else:
+                optimizer_rebuild_norm = optimizer
+            cuda.CudaEnv.optimizer_to(optimizer_rebuild_norm, device)
 
             for epoch in range(epoch_for_rebuilding_norm):
                 for (rebuilding_normalization_index, (data, label)) in enumerate(dataloader_for_rebuilding_norm):
