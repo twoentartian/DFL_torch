@@ -1,6 +1,7 @@
 import os
 import argparse
 import logging
+import shutil
 import sys
 import json
 from typing import Final
@@ -410,14 +411,6 @@ if __name__ == '__main__':
 
     # prepare model and dataset
     current_ml_setup = ml_setup.get_ml_setup_from_model_type(model_type)
-    if model_type == 'lenet5':
-        current_ml_setup = ml_setup.lenet5_mnist()
-    elif model_type == 'resnet18_bn':
-        current_ml_setup = ml_setup.resnet18_cifar10()
-    elif model_type == 'resnet18_gn':
-        current_ml_setup = ml_setup.resnet18_cifar10(enable_replace_bn_with_group_norm=True)
-    else:
-        raise ValueError(f'Invalid model type: {model_type}')
 
     # create output folder
     if args.output_folder_name is None:
@@ -426,6 +419,7 @@ if __name__ == '__main__':
     else:
         output_folder_path = os.path.join(os.curdir, args.output_folder_name)
     os.mkdir(output_folder_path)
+    shutil.copyfile(__file__, os.path.join(output_folder_path, os.path.basename(__file__)))
     info_file = open(os.path.join(output_folder_path, "arguments.txt"), 'x')
     info_file.write(f"{args}")
     info_file.flush()
