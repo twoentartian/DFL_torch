@@ -24,7 +24,6 @@ MAX_CPU_COUNT: Final[int] = 32
 
 ENABLE_DEDICATED_TRAINING_DATASET_FOR_REBUILDING_NORM: Final[bool] = True
 ENABLE_REBUILD_NORM_FOR_STARTING_ENDING_MODEL: Final[bool] = True
-ENABLE_REBUILD_NORM_WITH_SEPARATE_OPTIMIZER: Final[bool] = True
 ENABLE_NAN_CHECKING: Final[bool] = False
 ENABLE_PRE_TRAINING: Final[bool] = False
 
@@ -87,11 +86,13 @@ def get_files_to_process(arg_start_folder, arg_end_folder, arg_mode):
     return sorted(output_paths)
 
 
-def rebuild_norm_layers(model, model_state, initial_model_stat, arg_ml_setup, epoch_of_rebuild, dataloader, rebuild_lr, existing_optimizer, rebuild_on_device=None):
-    # reset normalization layers
-    for layer_name, layer_weights in model_state.items():
-        if special_torch_layers.is_normalization_layer(arg_ml_setup.model_name, layer_name):
-            model_state[layer_name] = initial_model_stat[layer_name]
+def rebuild_norm_layers(model, model_state, arg_ml_setup, epoch_of_rebuild, dataloader, rebuild_lr, existing_optimizer=None, rebuild_on_device=None, reset_norm_to_initial=False, initial_model_stat=None, display=False):
+    if reset_norm_to_initial:
+        assert initial_model_stat is not None
+        # reset normalization layers
+        for layer_name, layer_weights in model_state.items():
+            if special_torch_layers.is_normalization_layer(arg_ml_setup.model_name, layer_name):
+                model_state[layer_name] = initial_model_stat[layer_name]
     model.load_state_dict(model_state)
 
     if rebuild_on_device is None:
@@ -103,12 +104,12 @@ def rebuild_norm_layers(model, model_state, initial_model_stat, arg_ml_setup, ep
     rebuilding_normalization_count = 0
     criterion = arg_ml_setup.criterion
 
-    if ENABLE_REBUILD_NORM_WITH_SEPARATE_OPTIMIZER:
+    if existing_optimizer is None:
         optimizer_rebuild_norm = torch.optim.SGD(model.parameters(), lr=rebuild_lr)
     else:
         optimizer_rebuild_norm = existing_optimizer
     cuda.CudaEnv.optimizer_to(optimizer_rebuild_norm, rebuild_on_device)
-    rebuilding_loss_val = None
+    rebuild_states = []
     for epoch in range(epoch_of_rebuild):
         for (rebuilding_normalization_index, (data, label)) in enumerate(dataloader):
             data, label = data.to(rebuild_on_device), label.to(rebuild_on_device)
@@ -125,9 +126,12 @@ def rebuild_norm_layers(model, model_state, initial_model_stat, arg_ml_setup, ep
                     current_model_stat[layer_name] = model_state[layer_name]
             model.load_state_dict(current_model_stat)
             rebuilding_normalization_count += 1
+            rebuild_states.append((rebuilding_normalization_count, rebuilding_loss_val))
+            if display:
+                print(f"tick: {rebuilding_normalization_count}  loss: {rebuilding_loss_val}")
     output_model_state = model.state_dict()
     cuda.CudaEnv.model_state_dict_to(output_model_state, cpu_device)
-    return output_model_state, (rebuilding_normalization_count, rebuilding_loss_val)
+    return output_model_state, rebuild_states
 
 
 def process_file_func(arg_output_folder_path, start_model_path, end_model_path, arg_ml_setup, arg_lr, arg_lr_rebuild_norm, arg_max_tick, arg_training_round, arg_rebuild_normalization_round, arg_step_size, arg_adoptive_step_size, layer_skip_average, arg_worker_count, arg_total_cpu_count, arg_save_format, arg_use_cpu):
@@ -217,12 +221,12 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
     """rebuilding normalization for start and end points"""
     if ENABLE_REBUILD_NORM_FOR_STARTING_ENDING_MODEL:
         if arg_rebuild_normalization_round != 0:
-            start_model_stat_dict, _ = rebuild_norm_layers(start_model, start_model_stat_dict, initial_model_stat,
-                                                           arg_ml_setup, epoch_for_rebuilding_norm, dataloader_for_rebuilding_norm,
-                                                           arg_lr_rebuild_norm, optimizer, rebuild_on_device=device)
-            end_model_stat_dict, _ = rebuild_norm_layers(start_model, end_model_stat_dict, initial_model_stat,
-                                                         arg_ml_setup, epoch_for_rebuilding_norm, dataloader_for_rebuilding_norm,
-                                                         arg_lr_rebuild_norm, optimizer, rebuild_on_device=device)
+            start_model_stat_dict, _ = rebuild_norm_layers(start_model, start_model_stat_dict, arg_ml_setup, epoch_for_rebuilding_norm,
+                                                           dataloader_for_rebuilding_norm, arg_lr_rebuild_norm, optimizer,
+                                                           rebuild_on_device=device, initial_model_stat=initial_model_stat, reset_norm_to_initial=True)
+            end_model_stat_dict, _ = rebuild_norm_layers(start_model, end_model_stat_dict, arg_ml_setup, epoch_for_rebuilding_norm,
+                                                         dataloader_for_rebuilding_norm, arg_lr_rebuild_norm, optimizer,
+                                                         rebuild_on_device=device, initial_model_stat=initial_model_stat, reset_norm_to_initial=True)
 
     start_model_stat = start_model_stat_dict
 
@@ -284,9 +288,9 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
         """rebuilding normalization"""
         if arg_rebuild_normalization_round != 0:
             start_model_stat = start_model.state_dict()
-            start_model_stat, (rebuilding_iter, rebuilding_loss) = rebuild_norm_layers(start_model, start_model_stat, initial_model_stat,
-                                                                                       arg_ml_setup, epoch_for_rebuilding_norm, dataloader_for_rebuilding_norm,
-                                                                                       arg_lr_rebuild_norm, optimizer, rebuild_on_device=device)
+            start_model_stat, (rebuilding_iter, rebuilding_loss) = rebuild_norm_layers(start_model, start_model_stat, arg_ml_setup, epoch_for_rebuilding_norm,
+                                                                                       dataloader_for_rebuilding_norm, arg_lr_rebuild_norm, optimizer,
+                                                                                       rebuild_on_device=device, initial_model_stat=initial_model_stat, reset_norm_to_initial=True)
             child_logger.info(f"[{start_file_name}--{end_file_name}] current tick: {current_tick}, rebuilding finished at {rebuilding_iter} rounds, rebuilding loss = {rebuilding_loss}")
 
             # remove norm layer variance

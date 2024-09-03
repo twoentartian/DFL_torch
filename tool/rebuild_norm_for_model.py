@@ -7,9 +7,12 @@ import sys
 import copy
 import csv
 import hashlib
+import numpy as np
+import random
 from datetime import datetime
 from typing import Final
 
+import find_high_accuracy_path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from py_src import ml_setup, special_torch_layers, cuda
 
@@ -48,6 +51,10 @@ class IndexedDataset(torch.utils.data.Dataset):
 
 
 if __name__ == '__main__':
+    torch.manual_seed(42)
+    np.random.seed(42)
+    random.seed(42)
+
     torch.multiprocessing.set_start_method('spawn')
 
     parser = argparse.ArgumentParser(description='Rebuild norm layer for a model')
@@ -108,54 +115,35 @@ if __name__ == '__main__':
     optimizer_stat_path = model_path.replace('model.pt', 'optimizer.pt')
     assert os.path.exists(optimizer_stat_path), f'starting optimizer {optimizer_stat_path} is missing'
 
+    dataset = current_ml_setup.training_data_for_rebuilding_normalization
     dataset_rebuild_norm_size = rebuild_round * current_ml_setup.training_batch_size
+    epoch_for_rebuilding_norm = 1
+    if dataset_rebuild_norm_size > len(dataset):
+        ratio = int(dataset_rebuild_norm_size // len(dataset) + 1)
+        assert dataset_rebuild_norm_size % ratio == 0, f"dataset_rebuild_norm_size={dataset_rebuild_norm_size}, ratio={ratio}"
+        dataset_rebuild_norm_size = dataset_rebuild_norm_size // ratio
+        epoch_for_rebuilding_norm = epoch_for_rebuilding_norm * ratio
+
     indices = torch.randperm(len(current_ml_setup.training_data_for_rebuilding_normalization))[:dataset_rebuild_norm_size]
-    index_dataset = IndexedDataset(current_ml_setup.training_data_for_rebuilding_normalization)
-    sub_dataset = torch.utils.data.Subset(index_dataset, indices.tolist())
+    # index_dataset = IndexedDataset(current_ml_setup.training_data_for_rebuilding_normalization)
+    sub_dataset = torch.utils.data.Subset(current_ml_setup.training_data_for_rebuilding_normalization, indices.tolist())
     dataloader_for_rebuilding_norm = DataLoader(sub_dataset, batch_size=current_ml_setup.training_batch_size)
     criterion = current_ml_setup.criterion
 
     for rebuild_count_index in range(rebuild_count):
-        optimizer = torch.optim.SGD(target_model.parameters(), lr=lr)
-        cuda.CudaEnv.optimizer_to(optimizer, device)
-
         starting_model_stat = torch.load(model_path, map_location=cpu_device)
 
-        # reset normalization layers
-        for layer_name, layer_weights in starting_model_stat.items():
-            if special_torch_layers.is_normalization_layer(current_ml_setup.model_name, layer_name):
-                starting_model_stat[layer_name] = initial_model_stat[layer_name]
+        # optimizer = torch.optim.SGD(target_model.parameters(), lr=lr)
+        # optimizer_stat = torch.load(optimizer_stat_path, map_location=cpu_device)
+        # optimizer.load_state_dict(optimizer_stat)
 
-        # prepare for rebuild
-        target_model.load_state_dict(starting_model_stat)
-        target_model.to(device)
-        rebuilding_normalization_index = None
-        rebuilding_loss_val = None
-
-        # rebuild norm
-        for (rebuilding_normalization_index, (data, label, indices)) in enumerate(dataloader_for_rebuilding_norm):
-            if rebuilding_normalization_index == 0:
-                data_numpy = data.numpy()
-                tensor_bytes = data_numpy.tobytes()
-                hash_object = hashlib.sha256(tensor_bytes)
-                tensor_hash = hash_object.hexdigest()
-                print(f"{rebuilding_normalization_index} round: hash of training data batch is {tensor_hash}")
-
-            data, label = data.to(device), label.to(device)
-            optimizer.zero_grad(set_to_none=True)
-            output = target_model(data)
-            rebuilding_loss = criterion(output, label)
-            rebuilding_loss.backward()
-            rebuilding_loss_val = rebuilding_loss.item()
-            optimizer.step()
-            # reset all layers except normalization
-            target_model_stat = target_model.state_dict()
-            for layer_name, layer_weights in target_model_stat.items():
-                if not special_torch_layers.is_normalization_layer(current_ml_setup.model_name, layer_name):
-                    target_model_stat[layer_name] = starting_model_stat[layer_name]
-            target_model.load_state_dict(target_model_stat)
-
-        print(f"rebuild norm layer finished at {rebuild_round} rounds, rebuilding loss = {rebuilding_loss_val}")
+        optimizer = torch.optim.Adam(target_model.parameters(), lr=0.001)
+        final_state, rebuild_states = find_high_accuracy_path.rebuild_norm_layers(target_model, starting_model_stat, current_ml_setup,
+                                                                                  epoch_for_rebuilding_norm, dataloader_for_rebuilding_norm, lr,
+                                                                                  existing_optimizer=optimizer, rebuild_on_device=device,
+                                                                                  initial_model_stat=initial_model_stat, reset_norm_to_initial=True, display=True)
+        rebuild_iter, rebuilding_loss_val = rebuild_states[-1]
+        print(f"rebuild norm layer finished at {rebuild_iter} rounds, rebuilding loss = {rebuilding_loss_val}")
 
         # save model state
         save_csv_file_name = f'{output_folder_path}/{rebuild_count_index}.csv'
