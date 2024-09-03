@@ -288,9 +288,12 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
         """rebuilding normalization"""
         if arg_rebuild_normalization_round != 0:
             start_model_stat = start_model.state_dict()
+            optimizer = torch.optim.Adam(start_model.parameters(), lr=0.001)
             start_model_stat, (rebuilding_iter, rebuilding_loss) = rebuild_norm_layers(start_model, start_model_stat, arg_ml_setup, epoch_for_rebuilding_norm,
-                                                                                       dataloader_for_rebuilding_norm, arg_lr_rebuild_norm, optimizer,
-                                                                                       rebuild_on_device=device, initial_model_stat=initial_model_stat, reset_norm_to_initial=True)
+                                                                                       dataloader_for_rebuilding_norm, arg_lr_rebuild_norm,
+                                                                                       rebuild_on_device=device, existing_optimizer=optimizer,
+                                                                                       initial_model_stat=initial_model_stat,
+                                                                                       reset_norm_to_initial=True)
             child_logger.info(f"[{start_file_name}--{end_file_name}] current tick: {current_tick}, rebuilding finished at {rebuilding_iter} rounds, rebuilding loss = {rebuilding_loss}")
 
             # remove norm layer variance
