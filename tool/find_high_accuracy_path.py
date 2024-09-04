@@ -326,9 +326,9 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
                 training_loss.backward()
                 optimizer.step()
                 training_loss_val = training_loss.item()
-                if training_index == training_round:
+                if training_index == train_round:
                     break
-                assert training_index < training_round
+                assert training_index < train_round
         elif training_mode == TrainMode.Adam_until_loss:
             averager_size = 10
             moving_max = util.MovingMax(averager_size)
