@@ -4,6 +4,7 @@ import logging
 import shutil
 import sys
 import json
+from enum import Enum
 from typing import Final
 import torch
 import torch.optim as optim
@@ -27,6 +28,9 @@ ENABLE_REBUILD_NORM_FOR_STARTING_ENDING_MODEL: Final[bool] = True
 ENABLE_NAN_CHECKING: Final[bool] = False
 ENABLE_PRE_TRAINING: Final[bool] = False
 
+class TrainMode(Enum):
+    SGD_x_rounds = 0
+    Adam_until_loss = 1
 
 def set_logging(base_logger, task_name, log_file_path=None):
     class ExitOnExceptionHandler(logging.StreamHandler):
@@ -86,7 +90,7 @@ def get_files_to_process(arg_start_folder, arg_end_folder, arg_mode):
     return sorted(output_paths)
 
 
-def rebuild_norm_layers(model, model_state, arg_ml_setup, epoch_of_rebuild, dataloader, rebuild_lr, existing_optimizer=None, rebuild_on_device=None, reset_norm_to_initial=False, initial_model_stat=None, display=False):
+def rebuild_norm_layers(model, model_state, arg_ml_setup, epoch_of_rebuild, dataloader, rebuild_lr=0.001, existing_optimizer=None, rebuild_on_device=None, reset_norm_to_initial=False, initial_model_stat=None, display=False):
     if reset_norm_to_initial:
         assert initial_model_stat is not None
         # reset normalization layers
@@ -105,7 +109,7 @@ def rebuild_norm_layers(model, model_state, arg_ml_setup, epoch_of_rebuild, data
     criterion = arg_ml_setup.criterion
 
     if existing_optimizer is None:
-        optimizer_rebuild_norm = torch.optim.SGD(model.parameters(), lr=rebuild_lr)
+        optimizer_rebuild_norm = torch.optim.Adam(model.parameters(), lr=rebuild_lr)
     else:
         optimizer_rebuild_norm = existing_optimizer
     cuda.CudaEnv.optimizer_to(optimizer_rebuild_norm, rebuild_on_device)
@@ -134,7 +138,17 @@ def rebuild_norm_layers(model, model_state, arg_ml_setup, epoch_of_rebuild, data
     return output_model_state, rebuild_states
 
 
-def process_file_func(arg_output_folder_path, start_model_path, end_model_path, arg_ml_setup, arg_lr, arg_lr_rebuild_norm, arg_max_tick, arg_training_round, arg_rebuild_normalization_round, arg_step_size, arg_adoptive_step_size, layer_skip_average, arg_worker_count, arg_total_cpu_count, arg_save_format, arg_use_cpu):
+def process_file_func(arg_output_folder_path, start_model_path, end_model_path, arg_ml_setup, training_parameters, arg_lr_rebuild_norm,
+                      arg_max_tick, arg_rebuild_normalization_round, arg_step_size, arg_adoptive_step_size, layer_skip_average,
+                      arg_worker_count, arg_total_cpu_count, arg_save_format, arg_use_cpu):
+    training_mode, training_parameter = training_parameters
+    if training_mode == TrainMode.SGD_x_rounds:
+        train_lr, train_round = training_parameter
+    elif training_mode == TrainMode.Adam_until_loss:
+        train_loss = training_parameter
+    else:
+        raise NotImplementedError
+
     start_file_name = os.path.basename(start_model_path).replace('.model.pt', '')
     end_file_name = os.path.basename(end_model_path).replace('.model.pt', '')
 
@@ -179,8 +193,26 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
     training_dataset = arg_ml_setup.training_data
     dataloader = DataLoader(training_dataset, batch_size=arg_ml_setup.training_batch_size, shuffle=True)
     criterion = arg_ml_setup.criterion
-    optimizer = torch.optim.SGD(start_model.parameters(), lr=arg_lr)
-    optimizer.load_state_dict(start_model_optimizer_stat)
+    if training_mode == TrainMode.SGD_x_rounds:
+        optimizer = torch.optim.SGD(start_model.parameters(), lr=train_lr)
+    elif training_mode == TrainMode.Adam_until_loss:
+        optimizer = torch.optim.Adam(start_model.parameters(), lr=0.001)
+    else:
+        raise NotImplementedError
+
+    # try loading optimizer state to optimizer
+    optimizer_test = copy.deepcopy(optimizer)
+    load_optimizer_success = False
+    try:
+        optimizer_test.load_state_dict(start_model_optimizer_stat)
+        optimizer.load_state_dict(start_model_optimizer_stat)
+        child_logger.info(f"successfully load optimizer state")
+        load_optimizer_success = True
+    except Exception as e:
+        child_logger.info(f"fail to load optimizer state: {str(e)}, now skip")
+    del optimizer_test
+
+    # set dataloader for rebuilding norm
     if arg_rebuild_normalization_round != 0:
         if ENABLE_DEDICATED_TRAINING_DATASET_FOR_REBUILDING_NORM:
             epoch_for_rebuilding_norm = 1
@@ -221,18 +253,26 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
     """rebuilding normalization for start and end points"""
     if ENABLE_REBUILD_NORM_FOR_STARTING_ENDING_MODEL:
         if arg_rebuild_normalization_round != 0:
-            start_model_stat_dict, _ = rebuild_norm_layers(start_model, start_model_stat_dict, arg_ml_setup, epoch_for_rebuilding_norm,
-                                                           dataloader_for_rebuilding_norm, arg_lr_rebuild_norm, optimizer,
+            child_logger.info(f"rebuilding normalization for starting and ending points")
+            optimizer_rebuild = torch.optim.Adam(start_model.parameters(), lr=0.001)
+            start_model_stat_dict, rebuild_states = rebuild_norm_layers(start_model, start_model_stat_dict, arg_ml_setup, epoch_for_rebuilding_norm,
+                                                           dataloader_for_rebuilding_norm, rebuild_lr=arg_lr_rebuild_norm, existing_optimizer=optimizer_rebuild,
                                                            rebuild_on_device=device, initial_model_stat=initial_model_stat, reset_norm_to_initial=True)
-            end_model_stat_dict, _ = rebuild_norm_layers(start_model, end_model_stat_dict, arg_ml_setup, epoch_for_rebuilding_norm,
-                                                         dataloader_for_rebuilding_norm, arg_lr_rebuild_norm, optimizer,
+            rebuild_iter, rebuilding_loss_val = rebuild_states[-1]
+            child_logger.info(f"rebuilding starting point finished at {rebuild_iter} rounds, rebuilding loss = {rebuilding_loss_val}")
+
+            optimizer_rebuild = torch.optim.Adam(start_model.parameters(), lr=0.001)
+            end_model_stat_dict, rebuild_states = rebuild_norm_layers(start_model, end_model_stat_dict, arg_ml_setup, epoch_for_rebuilding_norm,
+                                                         dataloader_for_rebuilding_norm, rebuild_lr=arg_lr_rebuild_norm, existing_optimizer=optimizer_rebuild,
                                                          rebuild_on_device=device, initial_model_stat=initial_model_stat, reset_norm_to_initial=True)
+            rebuild_iter, rebuilding_loss_val = rebuild_states[-1]
+            child_logger.info(f"rebuilding starting point finished at {rebuild_iter} rounds, rebuilding loss = {rebuilding_loss_val}")
 
     start_model_stat = start_model_stat_dict
 
     """pre training"""
-    if ENABLE_PRE_TRAINING:
-        child_logger.info(f"[{start_file_name}--{end_file_name}] pre training")
+    if ENABLE_PRE_TRAINING and not load_optimizer_success:
+        child_logger.info(f"pre training")
         start_model.load_state_dict(start_model_stat)
         cuda.CudaEnv.model_state_dict_to(start_model_stat, cpu_device)
         start_model.train()
@@ -242,13 +282,16 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
             data, label = data.to(device), label.to(device)
             optimizer.zero_grad(set_to_none=True)
             output = start_model(data)
-            loss = criterion(output, label)
-            loss.backward()
+            loss_pretrain = criterion(output, label)
+            loss_pretrain.backward()
+            loss_pretrain_val = loss_pretrain.item()
             optimizer.step()
+            child_logger.info(f"pre training loss #{training_index} = {loss_pretrain_val:.3f}")
             if training_index == 100:
                 break
-        start_model.load_state_dict(start_model_stat)
-
+        # start_model.load_state_dict(start_model_stat)
+        start_model_stat = start_model.state_dict()
+        cuda.CudaEnv.model_state_dict_to(start_model_stat, cpu_device)
     current_tick = 0
 
     while current_tick < arg_max_tick:
@@ -273,28 +316,54 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
         start_model.train()
         start_model.to(device)
         cuda.CudaEnv.optimizer_to(optimizer, device)
-        for (training_index, (data, label)) in enumerate(dataloader):
-            data, label = data.to(device), label.to(device)
-            optimizer.zero_grad(set_to_none=True)
-            output = start_model(data)
-            training_loss = criterion(output, label)
-            training_loss.backward()
-            optimizer.step()
-            training_loss_val = training_loss.item()
-            if training_index == arg_training_round:
-                break
-            assert training_index < arg_training_round
-        child_logger.info(f"[{start_file_name}--{end_file_name}] current tick: {current_tick}, training loss = {training_loss_val}")
+
+        if training_mode == TrainMode.SGD_x_rounds:
+            for (training_index, (data, label)) in enumerate(dataloader):
+                data, label = data.to(device), label.to(device)
+                optimizer.zero_grad(set_to_none=True)
+                output = start_model(data)
+                training_loss = criterion(output, label)
+                training_loss.backward()
+                optimizer.step()
+                training_loss_val = training_loss.item()
+                if training_index == training_round:
+                    break
+                assert training_index < training_round
+        elif training_mode == TrainMode.Adam_until_loss:
+            averager_size = 10
+            moving_max = util.MovingMax(averager_size)
+            while True:
+                exit_training = False
+                for (training_index, (data, label)) in enumerate(dataloader):
+                    data, label = data.to(device), label.to(device)
+                    optimizer.zero_grad(set_to_none=True)
+                    output = start_model(data)
+                    training_loss = criterion(output, label)
+                    training_loss.backward()
+                    optimizer.step()
+                    training_loss_val = training_loss.item()
+                    max_loss = moving_max.add(training_loss_val)
+                    child_logger.info(f"current tick: {current_tick}, training loss = {training_loss_val:.3f}, max loss = {max_loss:.3f}")
+                    if max_loss < training_loss and training_index > averager_size:
+                        exit_training = True
+                        break
+                if exit_training:
+                    break
+        else:
+            raise NotImplementedError
+
+        child_logger.info(f"current tick: {current_tick}, training loss = {training_loss_val:.3f}")
         """rebuilding normalization"""
         if arg_rebuild_normalization_round != 0:
             start_model_stat = start_model.state_dict()
-            optimizer = torch.optim.Adam(start_model.parameters(), lr=0.001)
-            start_model_stat, (rebuilding_iter, rebuilding_loss) = rebuild_norm_layers(start_model, start_model_stat, arg_ml_setup, epoch_for_rebuilding_norm,
-                                                                                       dataloader_for_rebuilding_norm, arg_lr_rebuild_norm,
-                                                                                       rebuild_on_device=device, existing_optimizer=optimizer,
+            optimizer_rebuild = torch.optim.Adam(start_model.parameters(), lr=0.001)
+            start_model_stat, rebuild_states = rebuild_norm_layers(start_model, start_model_stat, arg_ml_setup, epoch_for_rebuilding_norm,
+                                                                                       dataloader_for_rebuilding_norm, rebuild_lr=arg_lr_rebuild_norm,
+                                                                                       rebuild_on_device=device, existing_optimizer=optimizer_rebuild,
                                                                                        initial_model_stat=initial_model_stat,
                                                                                        reset_norm_to_initial=True)
-            child_logger.info(f"[{start_file_name}--{end_file_name}] current tick: {current_tick}, rebuilding finished at {rebuilding_iter} rounds, rebuilding loss = {rebuilding_loss}")
+            rebuild_iter, rebuilding_loss_val = rebuild_states[-1]
+            child_logger.info(f"current tick: {current_tick}, rebuilding finished at {rebuild_iter} rounds, rebuilding loss = {rebuilding_loss_val:.3f}")
 
             # remove norm layer variance
             target_variance = {k: v for k, v in target_variance.items() if not special_torch_layers.is_normalization_layer(arg_ml_setup.model_name, k)}
@@ -331,10 +400,15 @@ if __name__ == '__main__':
     parser.add_argument("-T", "--max_tick", type=int, default=10000)
     parser.add_argument("-s", "--step_size", type=float, default=0.001)
     parser.add_argument("-a", "--adoptive_step_size", type=float, default=0)
-    parser.add_argument("--training_round", type=int, default=1)
+
     parser.add_argument("-r", "--rebuild_norm_round", type=int, default=0, help='train for x rounds to rebuild the norm layers')
     parser.add_argument("--layer_skip_average", type=str, nargs='+')
-    parser.add_argument("--lr", type=float, default=0.001)
+
+    parser.add_argument("--lr", type=float, default=0.001, help='train the model with this learning rate, joint with "--training_round"')
+    parser.add_argument("--training_round", type=int, default=1, help='train the model for x rounds, joint with "--lr"')
+
+    parser.add_argument("--loss", type=float, default=-1, help='train the model until loss is smaller than, cannot use with "--training_round" or "--lr"')
+
     parser.add_argument("--lr_rebuild_norm", type=float, default=0.001)
     parser.add_argument("--save_format", type=str, default='none', choices=['none', 'file', 'lmdb'])
     parser.add_argument("--cpu", action='store_true', help='force using CPU for training')
@@ -346,18 +420,27 @@ if __name__ == '__main__':
     set_logging(logger, "main")
     logger.info("logging setup complete")
 
+    mode = TrainMode.SGD_x_rounds
+    learning_rate = args.lr
+    training_round = args.training_round
+    loss = args.loss
+    if loss != -1:
+        assert learning_rate == 0.001 and training_round == 1
+        mode = TrainMode.Adam_until_loss
+
     start_folder = args.start_folder
     end_folder = args.end_folder
-    mode = args.mapping_mode
+    mapping_mode = args.mapping_mode
+
     max_tick = args.max_tick
     step_size = args.step_size
     adoptive_step_size = args.adoptive_step_size
-    training_round = args.training_round
+
     rebuild_normalization_round = args.rebuild_norm_round
-    learning_rate = args.lr
+
     learning_rate_rebuild_norm = args.lr_rebuild_norm
     use_cpu = args.cpu
-    paths_to_find = get_files_to_process(args.start_folder, args.end_folder, mode)
+    paths_to_find = get_files_to_process(args.start_folder, args.end_folder, mapping_mode)
     save_format = args.save_format
     layer_skip_average = args.layer_skip_average
     paths_to_find_count = len(paths_to_find)
@@ -417,7 +500,17 @@ if __name__ == '__main__':
     if worker_count > paths_to_find_count:
         worker_count = paths_to_find_count
     logger.info(f"worker: {worker_count}")
-    args = [(output_folder_path, start_file, end_file, current_ml_setup, learning_rate, learning_rate_rebuild_norm, max_tick, training_round, rebuild_normalization_round, step_size, adoptive_step_size, layer_skip_average, worker_count, total_cpu_count, save_format, use_cpu) for (start_file, end_file) in paths_to_find]
+
+    if mode == TrainMode.SGD_x_rounds:
+        args = [(output_folder_path, start_file, end_file, current_ml_setup, (mode, (learning_rate, training_round)), learning_rate_rebuild_norm,
+                 max_tick, rebuild_normalization_round, step_size, adoptive_step_size, layer_skip_average,
+                 worker_count, total_cpu_count, save_format, use_cpu) for (start_file, end_file) in paths_to_find]
+    elif mode == TrainMode.Adam_until_loss:
+        args = [(output_folder_path, start_file, end_file, current_ml_setup, (mode, loss), learning_rate_rebuild_norm,
+                 max_tick, rebuild_normalization_round, step_size, adoptive_step_size, layer_skip_average,
+                 worker_count, total_cpu_count, save_format, use_cpu) for (start_file, end_file) in paths_to_find]
+    else:
+        raise NotImplementedError
     with concurrent.futures.ProcessPoolExecutor(max_workers=worker_count) as executor:
         futures = [executor.submit(process_file_func, *arg) for arg in args]
         for future in concurrent.futures.as_completed(futures):
