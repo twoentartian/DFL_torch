@@ -18,9 +18,15 @@ if __name__ == '__main__':
 
     cpu_device = torch.device("cpu")
     models = []
+    model_name = None
     for model_path in models_path:
         model_info = torch.load(model_path, map_location=cpu_device)
         model = model_info["state_dict"]
+        current_model_name = model_info["model_name"]
+        if model_name is None:
+            model_name = current_model_name
+        else:
+            assert current_model_name == model_name, "Model name mismatch"
         models.append(model)
 
     assert len(models) >= 2
@@ -35,5 +41,7 @@ if __name__ == '__main__':
         else:
             raise NotImplementedError
 
-    torch.save(output_model, args.output)
+    model_info = {"state_dict": output_model, "model_name": model_name}
+
+    torch.save(model_info, args.output)
 
