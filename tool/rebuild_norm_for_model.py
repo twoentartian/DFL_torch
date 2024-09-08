@@ -63,7 +63,6 @@ if __name__ == '__main__':
     parser.add_argument("-c", '--core', type=int, default=os.cpu_count(), help='specify the number of CPU cores to use')
     parser.add_argument("-r", "--rebuild_norm_round", type=int, default=50)
     parser.add_argument("-t", "--rebuild_count", type=int, default=1)
-    parser.add_argument("-m", "--model_type", type=str, default='auto', choices=['auto', 'lenet5', 'resnet18_bn', 'resnet18_gn'])
     parser.add_argument("--lr", type=float, default=0.001)
     parser.add_argument("-o", "--output_folder_name", default=None, help='specify the output folder name')
 
@@ -74,7 +73,6 @@ if __name__ == '__main__':
     if total_cpu_count > MAX_CPU_COUNT:
         total_cpu_count = MAX_CPU_COUNT
     model_path = args.model_path
-    model_type = args.model_type
     rebuild_round = args.rebuild_norm_round
     rebuild_count = args.rebuild_count
     lr = args.lr
@@ -85,13 +83,13 @@ if __name__ == '__main__':
     assert os.path.exists(model_path), f"model file {model_path} does not exist"
     model_file_name = os.path.basename(model_path)
     assert '.model.pt' in model_file_name, f"model file {model_file_name} does not have .model.pt extension"
-    if model_type == 'auto':
-        folder_path = os.path.dirname(model_path)
-        model_info_file = os.path.join(folder_path, 'info.json')
-        assert os.path.exists(model_info_file), f"model info file {model_info_file} does not exist, please specify model type with -m"
-        with open(model_info_file) as f:
-            model_info = json.load(f)
-        model_type = model_info['model_type']
+
+    cpu_device = torch.device("cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    starting_model_info = torch.load(model_path, map_location=cpu_device)
+    starting_model_stat = starting_model_info["state_dict"]
+    model_type = starting_model_info["model_name"]
 
     current_ml_setup = ml_setup.get_ml_setup_from_model_type(model_type)
 
@@ -106,9 +104,6 @@ if __name__ == '__main__':
     os.mkdir(output_folder_path)
 
     """ start rebuilding norm """
-    cpu_device = torch.device("cpu")
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
     target_model = copy.deepcopy(current_ml_setup.model)
     initial_model_stat = target_model.state_dict()
 
@@ -131,8 +126,6 @@ if __name__ == '__main__':
     criterion = current_ml_setup.criterion
 
     for rebuild_count_index in range(rebuild_count):
-        starting_model_stat = torch.load(model_path, map_location=cpu_device)
-
         # optimizer = torch.optim.SGD(target_model.parameters(), lr=lr)
         # optimizer_stat = torch.load(optimizer_stat_path, map_location=cpu_device)
         # optimizer.load_state_dict(optimizer_stat)

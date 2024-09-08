@@ -15,7 +15,6 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from py_src import ml_setup, util
 
 
-INFO_FILE_NAME = 'info.json'
 MAX_CPU_COUNT = 32
 RANDOM_SEED = 42
 
@@ -96,7 +95,6 @@ if __name__ == "__main__":
 
     parser.add_argument("-c", '--core', type=int, default=os.cpu_count(), help='specify the number of CPU cores to use')
     parser.add_argument("-w", "--worker", type=int, default=1, help='specify how many workers to run in parallel')
-    parser.add_argument("-m", "--model_type", type=str, default='auto', choices=['auto', 'lenet5', 'resnet18_bn', 'resnet18_gn'])
     parser.add_argument("-t", "--test_dataset_type", type=str, default='test', choices=['test', 'train'])
 
     parser.add_argument("--test_size", type=int, default=100)
@@ -109,24 +107,18 @@ if __name__ == "__main__":
     precision = args.precision + 1 # +1 because we count the final ending point
     cores = args.core
     worker_count = args.worker
-    model_type = args.model_type
     test_size = args.test_size
     test_dataset_type = args.test_dataset_type
     print(f"cores: {cores}    worker: {worker_count}")
 
     # load models
-    model_state_a = torch.load(model_a_path, map_location=torch.device('cpu'))
-    model_state_b = torch.load(model_b_path, map_location=torch.device('cpu'))
-    with open(os.path.join(os.path.dirname(model_a_path), INFO_FILE_NAME)) as f:
-        start_folder_info = json.load(f)
-    with open(os.path.join(os.path.dirname(model_b_path), INFO_FILE_NAME)) as f:
-        end_folder_info = json.load(f)
-    assert start_folder_info['model_type'] == end_folder_info['model_type']
-    if model_type == 'auto':
-        model_type = start_folder_info['model_type']
-    else:
-        assert model_type == start_folder_info['model_type']
-    current_ml_setup = ml_setup.get_ml_setup_from_model_type(model_type)
+    model_state_info_a = torch.load(model_a_path, map_location=torch.device('cpu'))
+    model_state_a = model_state_info_a['state_dict']
+    model_state_info_b = torch.load(model_b_path, map_location=torch.device('cpu'))
+    model_state_b = model_state_info_b['state_dict']
+    assert model_state_info_a['model_name'] == model_state_info_b['model_name']
+
+    current_ml_setup = ml_setup.get_ml_setup_from_model_type(model_state_info_a['model_name'])
 
     todo_list = []
     for p0 in np.linspace(0, scale, num=precision, endpoint=True):

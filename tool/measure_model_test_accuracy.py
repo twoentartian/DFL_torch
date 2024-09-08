@@ -52,27 +52,21 @@ def testing_model(model, current_ml_setup):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Measure model test accuracy and loss.')
     parser.add_argument("model_file", type=str)
-    parser.add_argument("-m", "--model_type", type=str, default='auto', choices=['auto', 'lenet5', 'resnet18_bn', 'resnet18_gn'])
 
     args = parser.parse_args()
 
     model_file_path = args.model_file
-    model_type = args.model_type
 
-    if model_type == 'auto':
-        folder_path = os.path.dirname(model_file_path)
-        model_info_file = os.path.join(folder_path, 'info.json')
-        assert os.path.exists(model_info_file), f"model info file {model_info_file} does not exist, please specify model type with -m"
-        with open(model_info_file) as f:
-            model_info = json.load(f)
-        model_type = model_info['model_type']
+    model_info = torch.load(model_file_path)
+    model_type = model_info["model_name"]
+    model_state = model_info["state_dict"]
 
     current_ml_setup = ml_setup.get_ml_setup_from_model_type(model_type)
 
     if not os.path.exists(model_file_path):
         print(f"file not found. {model_file_path}")
     model = current_ml_setup.model
-    model.load_state_dict(torch.load(model_file_path))
+    model.load_state_dict(model_state)
 
     test_loss, test_accuracy, train_loss, train_accuracy = testing_model(model, current_ml_setup)
     print(f"test loss={test_loss}, test acc={test_accuracy}")

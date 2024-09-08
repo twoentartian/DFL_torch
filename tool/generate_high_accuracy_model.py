@@ -81,9 +81,15 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
             record_model_service.trigger_without_runtime_parameters(epoch, [0], [model_stat])
     print(f"INDEX[{index}] finish training")
 
-    torch.save(model.state_dict(), os.path.join(output_folder, f"{str(index).zfill(digit_number_of_models)}.model.pt"))
-    torch.save(optimizer.state_dict(), os.path.join(output_folder, f"{str(index).zfill(digit_number_of_models)}.optimizer.pt"))
-    del model, dataset, dataloader, criterion, optimizer
+    model_info = {}
+    model_info["state_dict"] = model.state_dict()
+    model_info["model_name"] = arg_ml_setup.model_name
+    torch.save(model_info, os.path.join(output_folder, f"{str(index).zfill(digit_number_of_models)}.model.pt"))
+    optimizer_info = {}
+    optimizer_info["state_dict"] = optimizer.state_dict()
+    optimizer_info["model_name"] = arg_ml_setup.model_name
+    torch.save(optimizer_info, os.path.join(output_folder, f"{str(index).zfill(digit_number_of_models)}.optimizer.pt"))
+    del model, dataset, dataloader, criterion, optimizer, model_info, optimizer_info
     torch.cuda.empty_cache()
 
 
