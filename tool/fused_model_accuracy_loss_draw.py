@@ -19,7 +19,7 @@ def draw_fusion_accuracy_loss_graph(fusion_df, command, save_name):
     if len(propagating_src) == 3:
         fig = plt.figure()
         ax = fig.add_subplot(111, projection='3d')
-        sc = ax.scatter(fusion_df[propagating_src[0]], fusion_df[propagating_src[1]], fusion_df[propagating_src[2]], s=5, c=fusion_df[value_to_plot], cmap='hot')
+        sc = ax.scatter(fusion_df[propagating_src[0]], fusion_df[propagating_src[1]], fusion_df[propagating_src[2]], s=5, c=fusion_df[value_to_plot], vmax=3, cmap='hot')
         plt.colorbar(sc)
         ax.set_xlabel('Model 0')
         ax.set_ylabel('Model 1')
@@ -28,7 +28,7 @@ def draw_fusion_accuracy_loss_graph(fusion_df, command, save_name):
         plt.show()
     elif len(propagating_src) == 2:
         plt.figure()
-        sc = plt.scatter(fusion_df[propagating_src[0]], fusion_df[propagating_src[1]], c=fusion_df[value_to_plot], s=5, cmap='viridis')
+        sc = plt.scatter(fusion_df[propagating_src[0]], fusion_df[propagating_src[1]], c=fusion_df[value_to_plot], s=5, vmax=3, cmap='viridis')
         plt.colorbar(sc, label=command)
         plt.title(f'Heatmap of {value_to_plot.capitalize()}')
         plt.xlabel('Model 1')
@@ -75,4 +75,6 @@ if __name__ == "__main__":
 
     fusion_df = pd.read_csv(file_path)
     file_name = get_file_name_without_extension(file_path)
-    draw_fusion_accuracy_loss_graph(fusion_df, command, f"{file_name}__{command}.pdf")
+    folder_path = os.path.dirname(file_path)
+    output_path = os.path.join(folder_path, f"{file_name}__{command}.pdf")
+    draw_fusion_accuracy_loss_graph(fusion_df, command, output_path)

@@ -13,16 +13,14 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('model', type=str, help="path to the starting model state")
     parser.add_argument('-o', '--output', type=str, help="output path")
+    parser.add_argument('-a', '--analyze', action='store_true', help="perform model fusion analysis")
 
     args = parser.parse_args()
 
-    if args.output is None:
-        now_str = datetime.now().strftime("trained_model_%Y-%m-%d_%H-%M-%S_%f")
-        args.output = f"{now_str}.model.pt"
-
     # args
     model_path = args.model
-    output_folder_name = args.output
+    output_folder_path = args.output
+    enable_analysis = args.analyze
 
     # torch devices
     cpu_device = torch.device("cpu")
@@ -37,12 +35,10 @@ if __name__ == '__main__':
     print(f'Current ML setup: {current_ml_setup.model_name}')
 
     # create output folder
-    if output_folder_name is None:
-        time_now_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")
-        output_folder_path = os.path.join(os.curdir, f"{__file__}_{time_now_str}")
-    else:
-        output_folder_path = os.path.join(os.curdir, output_folder_name)
-    os.mkdir(output_folder_path)
+    if output_folder_path is None:
+        output_folder_path = os.path.dirname(model_path)
+    if not os.path.exists(output_folder_path):
+        os.makedirs(output_folder_path)
 
     target_model = copy.deepcopy(current_ml_setup.model)
     target_model.load_state_dict(model_state_dict)
@@ -54,10 +50,10 @@ if __name__ == '__main__':
     criterion = current_ml_setup.criterion
 
     if current_ml_setup.model_name == "resnet18_bn":
-        epochs = 30
-        optimizer = torch.optim.SGD(target_model.parameters(), lr=0.1, momentum=0.9, weight_decay=5e-4)
+        epochs = 10
+        optimizer = torch.optim.SGD(target_model.parameters(), lr=0.005, momentum=0.9, weight_decay=5e-4)
         steps_per_epoch = len(dataset) // current_ml_setup.training_batch_size + 1
-        lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, 0.1, steps_per_epoch=steps_per_epoch, epochs=epochs)
+        lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, 0.005, steps_per_epoch=steps_per_epoch, epochs=epochs)
     else:
         raise NotImplementedError()
 
@@ -92,4 +88,8 @@ if __name__ == '__main__':
     optimizer_info["model_name"] = current_ml_setup.model_name
     torch.save(optimizer_info, os.path.join(output_folder_path, f"trained.optimizer.pt"))
 
+    # if enable_analysis:
+    #     trained_model_path = os.path.join(output_folder_path, f"trained.model.pt")
+    #     start_model_path =
+    #     os.system(f"../tool/fused_model_accuracy_loss_calculate.py {} {}")
 

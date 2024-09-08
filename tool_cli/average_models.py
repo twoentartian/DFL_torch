@@ -1,6 +1,6 @@
 import torch
 import argparse
-from datetime import datetime
+import os
 
 
 if __name__ == '__main__':
@@ -10,15 +10,13 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    if args.output is None:
-        now_str = datetime.now().strftime("averaged_model_%Y-%m-%d_%H-%M-%S_%f")
-        args.output = f"{now_str}.model.pt"
-
     models_path = args.models
+    output_path = args.output
 
     cpu_device = torch.device("cpu")
     models = []
     model_name = None
+    output_path_when_not_specified = None
     for model_path in models_path:
         model_info = torch.load(model_path, map_location=cpu_device)
         model = model_info["state_dict"]
@@ -27,7 +25,21 @@ if __name__ == '__main__':
             model_name = current_model_name
         else:
             assert current_model_name == model_name, "Model name mismatch"
+        model_folder = os.path.dirname(model_path)
+        if output_path_when_not_specified is None:
+            output_path_when_not_specified = model_folder
+        else:
+            if output_path_when_not_specified != model_folder:
+                output_path_when_not_specified = ''
         models.append(model)
+
+    if output_path is None:
+        if output_path_when_not_specified == '':
+            output_path = os.getcwd()
+        else:
+            output_path = output_path_when_not_specified
+    if not os.path.exists(output_path):
+        os.makedirs(output_path)
 
     assert len(models) >= 2
 
@@ -43,5 +55,5 @@ if __name__ == '__main__':
 
     model_info = {"state_dict": output_model, "model_name": model_name}
 
-    torch.save(model_info, args.output)
+    torch.save( model_info, args.output)
 

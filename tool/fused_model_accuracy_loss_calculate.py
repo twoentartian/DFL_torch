@@ -111,6 +111,14 @@ if __name__ == "__main__":
     test_dataset_type = args.test_dataset_type
     print(f"cores: {cores}    worker: {worker_count}")
 
+    # output_path
+    model_a_folder = os.path.dirname(model_a_path)
+    model_b_folder = os.path.dirname(model_b_path)
+    assert model_a_folder == model_b_folder, "please put input models in the same folder"
+    model_a_file_name = os.path.splitext(os.path.basename(model_a_path))[0]
+    model_b_file_name = os.path.splitext(os.path.basename(model_b_path))[0]
+    output_folder = model_a_folder
+
     # load models
     model_state_info_a = torch.load(model_a_path, map_location=torch.device('cpu'))
     model_state_a = model_state_info_a['state_dict']
@@ -140,7 +148,8 @@ if __name__ == "__main__":
             final_output = final_output | result
 
     # save to csv
-    with open(f"./fusion_model_accuracy_on_{test_dataset_type}.csv", "w") as f:
+    csv_path = os.path.join(output_folder, f'fused_model_accuracy_loss_on_{test_dataset_type}_{model_a_file_name}_{model_b_file_name}.csv')
+    with open(csv_path, "w") as f:
         # write header
         f.write(f"0,1,accuracy,loss\n")
         for (p0, p1), (accuracy, loss) in final_output.items():
