@@ -115,8 +115,8 @@ if __name__ == "__main__":
     model_a_folder = os.path.dirname(model_a_path)
     model_b_folder = os.path.dirname(model_b_path)
     assert model_a_folder == model_b_folder, "please put input models in the same folder"
-    model_a_file_name = os.path.splitext(os.path.basename(model_a_path))[0]
-    model_b_file_name = os.path.splitext(os.path.basename(model_b_path))[0]
+    model_a_file_name = os.path.basename(model_a_path).replace('.model.pt', '')
+    model_b_file_name = os.path.basename(model_b_path).replace('.model.pt', '')
     output_folder = model_a_folder
 
     # load models
