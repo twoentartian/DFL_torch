@@ -26,7 +26,18 @@ MAX_CPU_COUNT: Final[int] = 32
 ENABLE_DEDICATED_TRAINING_DATASET_FOR_REBUILDING_NORM: Final[bool] = True
 ENABLE_REBUILD_NORM_FOR_STARTING_ENDING_MODEL: Final[bool] = True
 ENABLE_NAN_CHECKING: Final[bool] = False
-ENABLE_PRE_TRAINING: Final[bool] = False
+
+""" the optimizers to find the pathway points """
+def get_optimizer_to_find_pathway_point(model_name, model_parameter, dataset, batch_size):
+    if model_name == "resnet18_bn":
+        epochs = 10
+        optimizer = torch.optim.SGD(model_parameter, lr=0.005, momentum=0.9, weight_decay=5e-4)
+        steps_per_epoch = len(dataset) // batch_size + 1
+        lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, 0.005, steps_per_epoch=steps_per_epoch, epochs=epochs)
+    else:
+        raise NotImplementedError
+    return epochs, optimizer, lr_scheduler
+
 
 class TrainMode(Enum):
     SGD_x_rounds = 0
@@ -138,16 +149,21 @@ def rebuild_norm_layers(model, model_state, arg_ml_setup, epoch_of_rebuild, data
     return output_model_state, rebuild_states
 
 
-def process_file_func(arg_output_folder_path, start_model_path, end_model_path, arg_ml_setup, training_parameters, arg_lr_rebuild_norm,
-                      arg_max_tick, arg_rebuild_normalization_round, arg_step_size, arg_adoptive_step_size, layer_skip_average,
-                      arg_worker_count, arg_total_cpu_count, arg_save_format, arg_use_cpu):
-    training_mode, training_parameter = training_parameters
+def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild_norm, arg_pathway, arg_compute):
+    arg_output_folder_path, start_model_path, end_model_path, arg_ml_setup, arg_max_tick = arg_env
+    arg_rebuild_norm_lr, arg_rebuild_norm_round = arg_rebuild_norm
+    arg_step_size, arg_adoptive_step_size, arg_layer_skip_average = arg_average
+    arg_path_way_depth = arg_pathway
+    arg_worker_count, arg_total_cpu_count, arg_save_format, arg_use_cpu = arg_compute
+
+    training_mode, training_parameter = arg_training_parameters
     if training_mode == TrainMode.SGD_x_rounds:
         train_lr, train_round = training_parameter
     elif training_mode == TrainMode.Adam_until_loss:
-        train_loss = training_parameter
+        target_train_loss = training_parameter
     else:
         raise NotImplementedError
+    del training_parameter
 
     start_file_name = os.path.basename(start_model_path).replace('.model.pt', '')
     end_file_name = os.path.basename(end_model_path).replace('.model.pt', '')
@@ -170,6 +186,7 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
     start_optimizer_path = start_model_path.replace('model.pt', 'optimizer.pt')
     assert os.path.exists(start_optimizer_path), f'starting optimizer {start_optimizer_path} is missing'
 
+    # output folders
     arg_output_folder_path = os.path.join(arg_output_folder_path, f"{start_file_name}-{end_file_name}")
     if os.path.exists(arg_output_folder_path):
         child_logger.warning(f"{arg_output_folder_path} already exists")
@@ -180,10 +197,16 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
     cpu_device = torch.device("cpu")
     start_model = copy.deepcopy(arg_ml_setup.model)
     initial_model_stat = start_model.state_dict()
-    start_model_stat_dict = torch.load(start_model_path, map_location=cpu_device)
-    end_model_stat_dict = torch.load(end_model_path, map_location=cpu_device)
+    start_model_info = torch.load(start_model_path, map_location=cpu_device)
+    end_model_info = torch.load(end_model_path, map_location=cpu_device)
+    start_model_stat_dict = start_model_info["state_dict"]
+    end_model_stat_dict = end_model_info["state_dict"]
+    assert start_model_info["model_name"] == end_model_info["model_name"]
+
     start_model.load_state_dict(start_model_stat_dict)
-    start_model_optimizer_stat = torch.load(start_optimizer_path, map_location=cpu_device)  # load optimizer
+    start_model_optimizer_info = torch.load(start_optimizer_path, map_location=cpu_device)  # load optimizer
+    start_model_optimizer_stat = start_model_optimizer_info["state_dict"]
+
     # assert start_model_state_dict != end_model_stat_dict
     for key in start_model_stat_dict.keys():
         assert not torch.equal(start_model_stat_dict[key], end_model_stat_dict[key]), f'starting model({start_model_path}) is same as ending model({end_model_path})'
@@ -213,11 +236,11 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
     del optimizer_test
 
     # set dataloader for rebuilding norm
-    if arg_rebuild_normalization_round != 0:
+    if arg_rebuild_norm_round != 0:
         if ENABLE_DEDICATED_TRAINING_DATASET_FOR_REBUILDING_NORM:
             epoch_for_rebuilding_norm = 1
             dataset_for_rebuilding_norm = arg_ml_setup.training_data_for_rebuilding_normalization
-            dataset_rebuild_norm_size = arg_rebuild_normalization_round * arg_ml_setup.training_batch_size
+            dataset_rebuild_norm_size = arg_rebuild_norm_round * arg_ml_setup.training_batch_size
             if dataset_rebuild_norm_size > len(dataset_for_rebuilding_norm):
                 ratio = int(dataset_rebuild_norm_size // len(dataset_for_rebuilding_norm) + 1)
                 assert dataset_rebuild_norm_size % ratio == 0
@@ -249,65 +272,125 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
     record_test_accuracy_loss_service = record_test_accuracy_loss.ServiceTestAccuracyLossRecorder(1, 100, use_fixed_testing_dataset=True)
     record_test_accuracy_loss_service.initialize_without_runtime_parameters(arg_output_folder_path, [0], start_model, criterion, training_dataset)
 
-    # begin finding path
     """rebuilding normalization for start and end points"""
     if ENABLE_REBUILD_NORM_FOR_STARTING_ENDING_MODEL:
-        if arg_rebuild_normalization_round != 0:
+        if arg_rebuild_norm_round != 0:
             child_logger.info(f"rebuilding normalization for starting and ending points")
             optimizer_rebuild = torch.optim.Adam(start_model.parameters(), lr=0.001)
             start_model_stat_dict, rebuild_states = rebuild_norm_layers(start_model, start_model_stat_dict, arg_ml_setup, epoch_for_rebuilding_norm,
-                                                           dataloader_for_rebuilding_norm, rebuild_lr=arg_lr_rebuild_norm, existing_optimizer=optimizer_rebuild,
+                                                           dataloader_for_rebuilding_norm, rebuild_lr=arg_rebuild_norm_lr, existing_optimizer=optimizer_rebuild,
                                                            rebuild_on_device=device, initial_model_stat=initial_model_stat, reset_norm_to_initial=True)
             rebuild_iter, rebuilding_loss_val = rebuild_states[-1]
             child_logger.info(f"rebuilding starting point finished at {rebuild_iter} rounds, rebuilding loss = {rebuilding_loss_val}")
 
             optimizer_rebuild = torch.optim.Adam(start_model.parameters(), lr=0.001)
             end_model_stat_dict, rebuild_states = rebuild_norm_layers(start_model, end_model_stat_dict, arg_ml_setup, epoch_for_rebuilding_norm,
-                                                         dataloader_for_rebuilding_norm, rebuild_lr=arg_lr_rebuild_norm, existing_optimizer=optimizer_rebuild,
+                                                         dataloader_for_rebuilding_norm, rebuild_lr=arg_rebuild_norm_lr, existing_optimizer=optimizer_rebuild,
                                                          rebuild_on_device=device, initial_model_stat=initial_model_stat, reset_norm_to_initial=True)
             rebuild_iter, rebuilding_loss_val = rebuild_states[-1]
             child_logger.info(f"rebuilding starting point finished at {rebuild_iter} rounds, rebuilding loss = {rebuilding_loss_val}")
 
+    """find pathway points"""
+    if arg_path_way_depth != 0:
+        def find_pathway_point_between_two_model(m0, m1, target_model, model_name, fine_tune_dataloader, depth, index):
+            # average models
+            averaged_model_state = {}
+            for layer_name in m0.keys():
+                layer_of_first_model = m0[layer_name]
+                if isinstance(layer_of_first_model, torch.Tensor) and layer_of_first_model.dtype in (torch.float32, torch.float64):
+                    averaged_model_state[layer_name] = torch.mean(torch.stack([model[layer_name] for model in [m0, m1]]), dim=0)
+                elif "num_batches_tracked" in layer_name:
+                    averaged_model_state[layer_name] = m0[layer_name]
+                else:
+                    raise NotImplementedError
+
+            # record variance
+            ft_variance_record = model_variance_correct.VarianceCorrector(model_variance_correct.VarianceCorrectionType.FollowOthers)
+            ft_variance_record.add_variance(m0)
+            ft_variance_record.add_variance(m1)
+            ft_target_variance = ft_variance_record.get_variance()
+
+            # fine-tune the model with
+            target_model.load_state_dict(averaged_model_state)
+            target_model.to(device)
+            target_model.train()
+            ft_epochs, ft_optimizer, ft_lr_scheduler = get_optimizer_to_find_pathway_point(model_name, target_model.parameters(), fine_tune_dataloader.dataset, arg_ml_setup.training_batch_size)
+
+            for epoch in range(ft_epochs):
+                # scale variance
+                current_model_state = target_model.state_dict()
+                cuda.CudaEnv.model_state_dict_to(current_model_state, cpu_device)
+                current_model_state = model_variance_correct.VarianceCorrector.scale_model_stat_to_variance(current_model_state, ft_target_variance)
+                cuda.CudaEnv.model_state_dict_to(current_model_state, device)
+                target_model.load_state_dict(current_model_state)
+
+                # training
+                train_loss = 0
+                count = 0
+                for data, label in dataloader:
+                    data, label = data.to(device), label.to(device)
+                    ft_optimizer.zero_grad()
+                    outputs = target_model(data)
+                    loss = criterion(outputs, label)
+                    loss.backward()
+                    ft_optimizer.step()
+                    if ft_lr_scheduler is not None:
+                        ft_lr_scheduler.step()
+                    train_loss += loss.item()
+                    count += 1
+                lrs = []
+                for param_group in ft_optimizer.param_groups:
+                    lrs.append(param_group['lr'])
+                child_logger.info(f"find pathway points depth {depth} index {index}: epoch[{epoch}] loss={train_loss / count} lrs={lrs}")
+            output_model_state = target_model.state_dict()
+            cuda.CudaEnv.model_state_dict_to(output_model_state, torch.device("cpu"))
+            return output_model_state
+
+        def find_pathway_points(m0, m1, target_model, model_name, fine_tune_dataloader, depth):
+            current_models = [m0, m1]
+            for current_depth in range(1, depth+1):
+                new_models = []
+                for model_index in range(len(current_models) - 1):
+                    pathway_model_state = find_pathway_point_between_two_model(current_models[model_index], current_models[model_index+1], target_model, model_name, fine_tune_dataloader, current_depth, model_index)
+                    new_models.append(pathway_model_state)
+                new_model_list = [None] * (len(current_models) + len(new_models))
+                new_model_list[::2] = current_models
+                new_model_list[1::2] = new_models
+                current_models = new_model_list
+            current_models = current_models[1:-1]
+            return current_models
+
+        pathway_points = find_pathway_points(start_model_stat_dict, end_model_stat_dict, start_model, arg_ml_setup.model_name, dataloader, arg_path_way_depth)
+        child_logger.info(f"find {len(pathway_points)} pathway points depth")
+        # save pathway points
+        output_path_pathway_points = os.path.join(arg_output_folder_path, "pathway_points")
+        os.makedirs(output_path_pathway_points, exist_ok=True)
+
+        for index, pathway_model in enumerate(pathway_points):
+            model_info = {"state_dict": pathway_model, "model_name": arg_ml_setup.model_name}
+            torch.save(model_info, os.path.join(output_path_pathway_points, f"{index+1}_over_{len(pathway_points)+1}.model.pt"))
+    else:
+        pathway_points = []
+
     start_model_stat = start_model_stat_dict
-
-    """pre training"""
-    if ENABLE_PRE_TRAINING and not load_optimizer_success:
-        child_logger.info(f"pre training")
-        start_model.load_state_dict(start_model_stat)
-        cuda.CudaEnv.model_state_dict_to(start_model_stat, cpu_device)
-        start_model.train()
-        start_model.to(device)
-        cuda.CudaEnv.optimizer_to(optimizer, device)
-        for (training_index, (data, label)) in enumerate(dataloader):
-            data, label = data.to(device), label.to(device)
-            optimizer.zero_grad(set_to_none=True)
-            output = start_model(data)
-            loss_pretrain = criterion(output, label)
-            loss_pretrain.backward()
-            loss_pretrain_val = loss_pretrain.item()
-            optimizer.step()
-            child_logger.info(f"pre training loss #{training_index} = {loss_pretrain_val:.3f}")
-            if training_index == 100:
-                break
-        # start_model.load_state_dict(start_model_stat)
-        start_model_stat = start_model.state_dict()
-        cuda.CudaEnv.model_state_dict_to(start_model_stat, cpu_device)
+    target_direction_points = pathway_points + [end_model_stat_dict]
     current_tick = 0
-
     while current_tick < arg_max_tick:
+        """set end point"""
+        path_len = arg_max_tick // (len(pathway_points) + 1)
+        current_path_index = current_tick // path_len
+        current_direction_point = target_direction_points[current_path_index]
+
         """record variance"""
         variance_record = model_variance_correct.VarianceCorrector(model_variance_correct.VarianceCorrectionType.FollowOthers)
         variance_record.add_variance(start_model_stat)
         """move tensor"""
-        start_model_stat = model_average.move_model_state_toward(start_model_stat, end_model_stat_dict, arg_step_size, arg_adoptive_step_size, True, ignore_layer_keywords=layer_skip_average)
+        start_model_stat = model_average.move_model_state_toward(start_model_stat, current_direction_point, arg_step_size, arg_adoptive_step_size, False, ignore_layer_keywords=arg_layer_skip_average)
         if ENABLE_NAN_CHECKING:
             util.check_for_nans_in_state_dict(start_model_stat)
         """rescale variance"""
         target_variance = variance_record.get_variance()
-        for layer_name, single_layer_variance in target_variance.items():
-            if special_torch_layers.is_ignored_layer_averaging(layer_name):
-                continue
-            start_model_stat[layer_name] = model_variance_correct.VarianceCorrector.scale_tensor_to_variance(start_model_stat[layer_name], single_layer_variance)
+        start_model_stat = model_variance_correct.VarianceCorrector.scale_model_stat_to_variance(start_model_stat, target_variance)
         if ENABLE_NAN_CHECKING:
             util.check_for_nans_in_state_dict(start_model_stat)
         """training"""
@@ -344,7 +427,7 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
                     training_loss_val = training_loss.item()
                     max_loss = moving_max.add(training_loss_val)
                     child_logger.info(f"current tick: {current_tick}, training loss = {training_loss_val:.3f}, max loss = {max_loss:.3f}")
-                    if max_loss < training_loss and training_index > averager_size:
+                    if max_loss < target_train_loss and training_index > averager_size:
                         exit_training = True
                         break
                 if exit_training:
@@ -353,18 +436,19 @@ def process_file_func(arg_output_folder_path, start_model_path, end_model_path, 
             raise NotImplementedError
 
         child_logger.info(f"current tick: {current_tick}, training loss = {training_loss_val:.3f}")
+
+        start_model_stat = start_model.state_dict()
+
         """rebuilding normalization"""
-        if arg_rebuild_normalization_round != 0:
-            start_model_stat = start_model.state_dict()
+        if arg_rebuild_norm_round != 0:
             optimizer_rebuild = torch.optim.Adam(start_model.parameters(), lr=0.001)
             start_model_stat, rebuild_states = rebuild_norm_layers(start_model, start_model_stat, arg_ml_setup, epoch_for_rebuilding_norm,
-                                                                                       dataloader_for_rebuilding_norm, rebuild_lr=arg_lr_rebuild_norm,
+                                                                                       dataloader_for_rebuilding_norm, rebuild_lr=arg_rebuild_norm_lr,
                                                                                        rebuild_on_device=device, existing_optimizer=optimizer_rebuild,
                                                                                        initial_model_stat=initial_model_stat,
                                                                                        reset_norm_to_initial=True)
             rebuild_iter, rebuilding_loss_val = rebuild_states[-1]
             child_logger.info(f"current tick: {current_tick}, rebuilding finished at {rebuild_iter} rounds, rebuilding loss = {rebuilding_loss_val:.3f}")
-
             # remove norm layer variance
             target_variance = {k: v for k, v in target_variance.items() if not special_torch_layers.is_normalization_layer(arg_ml_setup.model_name, k)}
 
@@ -398,18 +482,25 @@ if __name__ == '__main__':
     parser.add_argument("-t", "--thread", type=int, default=1, help='specify how many models to train in parallel')
     parser.add_argument("-m", "--model_type", type=str, default='auto', choices=['auto', 'lenet5', 'resnet18_bn', 'resnet18_gn'])
     parser.add_argument("-T", "--max_tick", type=int, default=10000)
+
+    # average parameters
     parser.add_argument("-s", "--step_size", type=float, default=0.001)
     parser.add_argument("-a", "--adoptive_step_size", type=float, default=0)
-
-    parser.add_argument("-r", "--rebuild_norm_round", type=int, default=0, help='train for x rounds to rebuild the norm layers')
     parser.add_argument("--layer_skip_average", type=str, nargs='+')
 
+    # train parameters
     parser.add_argument("--lr", type=float, default=0.001, help='train the model with this learning rate, joint with "--training_round"')
     parser.add_argument("--training_round", type=int, default=1, help='train the model for x rounds, joint with "--lr"')
-
     parser.add_argument("--loss", type=float, default=-1, help='train the model until loss is smaller than, cannot use with "--training_round" or "--lr"')
 
+    # rebuild norm parameter
+    parser.add_argument("-r", "--rebuild_norm_round", type=int, default=0, help='train for x rounds to rebuild the norm layers')
     parser.add_argument("--lr_rebuild_norm", type=float, default=0.001)
+
+    # find pathway points parameters
+    parser.add_argument("-p", "--pathway_depth", type=int, default=0, help='the depth of find pathway points, 1->find a mid point, 2->find 3 points(25% each), 3->find 7 points(12.5% each)')
+
+    # compute parameters
     parser.add_argument("--save_format", type=str, default='none', choices=['none', 'file', 'lmdb'])
     parser.add_argument("--cpu", action='store_true', help='force using CPU for training')
     parser.add_argument("-o", "--output_folder_name", default=None, help='specify the output folder name')
@@ -437,6 +528,8 @@ if __name__ == '__main__':
     adoptive_step_size = args.adoptive_step_size
 
     rebuild_normalization_round = args.rebuild_norm_round
+
+    pathway_depth = args.pathway_depth
 
     learning_rate_rebuild_norm = args.lr_rebuild_norm
     use_cpu = args.cpu
@@ -502,13 +595,19 @@ if __name__ == '__main__':
     logger.info(f"worker: {worker_count}")
 
     if mode == TrainMode.SGD_x_rounds:
-        args = [(output_folder_path, start_file, end_file, current_ml_setup, (mode, (learning_rate, training_round)), learning_rate_rebuild_norm,
-                 max_tick, rebuild_normalization_round, step_size, adoptive_step_size, layer_skip_average,
-                 worker_count, total_cpu_count, save_format, use_cpu) for (start_file, end_file) in paths_to_find]
+        args = [( (output_folder_path, start_file, end_file, current_ml_setup, max_tick),
+                  (mode, (learning_rate, training_round)),
+                  (step_size, adoptive_step_size, layer_skip_average),
+                  (learning_rate_rebuild_norm, rebuild_normalization_round),
+                  (pathway_depth),
+                  (worker_count, total_cpu_count, save_format, use_cpu) ) for (start_file, end_file) in paths_to_find]
     elif mode == TrainMode.Adam_until_loss:
-        args = [(output_folder_path, start_file, end_file, current_ml_setup, (mode, loss), learning_rate_rebuild_norm,
-                 max_tick, rebuild_normalization_round, step_size, adoptive_step_size, layer_skip_average,
-                 worker_count, total_cpu_count, save_format, use_cpu) for (start_file, end_file) in paths_to_find]
+        args = [( (output_folder_path, start_file, end_file, current_ml_setup, max_tick),
+                  (mode, loss),
+                  (step_size, adoptive_step_size, layer_skip_average),
+                  (learning_rate_rebuild_norm, rebuild_normalization_round),
+                  (pathway_depth),
+                  (worker_count, total_cpu_count, save_format, use_cpu) ) for (start_file, end_file) in paths_to_find]
     else:
         raise NotImplementedError
     with concurrent.futures.ProcessPoolExecutor(max_workers=worker_count) as executor:
