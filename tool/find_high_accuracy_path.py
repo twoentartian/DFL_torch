@@ -357,23 +357,22 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
                 new_model_list[::2] = current_models
                 new_model_list[1::2] = new_models
                 current_models = new_model_list
-            current_models = current_models[1:-1]
             return current_models
 
         pathway_points = find_pathway_points(start_model_stat_dict, end_model_stat_dict, start_model, arg_ml_setup.model_name, dataloader, arg_path_way_depth)
-        child_logger.info(f"find {len(pathway_points)} pathway points depth")
+        child_logger.info(f"find {len(pathway_points)} pathway points with depth {arg_path_way_depth}")
         # save pathway points
         output_path_pathway_points = os.path.join(arg_output_folder_path, "pathway_points")
         os.makedirs(output_path_pathway_points, exist_ok=True)
 
         for index, pathway_model in enumerate(pathway_points):
             model_info = {"state_dict": pathway_model, "model_name": arg_ml_setup.model_name}
-            torch.save(model_info, os.path.join(output_path_pathway_points, f"{index+1}_over_{len(pathway_points)+1}.model.pt"))
+            torch.save(model_info, os.path.join(output_path_pathway_points, f"{index}_over_{len(pathway_points)-1}.model.pt"))
     else:
         pathway_points = []
 
     start_model_stat = start_model_stat_dict
-    target_direction_points = pathway_points + [end_model_stat_dict]
+    target_direction_points = pathway_points[1:]
     current_tick = 0
     while current_tick < arg_max_tick:
         """set end point"""
