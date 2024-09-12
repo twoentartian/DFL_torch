@@ -382,7 +382,7 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
     current_tick = 0
     while current_tick < arg_max_tick:
         """set end point"""
-        path_len = arg_max_tick // len(pathway_points)
+        path_len = arg_max_tick // len(target_direction_points)
         current_path_index = current_tick // path_len
         current_direction_point = target_direction_points[current_path_index]
 
