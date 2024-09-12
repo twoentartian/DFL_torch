@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from py_src import ml_setup, model_average, model_variance_correct, special_torch_layers, cuda, util
-from py_src.service import record_weights_difference, record_test_accuracy_loss, record_variance, record_model_stat
+from py_src.service import record_weights_difference, record_test_accuracy_loss, record_variance, record_model_stat, record_training_loss
 
 logger = logging.getLogger("find_high_accuracy_path")
 
@@ -27,7 +27,8 @@ ENABLE_DEDICATED_TRAINING_DATASET_FOR_REBUILDING_NORM: Final[bool] = True
 ENABLE_REBUILD_NORM_FOR_STARTING_ENDING_MODEL: Final[bool] = True
 ENABLE_NAN_CHECKING: Final[bool] = False
 
-""" the optimizers to find the pathway points """
+
+# the optimizers to find the pathway points
 def get_optimizer_to_find_pathway_point(model_name, model_parameter, dataset, batch_size):
     if model_name == "resnet18_bn":
         epochs = 10
@@ -42,6 +43,7 @@ def get_optimizer_to_find_pathway_point(model_name, model_parameter, dataset, ba
 class TrainMode(Enum):
     SGD_x_rounds = 0
     Adam_until_loss = 1
+
 
 def set_logging(base_logger, task_name, log_file_path=None):
     class ExitOnExceptionHandler(logging.StreamHandler):
@@ -101,7 +103,9 @@ def get_files_to_process(arg_start_folder, arg_end_folder, arg_mode):
     return sorted(output_paths)
 
 
-def rebuild_norm_layers(model, model_state, arg_ml_setup, epoch_of_rebuild, dataloader, rebuild_lr=0.001, existing_optimizer=None, rebuild_on_device=None, reset_norm_to_initial=False, initial_model_stat=None, display=False):
+def rebuild_norm_layers(model, model_state, arg_ml_setup, epoch_of_rebuild, dataloader,
+                        rebuild_lr=0.001, existing_optimizer=None, rebuild_on_device=None,
+                        reset_norm_to_initial=False, initial_model_stat=None, display=False):
     if reset_norm_to_initial:
         assert initial_model_stat is not None
         # reset normalization layers
@@ -271,6 +275,8 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
         record_model_service = None
     record_test_accuracy_loss_service = record_test_accuracy_loss.ServiceTestAccuracyLossRecorder(1, 100, use_fixed_testing_dataset=True)
     record_test_accuracy_loss_service.initialize_without_runtime_parameters(arg_output_folder_path, [0], start_model, criterion, training_dataset)
+    record_training_loss_service = record_training_loss.ServiceTrainingLossRecorder(1)
+    record_training_loss_service.initialize_without_runtime_parameters(arg_output_folder_path, [0])
 
     """rebuilding normalization for start and end points"""
     if ENABLE_REBUILD_NORM_FOR_STARTING_ENDING_MODEL:
@@ -466,6 +472,7 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
         if record_model_service is not None:
             record_model_service.trigger_without_runtime_parameters(current_tick, [0], [start_model_stat])
         record_test_accuracy_loss_service.trigger_without_runtime_parameters(current_tick, {0: start_model_stat})
+        record_training_loss_service.trigger_without_runtime_parameters(current_tick, {0: training_loss_val})
 
         current_tick += 1
 
