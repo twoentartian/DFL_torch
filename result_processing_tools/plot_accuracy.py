@@ -37,6 +37,8 @@ if __name__ == '__main__':
     weight_diff_file_path = 'weight_difference_l2.csv'
     loss_file_path = 'loss.csv'
 
+    other_files_to_plot_candidate = {'0__distance_to_origin_l1.csv': ["conv1.weight", "bn1.weight"]}
+
     num_of_plots = 0
     if os.path.exists(accuracy_file_path):
         draw_accuracy = True
@@ -55,6 +57,12 @@ if __name__ == '__main__':
         num_of_plots += 1
     else:
         draw_loss = False
+
+    other_files_to_plot = {}
+    for other_file, col_to_plot in other_files_to_plot_candidate.items():
+        if os.path.exists(other_file):
+            other_files_to_plot[other_file] = col_to_plot
+            num_of_plots += 1
 
     fig, axs = plt.subplots(num_of_plots, figsize=(14, 7*num_of_plots))
     plot_index = 0
@@ -131,6 +139,27 @@ if __name__ == '__main__':
         axs[plot_index].set_yscale('log')
         axs[plot_index].set_xlim([0, weight_diff_df.index[weight_diff_df_len-1]])
         if len(weight_diff_df.columns) > 10:
+            axs[plot_index].legend().remove()
+        plot_index = plot_index + 1
+
+    for other_file, col_to_plot in other_files_to_plot.items():
+        df = pandas.read_csv(other_file, index_col=0, header=0)
+        print(df)
+        df_x = df.index
+        df_len = len(df)
+
+        if herd_effect_delay is not None:
+            axs[plot_index].axvline(x=herd_effect_delay, color='r', label=f'herd effect delay={herd_effect_delay}')
+        for col in col_to_plot:
+            axs[plot_index].plot(df_x, df[col], label=col)
+
+        axs[plot_index].grid()
+        axs[plot_index].legend()
+        axs[plot_index].set_title(f'{other_file}')
+        axs[plot_index].set_xlabel('time (tick)')
+        axs[plot_index].set_ylabel('value')
+        axs[plot_index].set_xlim([0, df.index[df_len-1]])
+        if len(df.columns) > 10:
             axs[plot_index].legend().remove()
         plot_index = plot_index + 1
 

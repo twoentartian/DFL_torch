@@ -7,6 +7,7 @@ import json
 from enum import Enum
 from typing import Final
 import torch
+import re
 import torch.optim as optim
 import concurrent.futures
 import copy
@@ -45,7 +46,7 @@ class TrainMode(Enum):
     Adam_until_loss = 1
 
 
-def set_logging(base_logger, task_name, log_file_path=None):
+def set_logging(target_logger, task_name, log_file_path=None):
     class ExitOnExceptionHandler(logging.StreamHandler):
         def emit(self, record):
             if record.levelno == logging.CRITICAL:
@@ -57,15 +58,15 @@ def set_logging(base_logger, task_name, log_file_path=None):
     console.setLevel(logging.INFO)
     console.setFormatter(formatter)
 
-    base_logger.setLevel(logging.DEBUG)
-    base_logger.addHandler(console)
-    base_logger.addHandler(ExitOnExceptionHandler())
+    target_logger.setLevel(logging.DEBUG)
+    target_logger.addHandler(console)
+    target_logger.addHandler(ExitOnExceptionHandler())
 
     if log_file_path is not None:
         file = logging.FileHandler(log_file_path)
         file.setLevel(logging.DEBUG)
         file.setFormatter(formatter)
-        logger.addHandler(file)
+        target_logger.addHandler(file)
 
     del console, formatter
 
@@ -157,7 +158,7 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
     arg_output_folder_path, start_model_path, end_model_path, arg_ml_setup, arg_max_tick = arg_env
     arg_rebuild_norm_lr, arg_rebuild_norm_round = arg_rebuild_norm
     arg_step_size, arg_adoptive_step_size, arg_layer_skip_average = arg_average
-    arg_path_way_depth = arg_pathway
+    arg_path_way_depth, arg_existing_pathway = arg_pathway
     arg_worker_count, arg_total_cpu_count, arg_save_format, arg_save_ticks, arg_use_cpu = arg_compute
 
     training_mode, training_parameter = arg_training_parameters
@@ -263,8 +264,10 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
 
     weight_diff_service = record_weights_difference.ServiceWeightsDifferenceRecorder(1)
     weight_diff_service.initialize_without_runtime_parameters(all_model_stats, arg_output_folder_path)
+    distance_to_origin_service = record_weights_difference.ServiceDistanceToOriginRecorder(1, [0])
+    distance_to_origin_service.initialize_without_runtime_parameters({0: start_model_stat_dict}, arg_output_folder_path)
     variance_service = record_variance.ServiceVarianceRecorder(1)
-    variance_service.initialize_without_runtime_parameters([0], start_model_stat_dict, arg_output_folder_path)
+    variance_service.initialize_without_runtime_parameters([0], [start_model_stat_dict], arg_output_folder_path)
     if arg_save_format != 'none':
         if not arg_save_ticks:
             record_model_service = record_model_stat.ModelStatRecorder(1)
@@ -298,82 +301,128 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
 
     """find pathway points"""
     if arg_path_way_depth != 0:
-        def find_pathway_point_between_two_model(m0, m1, target_model, model_name, fine_tune_dataloader, depth, index):
-            # average models
-            averaged_model_state = {}
-            for layer_name in m0.keys():
-                layer_of_first_model = m0[layer_name]
-                if isinstance(layer_of_first_model, torch.Tensor) and layer_of_first_model.dtype in (torch.float32, torch.float64):
-                    averaged_model_state[layer_name] = torch.mean(torch.stack([model[layer_name] for model in [m0, m1]]), dim=0)
-                elif "num_batches_tracked" in layer_name:
-                    averaged_model_state[layer_name] = m0[layer_name]
+        if arg_existing_pathway is None:
+            child_logger.info(f"finding pathway points with depth {arg_path_way_depth}")
+
+            def find_pathway_point_between_two_model(m0, m1, target_model, model_name, fine_tune_dataloader, depth, index):
+                # average models
+                averaged_model_state = {}
+                for layer_name in m0.keys():
+                    layer_of_first_model = m0[layer_name]
+                    if isinstance(layer_of_first_model, torch.Tensor) and layer_of_first_model.dtype in (torch.float32, torch.float64):
+                        averaged_model_state[layer_name] = torch.mean(torch.stack([model[layer_name] for model in [m0, m1]]), dim=0)
+                    elif "num_batches_tracked" in layer_name:
+                        averaged_model_state[layer_name] = m0[layer_name]
+                    else:
+                        raise NotImplementedError
+
+                # record variance
+                ft_variance_record = model_variance_correct.VarianceCorrector(model_variance_correct.VarianceCorrectionType.FollowOthers)
+                ft_variance_record.add_variance(m0)
+                ft_variance_record.add_variance(m1)
+                ft_target_variance = ft_variance_record.get_variance()
+
+                # fine-tune the model with
+                target_model.load_state_dict(averaged_model_state)
+                target_model.to(device)
+                target_model.train()
+                ft_epochs, ft_optimizer, ft_lr_scheduler = get_optimizer_to_find_pathway_point(model_name, target_model.parameters(), fine_tune_dataloader.dataset, arg_ml_setup.training_batch_size)
+
+                for epoch in range(ft_epochs):
+                    # scale variance
+                    current_model_state = target_model.state_dict()
+                    cuda.CudaEnv.model_state_dict_to(current_model_state, cpu_device)
+                    current_model_state = model_variance_correct.VarianceCorrector.scale_model_stat_to_variance(current_model_state, ft_target_variance)
+                    cuda.CudaEnv.model_state_dict_to(current_model_state, device)
+                    target_model.load_state_dict(current_model_state)
+
+                    # training
+                    train_loss = 0
+                    count = 0
+                    for data, label in dataloader:
+                        data, label = data.to(device), label.to(device)
+                        ft_optimizer.zero_grad()
+                        outputs = target_model(data)
+                        loss = criterion(outputs, label)
+                        loss.backward()
+                        ft_optimizer.step()
+                        if ft_lr_scheduler is not None:
+                            ft_lr_scheduler.step()
+                        train_loss += loss.item()
+                        count += 1
+                    lrs = []
+                    for param_group in ft_optimizer.param_groups:
+                        lrs.append(param_group['lr'])
+                    child_logger.info(f"find pathway points depth {depth} index {index}: epoch[{epoch}] loss={train_loss / count} lrs={lrs}")
+                output_model_state = target_model.state_dict()
+                cuda.CudaEnv.model_state_dict_to(output_model_state, torch.device("cpu"))
+                return output_model_state
+
+            def find_pathway_points(m0, m1, target_model, model_name, fine_tune_dataloader, depth):
+                current_models = [m0, m1]
+                for current_depth in range(1, depth+1):
+                    new_models = []
+                    for model_index in range(len(current_models) - 1):
+                        pathway_model_state = find_pathway_point_between_two_model(current_models[model_index], current_models[model_index+1], target_model, model_name, fine_tune_dataloader, current_depth, model_index)
+                        new_models.append(pathway_model_state)
+                    new_model_list = [None] * (len(current_models) + len(new_models))
+                    new_model_list[::2] = current_models
+                    new_model_list[1::2] = new_models
+                    current_models = new_model_list
+                return current_models
+
+            pathway_points = find_pathway_points(start_model_stat_dict, end_model_stat_dict, start_model, arg_ml_setup.model_name, dataloader, arg_path_way_depth)
+            child_logger.info(f"find {len(pathway_points)} pathway points with depth {arg_path_way_depth}")
+            # save pathway points
+            output_path_pathway_points = os.path.join(arg_output_folder_path, "pathway_points")
+            os.makedirs(output_path_pathway_points, exist_ok=True)
+
+            for index, pathway_model in enumerate(pathway_points):
+                model_info = {"state_dict": pathway_model, "model_name": arg_ml_setup.model_name}
+                torch.save(model_info, os.path.join(output_path_pathway_points, f"{index}_over_{len(pathway_points)-1}.model.pt"))
+        else:
+            child_logger.info(f"loading existing pathway points from {arg_existing_pathway}")
+
+            def extract_x_y_from_filename(filename):
+                match = re.match(r"(\d+)_over_(\d+)\.model\.pt", filename)
+                if match:
+                    x = int(match.group(1))
+                    y = int(match.group(2))
+                    return x, y
+                return None, None
+
+            model_list = []
+            found_files = {}
+            for file_name in os.listdir(arg_existing_pathway):
+                if file_name.endswith(".model.pt"):
+                    x, y = extract_x_y_from_filename(file_name)
+                    if x is not None and y is not None:
+                        if y not in found_files:
+                            found_files[y] = []
+                        found_files[y].append(x)
+            if found_files:
+                max_y = max(found_files.keys())
+                expected_files = set(range(max_y + 1))
+
+                if set(found_files[max_y]) == expected_files:
+                    child_logger.info(f"all files from 0_over_{max_y}.model.pt to {max_y}_over_{max_y}.model.pt are present.")
+                    # Load models into the list
+                    for x in range(max_y + 1):
+                        file_name = f"{x}_over_{max_y}.model.pt"
+                        model_path = os.path.join(arg_existing_pathway, file_name)
+                        model_state_dict, _ = util.load_model_state_file(model_path)
+                        model_list.append(model_state_dict)
                 else:
-                    raise NotImplementedError
+                    child_logger.critical(f"missing files for {max_y}. Expected {expected_files}, but found {found_files[max_y]}")
+            else:
+                child_logger.critical("no valid model files found in the folder.")
+            for key in start_model_stat_dict.keys():
+                assert torch.equal(start_model_stat_dict[key], model_list[0][key])
+                assert torch.equal(model_list[-1][key], end_model_stat_dict[key])
 
-            # record variance
-            ft_variance_record = model_variance_correct.VarianceCorrector(model_variance_correct.VarianceCorrectionType.FollowOthers)
-            ft_variance_record.add_variance(m0)
-            ft_variance_record.add_variance(m1)
-            ft_target_variance = ft_variance_record.get_variance()
-
-            # fine-tune the model with
-            target_model.load_state_dict(averaged_model_state)
-            target_model.to(device)
-            target_model.train()
-            ft_epochs, ft_optimizer, ft_lr_scheduler = get_optimizer_to_find_pathway_point(model_name, target_model.parameters(), fine_tune_dataloader.dataset, arg_ml_setup.training_batch_size)
-
-            for epoch in range(ft_epochs):
-                # scale variance
-                current_model_state = target_model.state_dict()
-                cuda.CudaEnv.model_state_dict_to(current_model_state, cpu_device)
-                current_model_state = model_variance_correct.VarianceCorrector.scale_model_stat_to_variance(current_model_state, ft_target_variance)
-                cuda.CudaEnv.model_state_dict_to(current_model_state, device)
-                target_model.load_state_dict(current_model_state)
-
-                # training
-                train_loss = 0
-                count = 0
-                for data, label in dataloader:
-                    data, label = data.to(device), label.to(device)
-                    ft_optimizer.zero_grad()
-                    outputs = target_model(data)
-                    loss = criterion(outputs, label)
-                    loss.backward()
-                    ft_optimizer.step()
-                    if ft_lr_scheduler is not None:
-                        ft_lr_scheduler.step()
-                    train_loss += loss.item()
-                    count += 1
-                lrs = []
-                for param_group in ft_optimizer.param_groups:
-                    lrs.append(param_group['lr'])
-                child_logger.info(f"find pathway points depth {depth} index {index}: epoch[{epoch}] loss={train_loss / count} lrs={lrs}")
-            output_model_state = target_model.state_dict()
-            cuda.CudaEnv.model_state_dict_to(output_model_state, torch.device("cpu"))
-            return output_model_state
-
-        def find_pathway_points(m0, m1, target_model, model_name, fine_tune_dataloader, depth):
-            current_models = [m0, m1]
-            for current_depth in range(1, depth+1):
-                new_models = []
-                for model_index in range(len(current_models) - 1):
-                    pathway_model_state = find_pathway_point_between_two_model(current_models[model_index], current_models[model_index+1], target_model, model_name, fine_tune_dataloader, current_depth, model_index)
-                    new_models.append(pathway_model_state)
-                new_model_list = [None] * (len(current_models) + len(new_models))
-                new_model_list[::2] = current_models
-                new_model_list[1::2] = new_models
-                current_models = new_model_list
-            return current_models
-
-        pathway_points = find_pathway_points(start_model_stat_dict, end_model_stat_dict, start_model, arg_ml_setup.model_name, dataloader, arg_path_way_depth)
-        child_logger.info(f"find {len(pathway_points)} pathway points with depth {arg_path_way_depth}")
-        # save pathway points
-        output_path_pathway_points = os.path.join(arg_output_folder_path, "pathway_points")
-        os.makedirs(output_path_pathway_points, exist_ok=True)
-
-        for index, pathway_model in enumerate(pathway_points):
-            model_info = {"state_dict": pathway_model, "model_name": arg_ml_setup.model_name}
-            torch.save(model_info, os.path.join(output_path_pathway_points, f"{index}_over_{len(pathway_points)-1}.model.pt"))
+            pathway_points = model_list
+            assert 2 ** arg_path_way_depth + 1 == len(pathway_points)
+            child_logger.info(f"loading and checking pathway points pass")
     else:
         pathway_points = [start_model_stat_dict, end_model_stat_dict]
 
@@ -468,6 +517,7 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
         # service
         all_model_stats = [start_model_stat, end_model_stat_dict]
         weight_diff_service.trigger_without_runtime_parameters(current_tick, all_model_stats)
+        distance_to_origin_service.trigger_without_runtime_parameters(current_tick, {0: start_model_stat})
         variance_service.trigger_without_runtime_parameters(current_tick, [0], [start_model_stat])
         if record_model_service is not None:
             record_flag = False
@@ -512,6 +562,7 @@ if __name__ == '__main__':
 
     # find pathway points parameters
     parser.add_argument("-p", "--pathway_depth", type=int, default=0, help='the depth of find pathway points, 1->find a mid point, 2->find 3 points(25% each), 3->find 7 points(12.5% each)')
+    parser.add_argument("--existing_pathway", type=str, help='specify the folder containing existing pathway points')
 
     # compute parameters
     parser.add_argument("--save_ticks", type=str, help='specify when to record the models (e.g. [1,2,3,5-10]), only works when --save_format is set to work.')
@@ -544,6 +595,7 @@ if __name__ == '__main__':
     rebuild_normalization_round = args.rebuild_norm_round
 
     pathway_depth = args.pathway_depth
+    existing_pathway = args.existing_pathway
 
     learning_rate_rebuild_norm = args.lr_rebuild_norm
     use_cpu = args.cpu
@@ -614,14 +666,14 @@ if __name__ == '__main__':
                   (mode, (learning_rate, training_round)),
                   (step_size, adoptive_step_size, layer_skip_average),
                   (learning_rate_rebuild_norm, rebuild_normalization_round),
-                  (pathway_depth),
+                  (pathway_depth, existing_pathway),
                   (worker_count, total_cpu_count, save_format, save_ticks, use_cpu) ) for (start_file, end_file) in paths_to_find]
     elif mode == TrainMode.Adam_until_loss:
         args = [( (output_folder_path, start_file, end_file, current_ml_setup, max_tick),
                   (mode, loss),
                   (step_size, adoptive_step_size, layer_skip_average),
                   (learning_rate_rebuild_norm, rebuild_normalization_round),
-                  (pathway_depth),
+                  (pathway_depth, existing_pathway),
                   (worker_count, total_cpu_count, save_format, save_ticks, use_cpu) ) for (start_file, end_file) in paths_to_find]
     else:
         raise NotImplementedError
