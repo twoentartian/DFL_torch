@@ -56,3 +56,16 @@ class MovingMax:
         if not self.max_deque:
             return None
         return self.max_deque[0]
+
+def expand_int_args(input_int_str: str):
+    result = []
+    parts = input_int_str.split(',')
+
+    for part in parts:
+        if '-' in part:
+            start, end = map(int, part.split('-'))
+            result.extend(range(start, end + 1))
+        else:
+            result.append(int(part))
+
+    return result

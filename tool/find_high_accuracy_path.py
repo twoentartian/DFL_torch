@@ -154,7 +154,7 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
     arg_rebuild_norm_lr, arg_rebuild_norm_round = arg_rebuild_norm
     arg_step_size, arg_adoptive_step_size, arg_layer_skip_average = arg_average
     arg_path_way_depth = arg_pathway
-    arg_worker_count, arg_total_cpu_count, arg_save_format, arg_use_cpu = arg_compute
+    arg_worker_count, arg_total_cpu_count, arg_save_format, arg_save_ticks, arg_use_cpu = arg_compute
 
     training_mode, training_parameter = arg_training_parameters
     if training_mode == TrainMode.SGD_x_rounds:
@@ -265,7 +265,10 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
     variance_service = record_variance.ServiceVarianceRecorder(1)
     variance_service.initialize_without_runtime_parameters(all_node_names, all_model_stats, arg_output_folder_path)
     if arg_save_format != 'none':
-        record_model_service = record_model_stat.ModelStatRecorder(1)
+        if not arg_save_ticks:
+            record_model_service = record_model_stat.ModelStatRecorder(1)
+        else:
+            record_model_service = record_model_stat.ModelStatRecorder(arg_max_tick)
         record_model_service.initialize_without_runtime_parameters([0], arg_output_folder_path, save_format=arg_save_format)
     else:
         record_model_service = None
@@ -369,7 +372,7 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
             model_info = {"state_dict": pathway_model, "model_name": arg_ml_setup.model_name}
             torch.save(model_info, os.path.join(output_path_pathway_points, f"{index}_over_{len(pathway_points)-1}.model.pt"))
     else:
-        pathway_points = []
+        pathway_points = [start_model_stat_dict, end_model_stat_dict]
 
     start_model_stat = start_model_stat_dict
     target_direction_points = pathway_points[1:]
@@ -464,7 +467,14 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
         weight_diff_service.trigger_without_runtime_parameters(current_tick, all_model_stats)
         variance_service.trigger_without_runtime_parameters(current_tick, all_node_names, all_model_stats)
         if record_model_service is not None:
-            record_model_service.trigger_without_runtime_parameters(current_tick, [0], [start_model_stat])
+            record_flag = False
+            if arg_save_ticks is None:
+                record_flag = True
+            else:
+                if current_tick in arg_save_ticks:
+                    record_flag = True
+            if record_flag:
+                record_model_service.trigger_without_runtime_parameters(current_tick, [0], [start_model_stat])
         record_test_accuracy_loss_service.trigger_without_runtime_parameters(current_tick, {0: start_model_stat})
 
         current_tick += 1
@@ -500,6 +510,7 @@ if __name__ == '__main__':
     parser.add_argument("-p", "--pathway_depth", type=int, default=0, help='the depth of find pathway points, 1->find a mid point, 2->find 3 points(25% each), 3->find 7 points(12.5% each)')
 
     # compute parameters
+    parser.add_argument("--save_ticks", type=str, help='specify when to record the models (e.g. [1,2,3,5-10]), only works when --save_format is set to work.')
     parser.add_argument("--save_format", type=str, default='none', choices=['none', 'file', 'lmdb'])
     parser.add_argument("--cpu", action='store_true', help='force using CPU for training')
     parser.add_argument("-o", "--output_folder_name", default=None, help='specify the output folder name')
@@ -533,6 +544,7 @@ if __name__ == '__main__':
     learning_rate_rebuild_norm = args.lr_rebuild_norm
     use_cpu = args.cpu
     paths_to_find = get_files_to_process(args.start_folder, args.end_folder, mapping_mode)
+    save_ticks = util.expand_int_args(args.save_ticks)
     save_format = args.save_format
     layer_skip_average = args.layer_skip_average
     paths_to_find_count = len(paths_to_find)
@@ -599,14 +611,14 @@ if __name__ == '__main__':
                   (step_size, adoptive_step_size, layer_skip_average),
                   (learning_rate_rebuild_norm, rebuild_normalization_round),
                   (pathway_depth),
-                  (worker_count, total_cpu_count, save_format, use_cpu) ) for (start_file, end_file) in paths_to_find]
+                  (worker_count, total_cpu_count, save_format, save_ticks, use_cpu) ) for (start_file, end_file) in paths_to_find]
     elif mode == TrainMode.Adam_until_loss:
         args = [( (output_folder_path, start_file, end_file, current_ml_setup, max_tick),
                   (mode, loss),
                   (step_size, adoptive_step_size, layer_skip_average),
                   (learning_rate_rebuild_norm, rebuild_normalization_round),
                   (pathway_depth),
-                  (worker_count, total_cpu_count, save_format, use_cpu) ) for (start_file, end_file) in paths_to_find]
+                  (worker_count, total_cpu_count, save_format, save_ticks, use_cpu) ) for (start_file, end_file) in paths_to_find]
     else:
         raise NotImplementedError
     with concurrent.futures.ProcessPoolExecutor(max_workers=worker_count) as executor:

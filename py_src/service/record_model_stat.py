@@ -2,13 +2,16 @@ import os
 import torch
 import io
 import lmdb
+from typing import Optional, List
 from py_src.service_base import Service
 from py_src.simulation_runtime_parameters import RuntimeParameters, SimulationPhase
 
 
 class ModelStatRecorder(Service):
-    def __init__(self, interval, phase=SimulationPhase.END_OF_TICK, record_node=None) -> None:
+    def __init__(self, interval, phase=SimulationPhase.END_OF_TICK, record_node=None, record_at_tick: Optional[List[int]] = None) -> None:
         super().__init__()
+        if record_at_tick is None:
+            self.record_at_tick = []
         self.save_path = None
         self.save_path_for_each_node = None
         self.record_node = record_node
@@ -33,7 +36,7 @@ class ModelStatRecorder(Service):
         self.initialize_without_runtime_parameters(node_names, output_path, save_format)
 
     def trigger(self, parameters: RuntimeParameters, *args, **kwargs):
-        if parameters.current_tick % self.interval != 0:
+        if (parameters.current_tick % self.interval != 0) and (parameters.current_tick not in self.record_at_tick):
             return      # skip is not time yet
 
         if parameters.phase == self.record_phase:
