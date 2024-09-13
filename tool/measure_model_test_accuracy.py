@@ -52,13 +52,19 @@ def testing_model(model, current_ml_setup):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Measure model test accuracy and loss.')
     parser.add_argument("model_file", type=str)
+    parser.add_argument("-m", "--model_type", type=str, choices=["auto", "lenet5", "resnet18_bn", "resnet18_gn"], default="auto")
 
     args = parser.parse_args()
 
     model_file_path = args.model_file
+    model_type_from_cli = args.model_type
 
     model_info = torch.load(model_file_path)
-    model_type = model_info["model_name"]
+    if model_type_from_cli == "auto":
+        model_type = model_info["model_name"]
+    else:
+        model_type = model_type_from_cli
+    assert model_type is not None, "model_type is None"
     model_state = model_info["state_dict"]
 
     current_ml_setup = ml_setup.get_ml_setup_from_model_type(model_type)
