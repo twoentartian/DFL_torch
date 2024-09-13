@@ -264,7 +264,7 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
     weight_diff_service = record_weights_difference.ServiceWeightsDifferenceRecorder(1)
     weight_diff_service.initialize_without_runtime_parameters(all_model_stats, arg_output_folder_path)
     variance_service = record_variance.ServiceVarianceRecorder(1)
-    variance_service.initialize_without_runtime_parameters(all_node_names, all_model_stats, arg_output_folder_path)
+    variance_service.initialize_without_runtime_parameters([0], start_model_stat_dict, arg_output_folder_path)
     if arg_save_format != 'none':
         if not arg_save_ticks:
             record_model_service = record_model_stat.ModelStatRecorder(1)
@@ -468,7 +468,7 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
         # service
         all_model_stats = [start_model_stat, end_model_stat_dict]
         weight_diff_service.trigger_without_runtime_parameters(current_tick, all_model_stats)
-        variance_service.trigger_without_runtime_parameters(current_tick, all_node_names, all_model_stats)
+        variance_service.trigger_without_runtime_parameters(current_tick, [0], [start_model_stat])
         if record_model_service is not None:
             record_flag = False
             if arg_save_ticks is None:
