@@ -201,15 +201,12 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
     cpu_device = torch.device("cpu")
     start_model = copy.deepcopy(arg_ml_setup.model)
     initial_model_stat = start_model.state_dict()
-    start_model_info = torch.load(start_model_path, map_location=cpu_device)
-    end_model_info = torch.load(end_model_path, map_location=cpu_device)
-    start_model_stat_dict = start_model_info["state_dict"]
-    end_model_stat_dict = end_model_info["state_dict"]
-    assert start_model_info["model_name"] == end_model_info["model_name"]
+    start_model_stat_dict, start_model_name = util.load_model_state_file(start_model_path)
+    end_model_stat_dict, end_model_name = util.load_model_state_file(end_model_path)
+    util.assert_if_both_not_none(start_model_name, end_model_name)
 
     start_model.load_state_dict(start_model_stat_dict)
-    start_model_optimizer_info = torch.load(start_optimizer_path, map_location=cpu_device)  # load optimizer
-    start_model_optimizer_stat = start_model_optimizer_info["state_dict"]
+    start_model_optimizer_stat, _ = util.load_optimizer_state_file(start_optimizer_path)
 
     # assert start_model_state_dict != end_model_stat_dict
     for key in start_model_stat_dict.keys():

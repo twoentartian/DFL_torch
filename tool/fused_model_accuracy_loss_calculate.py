@@ -120,13 +120,11 @@ if __name__ == "__main__":
     output_folder = model_a_folder
 
     # load models
-    model_state_info_a = torch.load(model_a_path, map_location=torch.device('cpu'))
-    model_state_a = model_state_info_a['state_dict']
-    model_state_info_b = torch.load(model_b_path, map_location=torch.device('cpu'))
-    model_state_b = model_state_info_b['state_dict']
-    assert model_state_info_a['model_name'] == model_state_info_b['model_name']
+    model_state_a, model_a_name = util.load_model_state_file(model_a_path)
+    model_state_b, model_b_name = util.load_model_state_file(model_b_path)
+    util.assert_if_both_not_none(model_a_name, model_b_name)
 
-    current_ml_setup = ml_setup.get_ml_setup_from_model_type(model_state_info_a['model_name'])
+    current_ml_setup = ml_setup.get_ml_setup_from_model_type(model_state_a)
 
     todo_list = []
     for p0 in np.linspace(0, scale, num=precision, endpoint=True):

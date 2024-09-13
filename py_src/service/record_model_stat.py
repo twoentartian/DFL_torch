@@ -3,6 +3,7 @@ import torch
 import io
 import lmdb
 from typing import Optional, List
+from py_src import util
 from py_src.service_base import Service
 from py_src.simulation_runtime_parameters import RuntimeParameters, SimulationPhase
 
@@ -75,7 +76,7 @@ class ModelStatRecorder(Service):
             lmdb_inst = self.save_lmdb
             with lmdb_inst.begin(write=True) as txn:
                 for index, node_name in enumerate(node_names):
-                    lmdb_tx_name = f"{node_name}/{tick}.pt"
+                    lmdb_tx_name = f"{node_name}/{tick}.model.pt"
                     model_stat = model_stats[index]
                     buffer = io.BytesIO()
                     torch.save(model_stat, buffer)
@@ -85,8 +86,8 @@ class ModelStatRecorder(Service):
                 assert node_name in self.save_path_for_each_node.keys()
                 save_path_for_this_node = self.save_path_for_each_node[node_name]
                 model_stat = model_stats[index]
-                current_node_output_path = os.path.join(save_path_for_this_node, f"{tick}.pt")
-                torch.save(model_stat, current_node_output_path)
+                current_node_output_path = os.path.join(save_path_for_this_node, f"{tick}.model.pt")
+                util.save_model_state(current_node_output_path, model_stat)
 
     def _is_current_node_recorded(self, node_name) -> bool:
         record_current_node = True

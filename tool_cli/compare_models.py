@@ -2,6 +2,11 @@ import torch
 import argparse
 import os
 import pandas as pd
+import sys
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from py_src import util
+
 
 SKIP_LAYERS = ["num_batches_tracked", "running_mean", "running_var"]
 
@@ -44,13 +49,13 @@ if __name__ == '__main__':
     model_name = None
     output_path_when_not_specified = None
     for model_path in models_path:
-        model_info = torch.load(model_path, map_location=cpu_device)
-        model = model_info["state_dict"]
-        current_model_name = model_info["model_name"]
+        model, current_model_name = util.load_model_state_file(model_path)
+
         if model_name is None:
             model_name = current_model_name
         else:
-            assert current_model_name == model_name, "Model name mismatch"
+            if current_model_name is not None:
+                assert current_model_name == model_name, "Model name mismatch"
         model_folder = os.path.dirname(model_path)
         if output_path_when_not_specified is None:
             output_path_when_not_specified = model_folder

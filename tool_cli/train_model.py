@@ -7,7 +7,7 @@ import sys
 import copy
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from py_src import ml_setup
+from py_src import ml_setup, util
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -26,9 +26,7 @@ if __name__ == '__main__':
     cpu_device = torch.device("cpu")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    model_info = torch.load(model_path, map_location=cpu_device)
-    model_type = model_info["model_name"]
-    model_state_dict = model_info["state_dict"]
+    model_state_dict, model_type = util.load_model_state_file(model_path)
 
     current_ml_setup = ml_setup.get_ml_setup_from_model_type(model_type)
 
@@ -78,18 +76,5 @@ if __name__ == '__main__':
         print(f"epoch[{epoch}] loss={train_loss/count} lrs={lrs}")
     print(f"finish training")
 
-    model_info = {}
-    model_info["state_dict"] = target_model.state_dict()
-    model_info["model_name"] = current_ml_setup.model_name
-    torch.save(model_info, os.path.join(output_folder_path, f"trained.model.pt"))
-
-    optimizer_info = {}
-    optimizer_info["state_dict"] = optimizer.state_dict()
-    optimizer_info["model_name"] = current_ml_setup.model_name
-    torch.save(optimizer_info, os.path.join(output_folder_path, f"trained.optimizer.pt"))
-
-    # if enable_analysis:
-    #     trained_model_path = os.path.join(output_folder_path, f"trained.model.pt")
-    #     start_model_path =
-    #     os.system(f"../tool/fused_model_accuracy_loss_calculate.py {} {}")
-
+    util.save_model_state(os.path.join(output_folder_path, f"trained.model.pt"), target_model.state_dict(), current_ml_setup.model_name)
+    util.save_optimizer_state(os.path.join(output_folder_path, f"trained.optimizer.pt"), optimizer.state_dict(), current_ml_setup.model_name)
