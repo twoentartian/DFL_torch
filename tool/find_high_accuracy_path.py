@@ -44,6 +44,7 @@ def get_optimizer_to_find_pathway_point(model_name, model_parameter, dataset, ba
 class TrainMode(Enum):
     SGD_x_rounds = 0
     Adam_until_loss = 1
+    SGD_until_loss = 2
 
 
 def set_logging(target_logger, task_name, log_file_path=None):
@@ -164,7 +165,7 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
     training_mode, training_parameter = arg_training_parameters
     if training_mode == TrainMode.SGD_x_rounds:
         train_lr, train_round = training_parameter
-    elif training_mode == TrainMode.Adam_until_loss:
+    elif training_mode == TrainMode.Adam_until_loss or training_mode == TrainMode.SGD_until_loss:
         target_train_loss = training_parameter
     else:
         raise NotImplementedError
@@ -222,6 +223,8 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
         optimizer = torch.optim.SGD(start_model.parameters(), lr=train_lr)
     elif training_mode == TrainMode.Adam_until_loss:
         optimizer = torch.optim.Adam(start_model.parameters(), lr=0.001)
+    elif training_mode == TrainMode.SGD_until_loss:
+        optimizer = torch.optim.SGD(start_model.parameters(), lr=0.001)
     else:
         raise NotImplementedError
 
@@ -468,7 +471,7 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
                 if training_index == train_round:
                     break
                 assert training_index < train_round
-        elif training_mode == TrainMode.Adam_until_loss:
+        elif training_mode == TrainMode.Adam_until_loss or training_mode == TrainMode.SGD_until_loss:
             averager_size = 10
             moving_max = util.MovingMax(averager_size)
             while True:
@@ -584,7 +587,7 @@ if __name__ == '__main__':
     loss = args.loss
     if loss != -1:
         assert learning_rate == 0.001 and training_round == 1
-        mode = TrainMode.Adam_until_loss
+        mode = TrainMode.SGD_until_loss
 
     start_folder = args.start_folder
     end_folder = args.end_folder
@@ -670,7 +673,7 @@ if __name__ == '__main__':
                   (learning_rate_rebuild_norm, rebuild_normalization_round),
                   (pathway_depth, existing_pathway),
                   (worker_count, total_cpu_count, save_format, save_ticks, use_cpu) ) for (start_file, end_file) in paths_to_find]
-    elif mode == TrainMode.Adam_until_loss:
+    elif mode == TrainMode.Adam_until_loss or mode == TrainMode.SGD_until_loss:
         args = [( (output_folder_path, start_file, end_file, current_ml_setup, max_tick),
                   (mode, loss),
                   (step_size, adoptive_step_size, layer_skip_average),
