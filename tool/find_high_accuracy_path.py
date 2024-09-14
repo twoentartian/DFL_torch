@@ -486,7 +486,7 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
                     training_loss_val = training_loss.item()
                     max_loss = moving_max.add(training_loss_val)
                     child_logger.info(f"current tick: {current_tick}, training loss = {training_loss_val:.3f}, max loss = {max_loss:.3f}")
-                    if max_loss < target_train_loss and training_index > moving_max_size:
+                    if max_loss < target_train_loss and training_index+1 >= moving_max_size:
                         exit_training = True
                         break
                 if exit_training:
