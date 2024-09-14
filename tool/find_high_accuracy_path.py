@@ -429,21 +429,23 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
     start_model_stat = start_model_stat_dict
     target_direction_points = pathway_points[1:]
     current_tick = 0
+
+    """record variance"""
+    variance_record = model_variance_correct.VarianceCorrector(model_variance_correct.VarianceCorrectionType.FollowOthers)
+    variance_record.add_variance(start_model_stat)
+    target_variance = variance_record.get_variance()
+
     while current_tick < arg_max_tick:
         """set end point"""
         path_len = arg_max_tick // len(target_direction_points)
         current_path_index = current_tick // path_len
         current_direction_point = target_direction_points[current_path_index]
 
-        """record variance"""
-        variance_record = model_variance_correct.VarianceCorrector(model_variance_correct.VarianceCorrectionType.FollowOthers)
-        variance_record.add_variance(start_model_stat)
         """move tensor"""
         start_model_stat = model_average.move_model_state_toward(start_model_stat, current_direction_point, arg_step_size, arg_adoptive_step_size, False, ignore_layer_keywords=arg_layer_skip_average)
         if ENABLE_NAN_CHECKING:
             util.check_for_nans_in_state_dict(start_model_stat)
         """rescale variance"""
-        target_variance = variance_record.get_variance()
         start_model_stat = model_variance_correct.VarianceCorrector.scale_model_stat_to_variance(start_model_stat, target_variance)
         if ENABLE_NAN_CHECKING:
             util.check_for_nans_in_state_dict(start_model_stat)
