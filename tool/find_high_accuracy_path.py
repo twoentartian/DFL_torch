@@ -472,8 +472,8 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
                     break
                 assert training_index < train_round
         elif training_mode == TrainMode.Adam_until_loss or training_mode == TrainMode.SGD_until_loss:
-            averager_size = 10
-            moving_max = util.MovingMax(averager_size)
+            moving_max_size = 2
+            moving_max = util.MovingMax(moving_max_size)
             while True:
                 exit_training = False
                 for (training_index, (data, label)) in enumerate(dataloader):
@@ -486,7 +486,7 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
                     training_loss_val = training_loss.item()
                     max_loss = moving_max.add(training_loss_val)
                     child_logger.info(f"current tick: {current_tick}, training loss = {training_loss_val:.3f}, max loss = {max_loss:.3f}")
-                    if max_loss < target_train_loss and training_index > averager_size:
+                    if max_loss < target_train_loss and training_index > moving_max_size:
                         exit_training = True
                         break
                 if exit_training:
