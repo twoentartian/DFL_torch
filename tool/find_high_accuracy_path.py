@@ -605,7 +605,10 @@ if __name__ == '__main__':
     learning_rate_rebuild_norm = args.lr_rebuild_norm
     use_cpu = args.cpu
     paths_to_find = get_files_to_process(args.start_folder, args.end_folder, mapping_mode)
-    save_ticks = util.expand_int_args(args.save_ticks)
+    if args.save_ticks is not None:
+        save_ticks = util.expand_int_args(args.save_ticks)
+    else:
+        save_ticks = None
     save_format = args.save_format
     layer_skip_average = args.layer_skip_average
     paths_to_find_count = len(paths_to_find)
