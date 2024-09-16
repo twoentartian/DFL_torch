@@ -134,7 +134,7 @@ def resnet18_cifar10(enable_replace_bn_with_group_norm=False):
     else:
         output_resnet18_cifar10.model = models.resnet18(progress=False, num_classes=10, zero_init_residual=False, groups=1, width_per_group=64, replace_stride_with_dilation=None)
         output_resnet18_cifar10.model_name = "resnet18_bn"
-    output_resnet18_cifar10.model.conv1 = nn.Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=True)  # change for cifar10 dataset
+    output_resnet18_cifar10.model.conv1 = nn.Conv2d(3, 128, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)  # change for cifar10 dataset
     output_resnet18_cifar10.model.maxpool = nn.Identity()
     output_resnet18_cifar10.training_data, output_resnet18_cifar10.testing_data, output_resnet18_cifar10.dataset_label = dataset_cifar10(random_crop_flip=True)
     output_resnet18_cifar10.training_data_for_rebuilding_normalization, _, _ = dataset_cifar10(random_crop_flip=False)
