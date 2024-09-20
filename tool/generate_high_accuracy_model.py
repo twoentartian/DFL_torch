@@ -137,7 +137,7 @@ if __name__ == "__main__":
 
     # write info file
     info_content = {}
-    info_content['model_type'] = model_type
+    info_content['model_type'] = current_ml_setup.model_name
     info_content['model_count'] = number_of_models
     info_content['generated_by_cpu'] = use_cpu
     if current_ml_setup.has_normalization_layer:

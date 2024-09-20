@@ -44,6 +44,7 @@ def get_optimizer_to_find_pathway_point(model_name, model_parameter, dataset, ba
 class TrainMode(Enum):
     SGD_x_rounds = 0
     Adam_until_loss = 1
+    SGD_until_loss = 2
 
 
 def set_logging(target_logger, task_name, log_file_path=None):
@@ -164,7 +165,7 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
     training_mode, training_parameter = arg_training_parameters
     if training_mode == TrainMode.SGD_x_rounds:
         train_lr, train_round = training_parameter
-    elif training_mode == TrainMode.Adam_until_loss:
+    elif training_mode == TrainMode.Adam_until_loss or training_mode == TrainMode.SGD_until_loss:
         target_train_loss = training_parameter
     else:
         raise NotImplementedError
@@ -222,6 +223,8 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
         optimizer = torch.optim.SGD(start_model.parameters(), lr=train_lr)
     elif training_mode == TrainMode.Adam_until_loss:
         optimizer = torch.optim.Adam(start_model.parameters(), lr=0.001)
+    elif training_mode == TrainMode.SGD_until_loss:
+        optimizer = torch.optim.SGD(start_model.parameters(), lr=0.001)
     else:
         raise NotImplementedError
 
@@ -468,9 +471,9 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
                 if training_index == train_round:
                     break
                 assert training_index < train_round
-        elif training_mode == TrainMode.Adam_until_loss:
-            averager_size = 10
-            moving_max = util.MovingMax(averager_size)
+        elif training_mode == TrainMode.Adam_until_loss or training_mode == TrainMode.SGD_until_loss:
+            moving_max_size = 2
+            moving_max = util.MovingMax(moving_max_size)
             while True:
                 exit_training = False
                 for (training_index, (data, label)) in enumerate(dataloader):
@@ -483,7 +486,7 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
                     training_loss_val = training_loss.item()
                     max_loss = moving_max.add(training_loss_val)
                     child_logger.info(f"current tick: {current_tick}, training loss = {training_loss_val:.3f}, max loss = {max_loss:.3f}")
-                    if max_loss < target_train_loss and training_index > averager_size:
+                    if max_loss < target_train_loss and training_index+1 >= moving_max_size:
                         exit_training = True
                         break
                 if exit_training:
@@ -584,7 +587,7 @@ if __name__ == '__main__':
     loss = args.loss
     if loss != -1:
         assert learning_rate == 0.001 and training_round == 1
-        mode = TrainMode.Adam_until_loss
+        mode = TrainMode.SGD_until_loss
 
     start_folder = args.start_folder
     end_folder = args.end_folder
@@ -602,7 +605,10 @@ if __name__ == '__main__':
     learning_rate_rebuild_norm = args.lr_rebuild_norm
     use_cpu = args.cpu
     paths_to_find = get_files_to_process(args.start_folder, args.end_folder, mapping_mode)
-    save_ticks = util.expand_int_args(args.save_ticks)
+    if args.save_ticks is not None:
+        save_ticks = util.expand_int_args(args.save_ticks)
+    else:
+        save_ticks = None
     save_format = args.save_format
     layer_skip_average = args.layer_skip_average
     paths_to_find_count = len(paths_to_find)
@@ -670,7 +676,7 @@ if __name__ == '__main__':
                   (learning_rate_rebuild_norm, rebuild_normalization_round),
                   (pathway_depth, existing_pathway),
                   (worker_count, total_cpu_count, save_format, save_ticks, use_cpu) ) for (start_file, end_file) in paths_to_find]
-    elif mode == TrainMode.Adam_until_loss:
+    elif mode == TrainMode.Adam_until_loss or mode == TrainMode.SGD_until_loss:
         args = [( (output_folder_path, start_file, end_file, current_ml_setup, max_tick),
                   (mode, loss),
                   (step_size, adoptive_step_size, layer_skip_average),
