@@ -11,7 +11,7 @@ import concurrent.futures
 from torch.utils.data import DataLoader
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from py_src import ml_setup, complete_ml_setup
+from py_src import ml_setup, complete_ml_setup, util
 from py_src.service import record_model_stat
 
 def re_initialize_model(model, arg_ml_setup):
@@ -54,6 +54,10 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
     # reset random weights
     re_initialize_model(model, arg_ml_setup)
 
+    log_file = open(os.path.join(output_folder, f"{str(index).zfill(digit_number_of_models)}.log"), "w")
+    log_file.write("epoch,loss,lrs" + "\n")
+    log_file.flush()
+
     model.train()
     print(f"INDEX[{index}] begin training")
     for epoch in range(epochs):
@@ -74,22 +78,23 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
         for param_group in optimizer.param_groups:
             lrs.append(param_group['lr'])
         print(f"INDEX[{index}] epoch[{epoch}] loss={train_loss/count} lrs={lrs}")
+        log_file.write(f"{epoch},{train_loss/count},{lrs}" + "\n")
+        log_file.flush()
 
         # services
         if record_model_service is not None:
             model_stat = model.state_dict()
             record_model_service.trigger_without_runtime_parameters(epoch, [0], [model_stat])
     print(f"INDEX[{index}] finish training")
+    log_file.flush()
+    log_file.close()
 
-    model_info = {}
-    model_info["state_dict"] = model.state_dict()
-    model_info["model_name"] = arg_ml_setup.model_name
-    torch.save(model_info, os.path.join(output_folder, f"{str(index).zfill(digit_number_of_models)}.model.pt"))
-    optimizer_info = {}
-    optimizer_info["state_dict"] = optimizer.state_dict()
-    optimizer_info["model_name"] = arg_ml_setup.model_name
-    torch.save(optimizer_info, os.path.join(output_folder, f"{str(index).zfill(digit_number_of_models)}.optimizer.pt"))
-    del model, dataset, dataloader, criterion, optimizer, model_info, optimizer_info
+    util.save_model_state(os.path.join(output_folder, f"{str(index).zfill(digit_number_of_models)}.model.pt"),
+                          model.state_dict(), arg_ml_setup.model_name)
+    util.save_optimizer_state(os.path.join(output_folder, f"{str(index).zfill(digit_number_of_models)}.optimizer.pt"),
+                              optimizer.state_dict(), arg_ml_setup.model_name)
+
+    del model, dataset, dataloader, criterion, optimizer, log_file
     torch.cuda.empty_cache()
 
 
