@@ -5,6 +5,7 @@ import torch.nn.functional as nnF
 import numpy as np
 import torchvision.transforms.functional as visionF
 from torchvision import transforms, models, datasets
+from py_src.models import simple_net
 
 def replace_bn_with_ln(model):
     for name, module in model.named_children():
@@ -101,17 +102,17 @@ def lenet5():
 
 """ MNIST + LeNet5 """
 def lenet5_mnist():
-    lenet5_mnist = MlSetup()
-    lenet5_mnist.model = lenet5()
-    lenet5_mnist.model_name = "lenet5"
-    lenet5_mnist.training_data, lenet5_mnist.testing_data, lenet5_mnist.dataset_label = dataset_mnist()
-    lenet5_mnist.training_data_for_rebuilding_normalization = None
-    lenet5_mnist.criterion = torch.nn.CrossEntropyLoss()
-    lenet5_mnist.training_batch_size = 64
-    lenet5_mnist.learning_rate = 0.001
-    lenet5_mnist.weights_init_func = weights_init_xavier
-    lenet5_mnist.has_normalization_layer = False
-    return lenet5_mnist
+    output_ml_setup = MlSetup()
+    output_ml_setup.model = lenet5()
+    output_ml_setup.model_name = "lenet5"
+    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label = dataset_mnist()
+    output_ml_setup.training_data_for_rebuilding_normalization = None
+    output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
+    output_ml_setup.training_batch_size = 64
+    output_ml_setup.learning_rate = 0.001
+    output_ml_setup.weights_init_func = weights_init_xavier
+    output_ml_setup.has_normalization_layer = False
+    return output_ml_setup
 
 
 """ CIFAR10 + ResNet18 """
@@ -127,31 +128,44 @@ class GroupNorm(nn.Module):
         return x
 
 def resnet18_cifar10(enable_replace_bn_with_group_norm=False):
-    output_resnet18_cifar10 = MlSetup()
+    output_ml_setup = MlSetup()
     if enable_replace_bn_with_group_norm:
-        output_resnet18_cifar10.model = models.resnet18(progress=False, num_classes=10, zero_init_residual=False, groups=1, width_per_group=64, replace_stride_with_dilation=None, norm_layer=GroupNorm)
-        output_resnet18_cifar10.model_name = "resnet18_gn"
+        output_ml_setup.model = models.resnet18(progress=False, num_classes=10, zero_init_residual=False, groups=1, width_per_group=64, replace_stride_with_dilation=None, norm_layer=GroupNorm)
+        output_ml_setup.model_name = "resnet18_gn"
     else:
-        output_resnet18_cifar10.model = models.resnet18(progress=False, num_classes=10, zero_init_residual=False, groups=1, width_per_group=64, replace_stride_with_dilation=None)
-        output_resnet18_cifar10.model_name = "resnet18_bn"
+        output_ml_setup.model = models.resnet18(progress=False, num_classes=10, zero_init_residual=False, groups=1, width_per_group=64, replace_stride_with_dilation=None)
+        output_ml_setup.model_name = "resnet18_bn"
     from torchvision.models.resnet import BasicBlock
-    output_resnet18_cifar10.model.conv1 = nn.Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)  # change for cifar10 dataset
-    output_resnet18_cifar10.model.maxpool = nn.Identity()
-    output_resnet18_cifar10.training_data, output_resnet18_cifar10.testing_data, output_resnet18_cifar10.dataset_label = dataset_cifar10(random_crop_flip=True)
-    output_resnet18_cifar10.training_data_for_rebuilding_normalization, _, _ = dataset_cifar10(random_crop_flip=False)
-    output_resnet18_cifar10.criterion = torch.nn.CrossEntropyLoss()
-    output_resnet18_cifar10.training_batch_size = 256
-    output_resnet18_cifar10.learning_rate = 0.001
-    output_resnet18_cifar10.has_normalization_layer = True
-    return output_resnet18_cifar10
+    output_ml_setup.model.conv1 = nn.Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)  # change for cifar10 dataset
+    output_ml_setup.model.maxpool = nn.Identity()
+    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label = dataset_cifar10(random_crop_flip=True)
+    output_ml_setup.training_data_for_rebuilding_normalization, _, _ = dataset_cifar10(random_crop_flip=False)
+    output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
+    output_ml_setup.training_batch_size = 256
+    output_ml_setup.learning_rate = 0.001
+    output_ml_setup.has_normalization_layer = True
+    return output_ml_setup
 
 
+""" CIFAR10 + SimpleNet """
+def simplenet_cifar10():
+    output_ml_setup = MlSetup()
+    output_ml_setup.model = simple_net.__dict__["simplenet_cifar_5m"](num_classes=10)
+    output_ml_setup.model_name = "simplenet"
+    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label = dataset_cifar10(random_crop_flip=True)
+    output_ml_setup.training_data_for_rebuilding_normalization, _, _ = dataset_cifar10(random_crop_flip=False)
+    output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
+    output_ml_setup.training_batch_size = 64
+    output_ml_setup.learning_rate = 0.1
+    output_ml_setup.has_normalization_layer = True
+    return output_ml_setup
 
 
 """ Helper function """
 class ModelType(Enum):
     lenet5 = 0
     resnet18 = 1
+    simplenet = 2
 
 class NormType(Enum):
     auto = 0
@@ -170,6 +184,8 @@ def get_ml_setup_from_config(model_type: str, norm_type: str = 'auto'):
             output_ml_setup = resnet18_cifar10(enable_replace_bn_with_group_norm=True)
         else:
             raise NotImplementedError(f'{norm_type} is not implemented for {model_type} yet')
+    elif model_type == ModelType.simplenet:
+        output_ml_setup = simplenet_cifar10()
     else:
         raise ValueError(f'Invalid model type: {model_type}')
     return output_ml_setup
@@ -182,6 +198,8 @@ def get_ml_setup_from_model_type(model_name):
         output_ml_setup = resnet18_cifar10()
     elif model_name == 'resnet18_gn':
         output_ml_setup = resnet18_cifar10(enable_replace_bn_with_group_norm=True)
+    elif model_name == 'simplenet':
+        output_ml_setup = simplenet_cifar10()
     else:
         raise ValueError(f'Invalid model type: {model_name}')
     return output_ml_setup

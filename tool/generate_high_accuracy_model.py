@@ -40,7 +40,7 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
     model.to(device)
     dataset = copy.deepcopy(arg_ml_setup.training_data)
     batch_size = arg_ml_setup.training_batch_size
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, pin_memory=True)
     criterion = arg_ml_setup.criterion
     optimizer, lr_scheduler, epochs = complete_ml_setup.FastTrainingSetup.get_optimizer_lr_scheduler_epoch(arg_ml_setup, model)
 
@@ -105,7 +105,7 @@ if __name__ == "__main__":
     parser.add_argument("-n", "--number_of_models", type=int, default=1)
     parser.add_argument("-c", '--core', type=int, default=os.cpu_count(), help='specify the number of CPU cores to use')
     parser.add_argument("-t", "--thread", type=int, default=1, help='specify how many models to train in parallel')
-    parser.add_argument("-m", "--model_type", type=str, default='lenet5', choices=['lenet5', 'resnet18'])
+    parser.add_argument("-m", "--model_type", type=str, default='lenet5', choices=['lenet5', 'resnet18', 'simplenet'])
     parser.add_argument("--norm_method", type=str, default='auto', choices=['auto', 'bn', 'ln', 'gn'])
     parser.add_argument("--cpu", action='store_true', help='force using CPU for training')
     parser.add_argument("-o", "--output_folder_name", default=None, help='specify the output folder name')
@@ -124,8 +124,8 @@ if __name__ == "__main__":
 
     # prepare model and dataset
     current_ml_setup = ml_setup.get_ml_setup_from_config(model_type, norm_method)
-
     output_model_name = current_ml_setup.model_name
+    print(f"model name: {output_model_name}")
 
     # create output folder
     if output_folder_name is None:
