@@ -36,15 +36,33 @@ def get_optimizer_to_find_pathway_point(model_name, model_parameter, dataset, ba
         optimizer = torch.optim.SGD(model_parameter, lr=0.005, momentum=0.9, weight_decay=5e-4)
         steps_per_epoch = len(dataset) // batch_size + 1
         lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, 0.005, steps_per_epoch=steps_per_epoch, epochs=epochs)
+    elif model_name == "simplenet":
+        epochs = 40
+        optimizer = torch.optim.Adadelta(model_parameter, lr=0.1, rho=0.9, eps=1e-3, weight_decay=0.001)
+        steps_per_epoch = len(dataset) // batch_size + 1
+        milestones_epoch = [10]
+        milestones = [steps_per_epoch * i for i in milestones_epoch]
+        lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones, gamma=0.1)
     else:
-        raise NotImplementedError
+        raise NotImplementedError(f"{model_name} not implemented for finding pathway points")
     return epochs, optimizer, lr_scheduler
+
+def get_optimizer_to_find_high_accuracy_path(model_name, model_parameter, train_lr, dataset, batch_size):
+    if model_name == "lenet":
+        optimizer = torch.optim.SGD(model_parameter, lr=train_lr)
+    elif model_name == "resnet18_bn":
+        optimizer = torch.optim.SGD(model_parameter, lr=train_lr)
+    elif model_name == "simplenet":
+        optimizer = torch.optim.Adadelta(model_parameter, lr=train_lr, rho=0.9, eps=1e-3)
+    else:
+        raise NotImplementedError(f"{model_name} not implemented for finding high accuracy path")
+    return optimizer
 
 
 class TrainMode(Enum):
-    SGD_x_rounds = 0
+    default_x_rounds = 0
     Adam_until_loss = 1
-    SGD_until_loss = 2
+    default_until_loss = 2
 
 
 def set_logging(target_logger, task_name, log_file_path=None):
@@ -163,9 +181,9 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
     arg_worker_count, arg_total_cpu_count, arg_save_format, arg_save_ticks, arg_use_cpu = arg_compute
 
     training_mode, training_parameter = arg_training_parameters
-    if training_mode == TrainMode.SGD_x_rounds:
+    if training_mode == TrainMode.default_x_rounds:
         train_lr, train_round = training_parameter
-    elif training_mode == TrainMode.Adam_until_loss or training_mode == TrainMode.SGD_until_loss:
+    elif training_mode == TrainMode.Adam_until_loss or training_mode == TrainMode.default_until_loss:
         target_train_loss = training_parameter
     else:
         raise NotImplementedError
@@ -219,12 +237,12 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
     training_dataset = arg_ml_setup.training_data
     dataloader = DataLoader(training_dataset, batch_size=arg_ml_setup.training_batch_size, shuffle=True)
     criterion = arg_ml_setup.criterion
-    if training_mode == TrainMode.SGD_x_rounds:
-        optimizer = torch.optim.SGD(start_model.parameters(), lr=train_lr)
+    if training_mode == TrainMode.default_x_rounds:
+        optimizer = get_optimizer_to_find_high_accuracy_path(arg_ml_setup.model_name, start_model.parameters(), train_lr, training_dataset, arg_ml_setup.training_batch_size)
     elif training_mode == TrainMode.Adam_until_loss:
         optimizer = torch.optim.Adam(start_model.parameters(), lr=0.001)
-    elif training_mode == TrainMode.SGD_until_loss:
-        optimizer = torch.optim.SGD(start_model.parameters(), lr=0.001)
+    elif training_mode == TrainMode.default_until_loss:
+        optimizer = get_optimizer_to_find_high_accuracy_path(arg_ml_setup.model_name, start_model.parameters(), 0.001, training_dataset, arg_ml_setup.training_batch_size)
     else:
         raise NotImplementedError
 
@@ -459,7 +477,7 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
         start_model.to(device)
         cuda.CudaEnv.optimizer_to(optimizer, device)
 
-        if training_mode == TrainMode.SGD_x_rounds:
+        if training_mode == TrainMode.default_x_rounds:
             for (training_index, (data, label)) in enumerate(dataloader):
                 data, label = data.to(device), label.to(device)
                 optimizer.zero_grad(set_to_none=True)
@@ -471,7 +489,7 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
                 if training_index == train_round:
                     break
                 assert training_index < train_round
-        elif training_mode == TrainMode.Adam_until_loss or training_mode == TrainMode.SGD_until_loss:
+        elif training_mode == TrainMode.Adam_until_loss or training_mode == TrainMode.default_until_loss:
             moving_max_size = 2
             moving_max = util.MovingMax(moving_max_size)
             while True:
@@ -581,13 +599,13 @@ if __name__ == '__main__':
     set_logging(logger, "main")
     logger.info("logging setup complete")
 
-    mode = TrainMode.SGD_x_rounds
+    mode = TrainMode.default_x_rounds
     learning_rate = args.lr
     training_round = args.training_round
     loss = args.loss
     if loss != -1:
         assert learning_rate == 0.001 and training_round == 1
-        mode = TrainMode.SGD_until_loss
+        mode = TrainMode.default_until_loss
 
     start_folder = args.start_folder
     end_folder = args.end_folder
@@ -669,14 +687,14 @@ if __name__ == '__main__':
         worker_count = paths_to_find_count
     logger.info(f"worker: {worker_count}")
 
-    if mode == TrainMode.SGD_x_rounds:
+    if mode == TrainMode.default_x_rounds:
         args = [( (output_folder_path, start_file, end_file, current_ml_setup, max_tick),
                   (mode, (learning_rate, training_round)),
                   (step_size, adoptive_step_size, layer_skip_average),
                   (learning_rate_rebuild_norm, rebuild_normalization_round),
                   (pathway_depth, existing_pathway),
                   (worker_count, total_cpu_count, save_format, save_ticks, use_cpu) ) for (start_file, end_file) in paths_to_find]
-    elif mode == TrainMode.Adam_until_loss or mode == TrainMode.SGD_until_loss:
+    elif mode == TrainMode.Adam_until_loss or mode == TrainMode.default_until_loss:
         args = [( (output_folder_path, start_file, end_file, current_ml_setup, max_tick),
                   (mode, loss),
                   (step_size, adoptive_step_size, layer_skip_average),

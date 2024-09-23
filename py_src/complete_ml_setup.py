@@ -26,7 +26,7 @@ class FastTrainingSetup(object):
             return optimizer, lr_scheduler, epochs
         elif arg_ml_setup.model_name == 'simplenet':
             lr = 0.1
-            epochs = 550
+            epochs = 150
             optimizer = torch.optim.Adadelta(model.parameters(), lr=lr, rho=0.9, eps=1e-3, weight_decay=0.001)
             steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
             milestones_epoch = [100, 190, 306, 390, 440, 540]
