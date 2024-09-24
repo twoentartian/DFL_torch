@@ -24,8 +24,7 @@ INFO_FILE_NAME = 'info.json'
 
 MAX_CPU_COUNT: Final[int] = 32
 
-ENABLE_DEDICATED_TRAINING_DATASET_FOR_REBUILDING_NORM: Final[bool] = True
-ENABLE_REBUILD_NORM_FOR_STARTING_ENDING_MODEL: Final[bool] = True
+ENABLE_DEDICATED_TRAINING_DATASET_FOR_REBUILDING_NORM: Final[bool] = False
 ENABLE_NAN_CHECKING: Final[bool] = False
 
 
@@ -53,9 +52,16 @@ def get_optimizer_to_find_high_accuracy_path(model_name, model_parameter, train_
     elif model_name == "resnet18_bn":
         optimizer = torch.optim.SGD(model_parameter, lr=train_lr)
     elif model_name == "simplenet":
-        optimizer = torch.optim.Adadelta(model_parameter, lr=train_lr, rho=0.9, eps=1e-3)
+        optimizer = torch.optim.Adadelta(model_parameter, lr=train_lr, rho=0.9, eps=1e-3, weight_decay=0.001)
     else:
         raise NotImplementedError(f"{model_name} not implemented for finding high accuracy path")
+    return optimizer
+
+def get_optimizer_to_rebuild_norm(model_name, model_parameter, lr, dataset, batch_size):
+    if model_name == "resnet18_bn":
+        optimizer = torch.optim.SGD(model_parameter, lr=lr, momentum=0.9, weight_decay=5e-4)
+    else:
+        raise NotImplementedError(f"{model_name} not implemented for rebuilding norm")
     return optimizer
 
 
@@ -123,15 +129,44 @@ def get_files_to_process(arg_start_folder, arg_end_folder, arg_mode):
     return sorted(output_paths)
 
 
-def rebuild_norm_layers(model, model_state, arg_ml_setup, epoch_of_rebuild, dataloader,
+# rebuild_norm_layers=None indicates rebuild all norm layers, when specified, then only rebuild norm for these layers
+
+def rebuild_norm_layers(model, model_state, arg_ml_setup, epoch_of_rebuild, dataloader, rebuild_norm_round,
                         rebuild_lr=0.001, existing_optimizer=None, rebuild_on_device=None,
-                        reset_norm_to_initial=False, initial_model_stat=None, display=False):
+                        reset_norm_to_initial=False, initial_model_stat=None, display=False, rebuild_norm_layers_override=None):
+    global __print_norm_to_rebuild_layers
+    if rebuild_norm_layers_override is None:
+        rebuild_norm_layers_override = []
+
+    def is_processing_this_layer(model_name, layer_name, rebuild_norm_layers):
+        if len(rebuild_norm_layers) == 0:
+            if special_torch_layers.is_normalization_layer(model_name, layer_name):
+                return True
+            else:
+                return False
+        else:
+            process_this_layer = False
+            for single_layer in rebuild_norm_layers:
+                if layer_name in single_layer:
+                    process_this_layer = True
+                    break
+            return process_this_layer
+
+
+    # get the list of layers to rebuild norm
+    rebuild_norm_layers_to_process = []
+    for layer_name, layer_weights in model_state.items():
+        if is_processing_this_layer(arg_ml_setup.model_name, layer_name, rebuild_norm_layers_override):
+            rebuild_norm_layers_to_process.append(layer_name)
+
+    # reset target layers to initial state?
     if reset_norm_to_initial:
         assert initial_model_stat is not None
         # reset normalization layers
         for layer_name, layer_weights in model_state.items():
-            if special_torch_layers.is_normalization_layer(arg_ml_setup.model_name, layer_name):
+            if layer_name in rebuild_norm_layers_to_process:
                 model_state[layer_name] = initial_model_stat[layer_name]
+
     model.load_state_dict(model_state)
 
     if rebuild_on_device is None:
@@ -140,16 +175,17 @@ def rebuild_norm_layers(model, model_state, arg_ml_setup, epoch_of_rebuild, data
 
     model.train()
     model.to(rebuild_on_device)
-    rebuilding_normalization_count = 0
-    criterion = arg_ml_setup.criterion
 
+    criterion = arg_ml_setup.criterion
     if existing_optimizer is None:
         optimizer_rebuild_norm = torch.optim.Adam(model.parameters(), lr=rebuild_lr)
     else:
         optimizer_rebuild_norm = existing_optimizer
     cuda.CudaEnv.optimizer_to(optimizer_rebuild_norm, rebuild_on_device)
     rebuild_states = []
+    rebuilding_normalization_count = 0
     for epoch in range(epoch_of_rebuild):
+        exit_flag = False
         for (rebuilding_normalization_index, (data, label)) in enumerate(dataloader):
             data, label = data.to(rebuild_on_device), label.to(rebuild_on_device)
             optimizer_rebuild_norm.zero_grad(set_to_none=True)
@@ -161,21 +197,29 @@ def rebuild_norm_layers(model, model_state, arg_ml_setup, epoch_of_rebuild, data
             # reset all layers except normalization
             current_model_stat = model.state_dict()
             for layer_name, layer_weights in current_model_stat.items():
-                if not special_torch_layers.is_normalization_layer(arg_ml_setup.model_name, layer_name):
+                if layer_name not in rebuild_norm_layers_to_process:
                     current_model_stat[layer_name] = model_state[layer_name]
             model.load_state_dict(current_model_stat)
             rebuilding_normalization_count += 1
             rebuild_states.append((rebuilding_normalization_count, rebuilding_loss_val))
             if display:
                 print(f"tick: {rebuilding_normalization_count}  loss: {rebuilding_loss_val}")
+            if rebuilding_normalization_count >= rebuild_norm_round:
+                exit_flag = True
+                break
+        if exit_flag:
+            break
     output_model_state = model.state_dict()
     cuda.CudaEnv.model_state_dict_to(output_model_state, cpu_device)
-    return output_model_state, rebuild_states
+    return output_model_state, rebuild_states, rebuild_norm_layers_to_process
 
 
+__print_norm_to_rebuild_layers = True
 def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild_norm, arg_pathway, arg_compute):
+    global __print_norm_to_rebuild_layers
+
     arg_output_folder_path, start_model_path, end_model_path, arg_ml_setup, arg_max_tick = arg_env
-    arg_rebuild_norm_lr, arg_rebuild_norm_round = arg_rebuild_norm
+    arg_rebuild_norm_lr, arg_rebuild_norm_round, arg_rebuild_norm_specified_layers = arg_rebuild_norm
     arg_step_size, arg_adoptive_step_size, arg_layer_skip_average = arg_average
     arg_path_way_depth, arg_existing_pathway = arg_pathway
     arg_worker_count, arg_total_cpu_count, arg_save_format, arg_save_ticks, arg_use_cpu = arg_compute
@@ -302,25 +346,8 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
     record_training_loss_service = record_training_loss.ServiceTrainingLossRecorder(1)
     record_training_loss_service.initialize_without_runtime_parameters(arg_output_folder_path, [0])
 
-    """rebuilding normalization for start and end points"""
-    if ENABLE_REBUILD_NORM_FOR_STARTING_ENDING_MODEL:
-        if arg_rebuild_norm_round != 0:
-            child_logger.info(f"rebuilding normalization for starting and ending points")
-            optimizer_rebuild = torch.optim.Adam(start_model.parameters(), lr=0.001)
-            start_model_stat_dict, rebuild_states = rebuild_norm_layers(start_model, start_model_stat_dict, arg_ml_setup, epoch_for_rebuilding_norm,
-                                                           dataloader_for_rebuilding_norm, rebuild_lr=arg_rebuild_norm_lr, existing_optimizer=optimizer_rebuild,
-                                                           rebuild_on_device=device, initial_model_stat=initial_model_stat, reset_norm_to_initial=True)
-            rebuild_iter, rebuilding_loss_val = rebuild_states[-1]
-            child_logger.info(f"rebuilding starting point finished at {rebuild_iter} rounds, rebuilding loss = {rebuilding_loss_val}")
-
-            optimizer_rebuild = torch.optim.Adam(start_model.parameters(), lr=0.001)
-            end_model_stat_dict, rebuild_states = rebuild_norm_layers(start_model, end_model_stat_dict, arg_ml_setup, epoch_for_rebuilding_norm,
-                                                         dataloader_for_rebuilding_norm, rebuild_lr=arg_rebuild_norm_lr, existing_optimizer=optimizer_rebuild,
-                                                         rebuild_on_device=device, initial_model_stat=initial_model_stat, reset_norm_to_initial=True)
-            rebuild_iter, rebuilding_loss_val = rebuild_states[-1]
-            child_logger.info(f"rebuilding starting point finished at {rebuild_iter} rounds, rebuilding loss = {rebuilding_loss_val}")
-
     """find pathway points"""
+    optimizer_paths_for_pathway_points = None
     if arg_path_way_depth != 0:
         if arg_existing_pathway is None:
             child_logger.info(f"finding pathway points with depth {arg_path_way_depth}")
@@ -394,13 +421,6 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
 
             pathway_points = find_pathway_points(start_model_stat_dict, end_model_stat_dict, start_model, arg_ml_setup.model_name, dataloader, arg_path_way_depth)
             child_logger.info(f"find {len(pathway_points)} pathway points with depth {arg_path_way_depth}")
-            # save pathway points
-            output_path_pathway_points = os.path.join(arg_output_folder_path, "pathway_points")
-            os.makedirs(output_path_pathway_points, exist_ok=True)
-
-            for index, pathway_model in enumerate(pathway_points):
-                model_info = {"state_dict": pathway_model, "model_name": arg_ml_setup.model_name}
-                torch.save(model_info, os.path.join(output_path_pathway_points, f"{index}_over_{len(pathway_points)-1}.model.pt"))
         else:
             child_logger.info(f"loading existing pathway points from {arg_existing_pathway}")
 
@@ -444,6 +464,14 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
             pathway_points = model_list
             assert 2 ** arg_path_way_depth + 1 == len(pathway_points)
             child_logger.info(f"loading and checking pathway points pass")
+
+        # create folders and save pathway points
+        output_path_pathway_points = os.path.join(arg_output_folder_path, "pathway_points")
+        os.makedirs(output_path_pathway_points, exist_ok=True)
+        optimizer_paths_for_pathway_points = []
+        for index, pathway_model in enumerate(pathway_points):
+            util.save_model_state(os.path.join(output_path_pathway_points, f"{index}_over_{len(pathway_points) - 1}.model.pt"), pathway_model, arg_ml_setup.model_name)
+            optimizer_paths_for_pathway_points.append(os.path.join(output_path_pathway_points, f"{index}_over_{len(pathway_points) - 1}.optimizer.pt"))
     else:
         pathway_points = [start_model_stat_dict, end_model_stat_dict]
 
@@ -456,11 +484,17 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
     variance_record.add_variance(start_model_stat)
     target_variance = variance_record.get_variance()
 
+    previous_pathway_index = -1
     while current_tick < arg_max_tick:
         """set end point"""
         path_len = arg_max_tick // len(target_direction_points)
         current_path_index = current_tick // path_len
         current_direction_point = target_direction_points[current_path_index]
+        if previous_pathway_index != current_path_index:
+            # entering a new pathway point region
+            previous_pathway_index = current_path_index
+            if optimizer_paths_for_pathway_points is not None:
+                util.save_optimizer_state(optimizer_paths_for_pathway_points[current_path_index], optimizer.state_dict(), arg_ml_setup.model_name)
 
         """move tensor"""
         start_model_stat = model_average.move_model_state_toward(start_model_stat, current_direction_point, arg_step_size, arg_adoptive_step_size, False, ignore_layer_keywords=arg_layer_skip_average)
@@ -518,12 +552,15 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
 
         """rebuilding normalization"""
         if arg_rebuild_norm_round != 0:
-            optimizer_rebuild = torch.optim.Adam(start_model.parameters(), lr=0.001)
-            start_model_stat, rebuild_states = rebuild_norm_layers(start_model, start_model_stat, arg_ml_setup, epoch_for_rebuilding_norm,
-                                                                                       dataloader_for_rebuilding_norm, rebuild_lr=arg_rebuild_norm_lr,
-                                                                                       rebuild_on_device=device, existing_optimizer=optimizer_rebuild,
-                                                                                       initial_model_stat=initial_model_stat,
-                                                                                       reset_norm_to_initial=True)
+            optimizer_rebuild = optimizer
+            start_model_stat, rebuild_states, layers_rebuild = rebuild_norm_layers(start_model, start_model_stat, arg_ml_setup, epoch_for_rebuilding_norm,
+                                                                   dataloader_for_rebuilding_norm, arg_rebuild_norm_round, rebuild_lr=arg_rebuild_norm_lr,
+                                                                   rebuild_on_device=device, existing_optimizer=optimizer_rebuild,
+                                                                   initial_model_stat=initial_model_stat,
+                                                                   reset_norm_to_initial=True, rebuild_norm_layers_override=arg_rebuild_norm_specified_layers)
+            if __print_norm_to_rebuild_layers:
+                __print_norm_to_rebuild_layers = False
+                child_logger.info(f"layers to rebuild: {layers_rebuild}")
             rebuild_iter, rebuilding_loss_val = rebuild_states[-1]
             child_logger.info(f"current tick: {current_tick}, rebuilding finished at {rebuild_iter} rounds, rebuilding loss = {rebuilding_loss_val:.3f}")
             # remove norm layer variance
@@ -581,7 +618,8 @@ if __name__ == '__main__':
 
     # rebuild norm parameter
     parser.add_argument("-r", "--rebuild_norm_round", type=int, default=0, help='train for x rounds to rebuild the norm layers')
-    parser.add_argument("--lr_rebuild_norm", type=float, default=0.001)
+    parser.add_argument("--rebuild_norm_lr", type=float, default=0.001)
+    parser.add_argument("--rebuild_norm_layers", type=str, nargs="+", default=[], help='specify which layers to rebuild, default means all norm layers')
 
     # find pathway points parameters
     parser.add_argument("-p", "--pathway_depth", type=int, default=0, help='the depth of find pathway points, 1->find a mid point, 2->find 3 points(25% each), 3->find 7 points(12.5% each)')
@@ -620,7 +658,9 @@ if __name__ == '__main__':
     pathway_depth = args.pathway_depth
     existing_pathway = args.existing_pathway
 
-    learning_rate_rebuild_norm = args.lr_rebuild_norm
+    rebuild_norm_lr = args.rebuild_norm_lr
+    rebuild_norm_specified_layers = args.rebuild_norm_layers
+
     use_cpu = args.cpu
     paths_to_find = get_files_to_process(args.start_folder, args.end_folder, mapping_mode)
     if args.save_ticks is not None:
@@ -691,14 +731,14 @@ if __name__ == '__main__':
         args = [( (output_folder_path, start_file, end_file, current_ml_setup, max_tick),
                   (mode, (learning_rate, training_round)),
                   (step_size, adoptive_step_size, layer_skip_average),
-                  (learning_rate_rebuild_norm, rebuild_normalization_round),
+                  (rebuild_norm_lr, rebuild_normalization_round, rebuild_norm_specified_layers),
                   (pathway_depth, existing_pathway),
                   (worker_count, total_cpu_count, save_format, save_ticks, use_cpu) ) for (start_file, end_file) in paths_to_find]
     elif mode == TrainMode.Adam_until_loss or mode == TrainMode.default_until_loss:
         args = [( (output_folder_path, start_file, end_file, current_ml_setup, max_tick),
                   (mode, loss),
                   (step_size, adoptive_step_size, layer_skip_average),
-                  (learning_rate_rebuild_norm, rebuild_normalization_round),
+                  (rebuild_norm_lr, rebuild_normalization_round, rebuild_norm_specified_layers),
                   (pathway_depth, existing_pathway),
                   (worker_count, total_cpu_count, save_format, save_ticks, use_cpu) ) for (start_file, end_file) in paths_to_find]
     else:
