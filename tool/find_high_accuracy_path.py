@@ -325,12 +325,17 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
 
     # ignored layers
     ignore_layers = []
+    averaged_layers = []
     for layer_name in start_model_stat_dict.keys():
         if layer_name in arg_layer_skip_average:
             ignore_layers.append(layer_name)
         if special_torch_layers.is_keyword_in_layer_name(layer_name, arg_layer_skip_average_keyword):
             ignore_layers.append(layer_name)
-    child_logger.info(f"ignore moving layers: {ignore_layers}")
+    for layer_name in start_model_stat_dict.keys():
+        if layer_name not in ignore_layers:
+            averaged_layers.append(layer_name)
+    child_logger.info(f"ignore moving {len(ignore_layers)} layers: {ignore_layers}")
+    child_logger.info(f"moving {len(averaged_layers)} layers: {averaged_layers}")
 
     # services
     all_node_names = [0, 1]
