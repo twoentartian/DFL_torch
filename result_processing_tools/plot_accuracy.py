@@ -8,8 +8,8 @@ draw_only_first_node = False
 enable_draw_every_tick = False
 draw_every_tick = 500
 
-# __ignore_layer_list = ["num_batches_tracked", "running_mean", "running_var"]
-__ignore_layer_list = []
+__ignore_layer_list = ["num_batches_tracked", "running_mean", "running_var"]
+# __ignore_layer_list = []
 
 
 def is_ignored_layer(layer_name):
