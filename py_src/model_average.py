@@ -12,9 +12,9 @@ def move_tensor_toward(src_tensor, dest_tensor, step, adoptive_step):
     move_tensor = angle_tensor * real_step
     return src_tensor + move_tensor
 
-def move_model_state_toward(src_model_stat, dest_model_stat, step, adoptive_step, enable_merge_bias_with_weight=False, ignore_layer_keywords=None):
-    if ignore_layer_keywords is None:
-        ignore_layer_keywords = []
+def move_model_state_toward(src_model_stat, dest_model_stat, step, adoptive_step, enable_merge_bias_with_weight=False, ignore_layers=None):
+    if ignore_layers is None:
+        ignore_layers = []
     output_stat = copy.deepcopy(src_model_stat)
     layers_already_process = set()
     for layer_name in src_model_stat.keys():
@@ -22,7 +22,7 @@ def move_model_state_toward(src_model_stat, dest_model_stat, step, adoptive_step
             continue
         if special_torch_layers.is_ignored_layer_averaging(layer_name):
             continue
-        if special_torch_layers.is_keyword_in_layer_name(layer_name, ignore_layer_keywords):
+        if layer_name == ignore_layers:
             continue
 
         current_layer_processed = False

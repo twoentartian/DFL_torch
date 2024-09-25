@@ -220,7 +220,7 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
 
     arg_output_folder_path, start_model_path, end_model_path, arg_ml_setup, arg_max_tick = arg_env
     arg_rebuild_norm_lr, arg_rebuild_norm_round, arg_rebuild_norm_specified_layers = arg_rebuild_norm
-    arg_step_size, arg_adoptive_step_size, arg_layer_skip_average = arg_average
+    arg_step_size, arg_adoptive_step_size, arg_layer_skip_average, arg_layer_skip_average_keyword = arg_average
     arg_path_way_depth, arg_existing_pathway = arg_pathway
     arg_worker_count, arg_total_cpu_count, arg_save_format, arg_save_ticks, arg_use_cpu = arg_compute
 
@@ -322,6 +322,15 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
     else:
         dataloader_for_rebuilding_norm = None
         epoch_for_rebuilding_norm = None
+
+    # ignored layers
+    ignore_layers = []
+    for layer_name in start_model_stat_dict.keys():
+        if layer_name in arg_layer_skip_average:
+            ignore_layers.append(layer_name)
+        if special_torch_layers.is_keyword_in_layer_name(layer_name, arg_layer_skip_average_keyword):
+            ignore_layers.append(layer_name)
+    child_logger.info(f"ignore moving layers: {ignore_layers}")
 
     # services
     all_node_names = [0, 1]
@@ -497,7 +506,7 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
                 util.save_optimizer_state(optimizer_paths_for_pathway_points[current_path_index], optimizer.state_dict(), arg_ml_setup.model_name)
 
         """move tensor"""
-        start_model_stat = model_average.move_model_state_toward(start_model_stat, current_direction_point, arg_step_size, arg_adoptive_step_size, False, ignore_layer_keywords=arg_layer_skip_average)
+        start_model_stat = model_average.move_model_state_toward(start_model_stat, current_direction_point, arg_step_size, arg_adoptive_step_size, False, ignore_layers=ignore_layers)
         if ENABLE_NAN_CHECKING:
             util.check_for_nans_in_state_dict(start_model_stat)
         """rescale variance"""
@@ -610,6 +619,7 @@ if __name__ == '__main__':
     parser.add_argument("-s", "--step_size", type=float, default=0.001)
     parser.add_argument("-a", "--adoptive_step_size", type=float, default=0)
     parser.add_argument("--layer_skip_average", type=str, nargs='+')
+    parser.add_argument("--layer_skip_average_keyword", type=str, nargs='+')
 
     # train parameters
     parser.add_argument("--lr", type=float, default=0.001, help='train the model with this learning rate, joint with "--training_round"')
@@ -668,7 +678,8 @@ if __name__ == '__main__':
     else:
         save_ticks = None
     save_format = args.save_format
-    layer_skip_average = args.layer_skip_average
+    layer_skip_average = args.layer_skip_average if args.layer_skip_average is not None else []
+    layer_skip_average_keyword = args.layer_skip_average_keyword if args.layer_skip_average_keyword is not None else []
     paths_to_find_count = len(paths_to_find)
     logger.info(f"totally {paths_to_find_count} paths to process: {paths_to_find}")
 
@@ -730,14 +741,14 @@ if __name__ == '__main__':
     if mode == TrainMode.default_x_rounds:
         args = [( (output_folder_path, start_file, end_file, current_ml_setup, max_tick),
                   (mode, (learning_rate, training_round)),
-                  (step_size, adoptive_step_size, layer_skip_average),
+                  (step_size, adoptive_step_size, layer_skip_average, layer_skip_average_keyword),
                   (rebuild_norm_lr, rebuild_normalization_round, rebuild_norm_specified_layers),
                   (pathway_depth, existing_pathway),
                   (worker_count, total_cpu_count, save_format, save_ticks, use_cpu) ) for (start_file, end_file) in paths_to_find]
     elif mode == TrainMode.Adam_until_loss or mode == TrainMode.default_until_loss:
         args = [( (output_folder_path, start_file, end_file, current_ml_setup, max_tick),
                   (mode, loss),
-                  (step_size, adoptive_step_size, layer_skip_average),
+                  (step_size, adoptive_step_size, layer_skip_average, layer_skip_average_keyword),
                   (rebuild_norm_lr, rebuild_normalization_round, rebuild_norm_specified_layers),
                   (pathway_depth, existing_pathway),
                   (worker_count, total_cpu_count, save_format, save_ticks, use_cpu) ) for (start_file, end_file) in paths_to_find]
