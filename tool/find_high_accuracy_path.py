@@ -511,7 +511,7 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
                 util.save_optimizer_state(optimizer_paths_for_pathway_points[current_path_index], optimizer.state_dict(), arg_ml_setup.model_name)
 
         """move tensor"""
-        start_model_stat = model_average.move_model_state_toward(start_model_stat, current_direction_point, arg_step_size, arg_adoptive_step_size, False, ignore_layers=ignore_layers)
+        start_model_stat = model_average.move_model_state_toward(start_model_stat, current_direction_point, arg_step_size, arg_adoptive_step_size, False, ignore_layers=ignore_layers, random_scale=1.0)
         if ENABLE_NAN_CHECKING:
             util.check_for_nans_in_state_dict(start_model_stat)
         """rescale variance"""

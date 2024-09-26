@@ -3,16 +3,19 @@ import torch
 from py_src import special_torch_layers
 from py_src.model_variance_correct import VarianceCorrectionType, VarianceCorrector
 
-def move_tensor_toward(src_tensor, dest_tensor, step, adoptive_step):
+def move_tensor_toward(src_tensor, dest_tensor, step, adoptive_step, random_scale=None):
     diff_tensor = dest_tensor - src_tensor
     norm = torch.norm(diff_tensor)
     step_from_adoptive_part = norm * adoptive_step
     real_step = step if step > step_from_adoptive_part else step_from_adoptive_part
     angle_tensor = diff_tensor / norm
+    if random_scale is not None:
+        random_tensor = torch.rand(angle_tensor.shape)
+        angle_tensor = angle_tensor * random_tensor * random_scale
     move_tensor = angle_tensor * real_step
     return src_tensor + move_tensor
 
-def move_model_state_toward(src_model_stat, dest_model_stat, step, adoptive_step, enable_merge_bias_with_weight=False, ignore_layers=None):
+def move_model_state_toward(src_model_stat, dest_model_stat, step, adoptive_step, enable_merge_bias_with_weight=False, ignore_layers=None, random_scale=None):
     if ignore_layers is None:
         ignore_layers = []
     output_stat = copy.deepcopy(src_model_stat)
@@ -37,7 +40,7 @@ def move_model_state_toward(src_model_stat, dest_model_stat, step, adoptive_step
                 src_model_bias: torch.Tensor = src_model_stat[bias_layer_name]
                 src_tensor = torch.cat((src_model_weight.flatten(), src_model_bias.flatten()), dim=0)
                 dst_tensor = torch.cat((dest_model_stat[layer_name].flatten(), dest_model_stat[bias_layer_name].flatten()), dim=0)
-                output_tensor = move_tensor_toward(src_tensor, dst_tensor, step, adoptive_step)
+                output_tensor = move_tensor_toward(src_tensor, dst_tensor, step, adoptive_step, random_scale=random_scale)
                 output_weight_tensor, output_bias_tensor = torch.split(output_tensor, [src_model_weight.nelement(), src_model_bias.nelement()], dim=0)
                 output_weight_tensor = output_weight_tensor.reshape(src_model_weight.shape)
                 output_bias_tensor = output_bias_tensor.reshape(src_model_bias.shape)
