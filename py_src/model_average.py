@@ -3,7 +3,7 @@ import torch
 from py_src import special_torch_layers
 from py_src.model_variance_correct import VarianceCorrectionType, VarianceCorrector
 
-def move_tensor_toward(src_tensor, dest_tensor, step, adoptive_step, random_scale=None):
+def move_tensor_toward(layer_name, src_tensor, dest_tensor, step, adoptive_step, random_scale=None):
     diff_tensor = dest_tensor - src_tensor
     norm = torch.norm(diff_tensor)
     step_from_adoptive_part = norm * adoptive_step
@@ -23,9 +23,7 @@ def move_model_state_toward(src_model_stat, dest_model_stat, step, adoptive_step
     for layer_name in src_model_stat.keys():
         if layer_name in layers_already_process:
             continue
-        if special_torch_layers.is_ignored_layer_averaging(layer_name):
-            continue
-        if layer_name == ignore_layers:
+        if layer_name in ignore_layers:
             continue
 
         current_layer_processed = False
@@ -40,7 +38,7 @@ def move_model_state_toward(src_model_stat, dest_model_stat, step, adoptive_step
                 src_model_bias: torch.Tensor = src_model_stat[bias_layer_name]
                 src_tensor = torch.cat((src_model_weight.flatten(), src_model_bias.flatten()), dim=0)
                 dst_tensor = torch.cat((dest_model_stat[layer_name].flatten(), dest_model_stat[bias_layer_name].flatten()), dim=0)
-                output_tensor = move_tensor_toward(src_tensor, dst_tensor, step, adoptive_step, random_scale=random_scale)
+                output_tensor = move_tensor_toward(layer_name, src_tensor, dst_tensor, step, adoptive_step, random_scale=random_scale)
                 output_weight_tensor, output_bias_tensor = torch.split(output_tensor, [src_model_weight.nelement(), src_model_bias.nelement()], dim=0)
                 output_weight_tensor = output_weight_tensor.reshape(src_model_weight.shape)
                 output_bias_tensor = output_bias_tensor.reshape(src_model_bias.shape)
@@ -52,7 +50,7 @@ def move_model_state_toward(src_model_stat, dest_model_stat, step, adoptive_step
             layers_already_process.add(layer_name)
             src_tensor = src_model_stat[layer_name]
             dst_tensor = dest_model_stat[layer_name]
-            output_stat[layer_name] = move_tensor_toward(src_tensor, dst_tensor, step, adoptive_step)
+            output_stat[layer_name] = move_tensor_toward(layer_name, src_tensor, dst_tensor, step, adoptive_step, random_scale=random_scale)
     return output_stat
 
 class ModelAverager:

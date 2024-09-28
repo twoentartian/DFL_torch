@@ -24,7 +24,7 @@ INFO_FILE_NAME = 'info.json'
 
 MAX_CPU_COUNT: Final[int] = 32
 
-ENABLE_DEDICATED_TRAINING_DATASET_FOR_REBUILDING_NORM: Final[bool] = False
+ENABLE_DEDICATED_TRAINING_DATASET_FOR_REBUILDING_NORM: Final[bool] = True
 ENABLE_NAN_CHECKING: Final[bool] = False
 
 
@@ -46,20 +46,20 @@ def get_optimizer_to_find_pathway_point(model_name, model_parameter, dataset, ba
         raise NotImplementedError(f"{model_name} not implemented for finding pathway points")
     return epochs, optimizer, lr_scheduler
 
-def get_optimizer_to_find_high_accuracy_path(model_name, model_parameter, train_lr, dataset, batch_size):
+def get_optimizer_to_find_high_accuracy_path(model_name, model_parameter):
     if model_name == "lenet":
-        optimizer = torch.optim.SGD(model_parameter, lr=train_lr)
+        optimizer = torch.optim.SGD(model_parameter, lr=0.01)
     elif model_name == "resnet18_bn":
-        optimizer = torch.optim.SGD(model_parameter, lr=train_lr)
+        optimizer = torch.optim.SGD(model_parameter, lr=0.001, momentum=0.9, weight_decay=5e-4)
     elif model_name == "simplenet":
-        optimizer = torch.optim.Adadelta(model_parameter, lr=train_lr, rho=0.9, eps=1e-3, weight_decay=0.001)
+        optimizer = torch.optim.Adadelta(model_parameter, lr=0.01, rho=0.9, eps=1e-3, weight_decay=0.001)
     else:
         raise NotImplementedError(f"{model_name} not implemented for finding high accuracy path")
     return optimizer
 
-def get_optimizer_to_rebuild_norm(model_name, model_parameter, lr, dataset, batch_size):
+def get_optimizer_to_rebuild_norm(model_name, model_parameter):
     if model_name == "resnet18_bn":
-        optimizer = torch.optim.SGD(model_parameter, lr=lr, momentum=0.9, weight_decay=5e-4)
+        optimizer = torch.optim.SGD(model_parameter, lr=0.001, momentum=0.9, weight_decay=5e-4)
     else:
         raise NotImplementedError(f"{model_name} not implemented for rebuilding norm")
     return optimizer
@@ -67,8 +67,7 @@ def get_optimizer_to_rebuild_norm(model_name, model_parameter, lr, dataset, batc
 
 class TrainMode(Enum):
     default_x_rounds = 0
-    Adam_until_loss = 1
-    default_until_loss = 2
+    default_until_loss = 1
 
 
 def set_logging(target_logger, task_name, log_file_path=None):
@@ -131,27 +130,25 @@ def get_files_to_process(arg_start_folder, arg_end_folder, arg_mode):
 
 # rebuild_norm_layers=None indicates rebuild all norm layers, when specified, then only rebuild norm for these layers
 
-def rebuild_norm_layers(model, model_state, arg_ml_setup, epoch_of_rebuild, dataloader, rebuild_norm_round,
-                        rebuild_lr=0.001, existing_optimizer=None, rebuild_on_device=None,
-                        reset_norm_to_initial=False, initial_model_stat=None, display=False, rebuild_norm_layers_override=None):
+def rebuild_norm_layers(model, model_state, arg_ml_setup, epoch_of_rebuild, dataloader, rebuild_norm_round, existing_optimizer_state,
+                        rebuild_on_device=None, reset_norm_to_initial=False, initial_model_stat=None, display=False, rebuild_norm_layers_override=None):
     global __print_norm_to_rebuild_layers
     if rebuild_norm_layers_override is None:
         rebuild_norm_layers_override = []
 
-    def is_processing_this_layer(model_name, layer_name, rebuild_norm_layers):
-        if len(rebuild_norm_layers) == 0:
+    def is_processing_this_layer(model_name, layer_name, rebuild_norm_layers_override):
+        if len(rebuild_norm_layers_override) == 0:
             if special_torch_layers.is_normalization_layer(model_name, layer_name):
                 return True
             else:
                 return False
         else:
             process_this_layer = False
-            for single_layer in rebuild_norm_layers:
+            for single_layer in rebuild_norm_layers_override:
                 if layer_name in single_layer:
                     process_this_layer = True
                     break
             return process_this_layer
-
 
     # get the list of layers to rebuild norm
     rebuild_norm_layers_to_process = []
@@ -177,11 +174,11 @@ def rebuild_norm_layers(model, model_state, arg_ml_setup, epoch_of_rebuild, data
     model.to(rebuild_on_device)
 
     criterion = arg_ml_setup.criterion
-    if existing_optimizer is None:
-        optimizer_rebuild_norm = torch.optim.Adam(model.parameters(), lr=rebuild_lr)
-    else:
-        optimizer_rebuild_norm = existing_optimizer
+
+    optimizer_rebuild_norm = get_optimizer_to_rebuild_norm(arg_ml_setup.model_name, model.parameters())
+    optimizer_rebuild_norm.load_state_dict(existing_optimizer_state)
     cuda.CudaEnv.optimizer_to(optimizer_rebuild_norm, rebuild_on_device)
+
     rebuild_states = []
     rebuilding_normalization_count = 0
     for epoch in range(epoch_of_rebuild):
@@ -227,7 +224,7 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
     training_mode, training_parameter = arg_training_parameters
     if training_mode == TrainMode.default_x_rounds:
         train_lr, train_round = training_parameter
-    elif training_mode == TrainMode.Adam_until_loss or training_mode == TrainMode.default_until_loss:
+    elif training_mode == TrainMode.default_until_loss:
         target_train_loss = training_parameter
     else:
         raise NotImplementedError
@@ -264,9 +261,9 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
     # load models
     cpu_device = torch.device("cpu")
     start_model = copy.deepcopy(arg_ml_setup.model)
-    initial_model_stat = start_model.state_dict()
     start_model_stat_dict, start_model_name = util.load_model_state_file(start_model_path)
     end_model_stat_dict, end_model_name = util.load_model_state_file(end_model_path)
+    initial_model_stat = copy.deepcopy(start_model_stat_dict)
     util.assert_if_both_not_none(start_model_name, end_model_name)
 
     start_model.load_state_dict(start_model_stat_dict)
@@ -281,14 +278,7 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
     training_dataset = arg_ml_setup.training_data
     dataloader = DataLoader(training_dataset, batch_size=arg_ml_setup.training_batch_size, shuffle=True)
     criterion = arg_ml_setup.criterion
-    if training_mode == TrainMode.default_x_rounds:
-        optimizer = get_optimizer_to_find_high_accuracy_path(arg_ml_setup.model_name, start_model.parameters(), train_lr, training_dataset, arg_ml_setup.training_batch_size)
-    elif training_mode == TrainMode.Adam_until_loss:
-        optimizer = torch.optim.Adam(start_model.parameters(), lr=0.001)
-    elif training_mode == TrainMode.default_until_loss:
-        optimizer = get_optimizer_to_find_high_accuracy_path(arg_ml_setup.model_name, start_model.parameters(), 0.001, training_dataset, arg_ml_setup.training_batch_size)
-    else:
-        raise NotImplementedError
+    optimizer = get_optimizer_to_find_high_accuracy_path(arg_ml_setup.model_name, start_model.parameters())
 
     # try loading optimizer state to optimizer
     optimizer_test = copy.deepcopy(optimizer)
@@ -331,11 +321,13 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
             ignore_layers.append(layer_name)
         if special_torch_layers.is_keyword_in_layer_name(layer_name, arg_layer_skip_average_keyword):
             ignore_layers.append(layer_name)
+        if special_torch_layers.is_ignored_layer_averaging(layer_name):
+            ignore_layers.append(layer_name)
     for layer_name in start_model_stat_dict.keys():
         if layer_name not in ignore_layers:
             averaged_layers.append(layer_name)
     child_logger.info(f"ignore moving {len(ignore_layers)} layers: {ignore_layers}")
-    child_logger.info(f"moving {len(averaged_layers)} layers: {averaged_layers}")
+    child_logger.info(f"plan to move {len(averaged_layers)} layers: {averaged_layers}")
 
     # services
     all_node_names = [0, 1]
@@ -511,7 +503,7 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
                 util.save_optimizer_state(optimizer_paths_for_pathway_points[current_path_index], optimizer.state_dict(), arg_ml_setup.model_name)
 
         """move tensor"""
-        start_model_stat = model_average.move_model_state_toward(start_model_stat, current_direction_point, arg_step_size, arg_adoptive_step_size, False, ignore_layers=ignore_layers, random_scale=1.0)
+        start_model_stat = model_average.move_model_state_toward(start_model_stat, current_direction_point, arg_step_size, arg_adoptive_step_size, True, ignore_layers=ignore_layers)
         if ENABLE_NAN_CHECKING:
             util.check_for_nans_in_state_dict(start_model_stat)
         """rescale variance"""
@@ -537,7 +529,7 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
                 if training_index == train_round:
                     break
                 assert training_index < train_round
-        elif training_mode == TrainMode.Adam_until_loss or training_mode == TrainMode.default_until_loss:
+        elif training_mode == TrainMode.default_until_loss:
             moving_max_size = 2
             moving_max = util.MovingMax(moving_max_size)
             while True:
@@ -566,11 +558,10 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
 
         """rebuilding normalization"""
         if arg_rebuild_norm_round != 0:
-            optimizer_rebuild = optimizer
+            existing_optimizer_state = optimizer.state_dict()
             start_model_stat, rebuild_states, layers_rebuild = rebuild_norm_layers(start_model, start_model_stat, arg_ml_setup, epoch_for_rebuilding_norm,
-                                                                   dataloader_for_rebuilding_norm, arg_rebuild_norm_round, rebuild_lr=arg_rebuild_norm_lr,
-                                                                   rebuild_on_device=device, existing_optimizer=optimizer_rebuild,
-                                                                   initial_model_stat=initial_model_stat,
+                                                                   dataloader_for_rebuilding_norm, arg_rebuild_norm_round, existing_optimizer_state,
+                                                                   rebuild_on_device=device, initial_model_stat=initial_model_stat,
                                                                    reset_norm_to_initial=True, rebuild_norm_layers_override=arg_rebuild_norm_specified_layers)
             if __print_norm_to_rebuild_layers:
                 __print_norm_to_rebuild_layers = False
@@ -578,7 +569,7 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
             rebuild_iter, rebuilding_loss_val = rebuild_states[-1]
             child_logger.info(f"current tick: {current_tick}, rebuilding finished at {rebuild_iter} rounds, rebuilding loss = {rebuilding_loss_val:.3f}")
             # remove norm layer variance
-            target_variance = {k: v for k, v in target_variance.items() if not special_torch_layers.is_normalization_layer(arg_ml_setup.model_name, k)}
+            target_variance = {k: v for k, v in target_variance.items() if k not in layers_rebuild}
 
         cuda.CudaEnv.model_state_dict_to(start_model_stat, cpu_device)
         if ENABLE_NAN_CHECKING:
@@ -750,7 +741,7 @@ if __name__ == '__main__':
                   (rebuild_norm_lr, rebuild_normalization_round, rebuild_norm_specified_layers),
                   (pathway_depth, existing_pathway),
                   (worker_count, total_cpu_count, save_format, save_ticks, use_cpu) ) for (start_file, end_file) in paths_to_find]
-    elif mode == TrainMode.Adam_until_loss or mode == TrainMode.default_until_loss:
+    elif mode == TrainMode.default_until_loss:
         args = [( (output_folder_path, start_file, end_file, current_ml_setup, max_tick),
                   (mode, loss),
                   (step_size, adoptive_step_size, layer_skip_average, layer_skip_average_keyword),

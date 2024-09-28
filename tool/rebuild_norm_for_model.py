@@ -12,7 +12,7 @@ from typing import Final
 
 import find_high_accuracy_path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from py_src import ml_setup
+from py_src import ml_setup, util
 
 
 MAX_CPU_COUNT: Final[int] = 32
@@ -57,6 +57,7 @@ if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description='Rebuild norm layer for a model')
     parser.add_argument("model_path", type=str, help="model path")
+    parser.add_argument("initial_model_path", type=str, help="path to a initial model, this is usually the starting point of a trajectory")
 
     parser.add_argument("-c", '--core', type=int, default=os.cpu_count(), help='specify the number of CPU cores to use')
     parser.add_argument("-r", "--rebuild_norm_round", type=int, default=50)
@@ -71,6 +72,7 @@ if __name__ == '__main__':
     if total_cpu_count > MAX_CPU_COUNT:
         total_cpu_count = MAX_CPU_COUNT
     model_path = args.model_path
+    initial_model_path = args.initial_model_path
     rebuild_round = args.rebuild_norm_round
     rebuild_count = args.rebuild_count
     lr = args.lr
@@ -81,13 +83,15 @@ if __name__ == '__main__':
     assert os.path.exists(model_path), f"model file {model_path} does not exist"
     model_file_name = os.path.basename(model_path)
     assert '.model.pt' in model_file_name, f"model file {model_file_name} does not have .model.pt extension"
+    assert os.path.exists(initial_model_path), f"initial model file {initial_model_path} does not exist"
+    initial_model_file_name = os.path.basename(initial_model_path)
+    assert '.model.pt' in initial_model_file_name, f"model file {initial_model_file_name} does not have .model.pt extension"
 
     cpu_device = torch.device("cpu")
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    starting_model_info = torch.load(model_path, map_location=cpu_device)
-    starting_model_stat = starting_model_info["state_dict"]
-    model_type = starting_model_info["model_name"]
+    starting_model_stat, model_type = util.load_model_state_file(model_path)
+    initial_model_stat, _ = util.load_model_state_file(initial_model_path)
 
     current_ml_setup = ml_setup.get_ml_setup_from_model_type(model_type)
 
@@ -103,7 +107,6 @@ if __name__ == '__main__':
 
     """ start rebuilding norm """
     target_model = copy.deepcopy(current_ml_setup.model)
-    initial_model_stat = target_model.state_dict()
 
     optimizer_stat_path = model_path.replace('model.pt', 'optimizer.pt')
     assert os.path.exists(optimizer_stat_path), f'starting optimizer {optimizer_stat_path} is missing'
@@ -118,30 +121,21 @@ if __name__ == '__main__':
         epoch_for_rebuilding_norm = epoch_for_rebuilding_norm * ratio
 
     indices = torch.randperm(len(current_ml_setup.training_data_for_rebuilding_normalization))[:dataset_rebuild_norm_size]
-    # index_dataset = IndexedDataset(current_ml_setup.training_data_for_rebuilding_normalization)
     sub_dataset = torch.utils.data.Subset(current_ml_setup.training_data_for_rebuilding_normalization, indices.tolist())
     dataloader_for_rebuilding_norm = DataLoader(sub_dataset, batch_size=current_ml_setup.training_batch_size)
     criterion = current_ml_setup.criterion
 
     for rebuild_count_index in range(rebuild_count):
-        # optimizer = torch.optim.SGD(target_model.parameters(), lr=lr)
-        # optimizer_stat = torch.load(optimizer_stat_path, map_location=cpu_device)
-        # optimizer.load_state_dict(optimizer_stat)
-
-        optimizer = torch.optim.Adam(target_model.parameters(), lr=0.001)
-        final_state, rebuild_states = find_high_accuracy_path.rebuild_norm_layers(target_model, starting_model_stat, current_ml_setup,
-                                                                                  epoch_for_rebuilding_norm, dataloader_for_rebuilding_norm, lr,
-                                                                                  existing_optimizer=optimizer, rebuild_on_device=device,
-                                                                                  initial_model_stat=initial_model_stat, reset_norm_to_initial=True, display=True)
+        existing_optimizer_state, optimizer_model_type = util.load_optimizer_state_file(optimizer_stat_path)
+        assert optimizer_model_type == model_type
+        final_state, rebuild_states, rebuild_layers = find_high_accuracy_path.rebuild_norm_layers(target_model, starting_model_stat, current_ml_setup,
+                                                                                  epoch_for_rebuilding_norm, dataloader_for_rebuilding_norm, rebuild_round, existing_optimizer_state,
+                                                                                  rebuild_on_device=device, initial_model_stat=initial_model_stat, reset_norm_to_initial=False, display=True)
         rebuild_iter, rebuilding_loss_val = rebuild_states[-1]
-        print(f"rebuild norm layer finished at {rebuild_iter} rounds, rebuilding loss = {rebuilding_loss_val}")
+        print(f"rebuild norm layer finished at {rebuild_iter} rounds, rebuilding loss = {rebuilding_loss_val}, totally {len(rebuild_layers)} layers: {rebuild_layers}")
 
         # save model state
         save_csv_file_name = f'{output_folder_path}/{rebuild_count_index}.csv'
         state_dict = target_model.state_dict()
         save_first_norm_layer_to_file(save_csv_file_name, state_dict)
-
-
-
-
 
