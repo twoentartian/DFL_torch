@@ -63,6 +63,13 @@ def get_optimizer_to_rebuild_norm(model_name, model_parameter):
         raise NotImplementedError(f"{model_name} not implemented for rebuilding norm")
     return optimizer
 
+def get_enable_merge_bias_weight_during_moving(model_name):
+    if model_name == "lenet":
+        return True
+    elif model_name == "resnet18_bn":
+        return False
+    else:
+        raise NotImplementedError(f"{model_name} not implemented for get_enable_merge_bias_weight_during_moving")
 
 class TrainMode(Enum):
     default_x_rounds = 0
@@ -532,7 +539,9 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
                 util.save_optimizer_state(optimizer_paths_for_pathway_points[current_path_index], optimizer.state_dict(), arg_ml_setup.model_name)
 
         """move tensor"""
-        start_model_stat = model_average.move_model_state_toward(start_model_stat, current_direction_point, arg_step_size, arg_adoptive_step_size, True, ignore_layers=ignore_layers)
+        merge_bias_weight = get_enable_merge_bias_weight_during_moving(arg_ml_setup.model_name)
+        start_model_stat = model_average.move_model_state_toward(start_model_stat, current_direction_point, arg_step_size, arg_adoptive_step_size,
+                                                                 enable_merge_bias_with_weight=merge_bias_weight, ignore_layers=ignore_layers)
 
         if ENABLE_NAN_CHECKING:
             util.check_for_nans_in_state_dict(start_model_stat)
