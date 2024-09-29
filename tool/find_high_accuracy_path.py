@@ -49,7 +49,7 @@ def get_optimizer_to_find_high_accuracy_path(model_name, model_parameter):
     if model_name == "lenet":
         optimizer = torch.optim.SGD(model_parameter, lr=0.01)
     elif model_name == "resnet18_bn":
-        optimizer = torch.optim.SGD(model_parameter, lr=0.001, momentum=0.9, weight_decay=5e-4)
+        optimizer = torch.optim.SGD(model_parameter, lr=0.001)
     elif model_name == "simplenet":
         optimizer = torch.optim.Adadelta(model_parameter, lr=0.01, rho=0.9, eps=1e-3, weight_decay=0.001)
     else:
