@@ -602,7 +602,7 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
             rebuild_iter, rebuilding_loss_val = rebuild_states[-1]
             child_logger.info(f"current tick: {current_tick}, rebuilding finished at {rebuild_iter} rounds, rebuilding loss = {rebuilding_loss_val:.3f}")
             # remove norm layer variance
-            target_variance = {k: v for k, v in target_variance.items() if k not in layers_rebuild}
+            # target_variance = {k: v for k, v in target_variance.items() if k not in layers_rebuild}
 
         if ENABLE_NAN_CHECKING:
             util.check_for_nans_in_state_dict(start_model_stat)
