@@ -207,7 +207,6 @@ def rebuild_norm_layers(model, model_state, arg_ml_setup, epoch_of_rebuild, data
         if exit_flag:
             break
     output_model_state = model.state_dict()
-    cuda.CudaEnv.model_state_dict_to(output_model_state, cpu_device)
     return output_model_state, rebuild_states, rebuild_norm_layers_to_process
 
 
@@ -385,9 +384,7 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
                 for epoch in range(ft_epochs):
                     # scale variance
                     current_model_state = target_model.state_dict()
-                    cuda.CudaEnv.model_state_dict_to(current_model_state, cpu_device)
                     current_model_state = model_variance_correct.VarianceCorrector.scale_model_stat_to_variance(current_model_state, ft_target_variance)
-                    cuda.CudaEnv.model_state_dict_to(current_model_state, device)
                     target_model.load_state_dict(current_model_state)
 
                     # training
@@ -492,11 +489,19 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
 
     previous_pathway_index = -1
     while current_tick < arg_max_tick:
+        cuda.CudaEnv.model_state_dict_to(start_model_stat, device)
+
         """set end point"""
         path_len = arg_max_tick // len(target_direction_points)
         current_path_index = current_tick // path_len
         current_direction_point = target_direction_points[current_path_index]
         if previous_pathway_index != current_path_index:
+            # move current pathway points to computing device and move else back to cpu
+            for i in range(len(target_direction_points)):
+                if i == current_path_index:
+                    cuda.CudaEnv.model_state_dict_to(target_direction_points[i], device)
+                else:
+                    cuda.CudaEnv.model_state_dict_to(target_direction_points[i], cpu_device)
             # entering a new pathway point region
             previous_pathway_index = current_path_index
             if optimizer_paths_for_pathway_points is not None:
@@ -504,6 +509,7 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
 
         """move tensor"""
         start_model_stat = model_average.move_model_state_toward(start_model_stat, current_direction_point, arg_step_size, arg_adoptive_step_size, True, ignore_layers=ignore_layers)
+
         if ENABLE_NAN_CHECKING:
             util.check_for_nans_in_state_dict(start_model_stat)
         """rescale variance"""
@@ -571,7 +577,6 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
             # remove norm layer variance
             target_variance = {k: v for k, v in target_variance.items() if k not in layers_rebuild}
 
-        cuda.CudaEnv.model_state_dict_to(start_model_stat, cpu_device)
         if ENABLE_NAN_CHECKING:
             util.check_for_nans_in_state_dict(start_model_stat)
         """scale variance back, due to SGD variance drift"""
@@ -579,8 +584,10 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
         if ENABLE_NAN_CHECKING:
             util.check_for_nans_in_state_dict(start_model_stat)
 
-        # service
+        """service"""
         all_model_stats = [start_model_stat, end_model_stat_dict]
+        for i in all_model_stats:
+            cuda.CudaEnv.model_state_dict_to(i, device)
         weight_diff_service.trigger_without_runtime_parameters(current_tick, all_model_stats)
         distance_to_origin_service.trigger_without_runtime_parameters(current_tick, {0: start_model_stat})
         variance_service.trigger_without_runtime_parameters(current_tick, [0], [start_model_stat])
