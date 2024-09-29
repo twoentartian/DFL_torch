@@ -129,7 +129,7 @@ def get_files_to_process(arg_start_folder, arg_end_folder, arg_mode):
 
 # rebuild_norm_layers=None indicates rebuild all norm layers, when specified, then only rebuild norm for these layers
 
-def rebuild_norm_layers(model, model_state, arg_ml_setup, epoch_of_rebuild, dataloader, rebuild_norm_round, existing_optimizer_state,
+def rebuild_norm_layers(model, model_state, arg_ml_setup, epoch_of_rebuild, dataloader, rebuild_norm_round, existing_optimizer_state_or_optimizer,
                         rebuild_on_device=None, reset_norm_to_initial=False, initial_model_stat=None, display=False, rebuild_norm_layers_override=None):
     global __print_norm_to_rebuild_layers
     if rebuild_norm_layers_override is None:
@@ -174,8 +174,15 @@ def rebuild_norm_layers(model, model_state, arg_ml_setup, epoch_of_rebuild, data
 
     criterion = arg_ml_setup.criterion
 
-    optimizer_rebuild_norm = get_optimizer_to_rebuild_norm(arg_ml_setup.model_name, model.parameters())
-    optimizer_rebuild_norm.load_state_dict(existing_optimizer_state)
+    if isinstance(existing_optimizer_state_or_optimizer, dict):
+        # this is an optimizer state
+        optimizer_rebuild_norm = get_optimizer_to_rebuild_norm(arg_ml_setup.model_name, model.parameters())
+        optimizer_rebuild_norm.load_state_dict(existing_optimizer_state_or_optimizer)
+    elif isinstance(existing_optimizer_state_or_optimizer, optim.Optimizer):
+        # this is an optimizer
+        optimizer_rebuild_norm = existing_optimizer_state_or_optimizer
+    else:
+        raise ValueError(f"existing_optimizer_state_or_optimizer should be an optimizer or an optimizer state dict.")
     cuda.CudaEnv.optimizer_to(optimizer_rebuild_norm, rebuild_on_device)
 
     rebuild_states = []
@@ -214,7 +221,7 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
     global __print_norm_to_rebuild_layers
 
     arg_output_folder_path, start_model_path, end_model_path, arg_ml_setup, arg_max_tick = arg_env
-    arg_rebuild_norm_lr, arg_rebuild_norm_round, arg_rebuild_norm_specified_layers, arg_dedicated_rebuild_norm_dataloader = arg_rebuild_norm
+    arg_rebuild_norm_lr, arg_rebuild_norm_round, arg_rebuild_norm_specified_layers, arg_dedicated_rebuild_norm_dataloader, arg_rebuild_norm_reuse_train_optimizer = arg_rebuild_norm
     arg_step_size, arg_adoptive_step_size, arg_layer_skip_average, arg_layer_skip_average_keyword = arg_average
     arg_path_way_depth, arg_existing_pathway = arg_pathway
     arg_worker_count, arg_total_cpu_count, arg_save_format, arg_save_ticks, arg_use_cpu = arg_compute
@@ -581,9 +588,12 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
 
         """rebuilding normalization"""
         if arg_rebuild_norm_round != 0:
-            existing_optimizer_state = optimizer.state_dict()
+            if arg_rebuild_norm_reuse_train_optimizer:
+                i = optimizer
+            else:
+                i = optimizer.state_dict()
             start_model_stat, rebuild_states, layers_rebuild = rebuild_norm_layers(start_model, start_model_stat, arg_ml_setup, epoch_for_rebuilding_norm,
-                                                                   dataloader_for_rebuilding_norm, arg_rebuild_norm_round, existing_optimizer_state,
+                                                                   dataloader_for_rebuilding_norm, arg_rebuild_norm_round, i,
                                                                    rebuild_on_device=device, initial_model_stat=initial_model_stat,
                                                                    reset_norm_to_initial=True, rebuild_norm_layers_override=arg_rebuild_norm_specified_layers)
             if __print_norm_to_rebuild_layers:
@@ -656,6 +666,7 @@ if __name__ == '__main__':
     parser.add_argument("--rebuild_norm_lr", type=float, default=0.001)
     parser.add_argument("--rebuild_norm_layers", type=str, nargs="+", default=[], help='specify which layers to rebuild, default means all norm layers')
     parser.add_argument("--dedicated_rebuild_norm_dataloader", action='store_true', help='use a dedicated, sample order preserved dataloader')
+    parser.add_argument("--rebuild_norm_reuse_train_optimizer", action='store_true', help='reuse the training optimizer for building norm layers')
 
     # find pathway points parameters
     parser.add_argument("-p", "--pathway_depth", type=int, default=0, help='the depth of find pathway points, 1->find a mid point, 2->find 3 points(25% each), 3->find 7 points(12.5% each)')
@@ -700,6 +711,7 @@ if __name__ == '__main__':
     rebuild_norm_lr = args.rebuild_norm_lr
     rebuild_norm_specified_layers = args.rebuild_norm_layers
     dedicated_rebuild_norm_dataloader = args.dedicated_rebuild_norm_dataloader
+    rebuild_norm_reuse_train_optimizer = args.rebuild_norm_reuse_train_optimizer
 
     # find pathway points parameters
     pathway_depth = args.pathway_depth
@@ -775,14 +787,14 @@ if __name__ == '__main__':
         args = [( (output_folder_path, start_file, end_file, current_ml_setup, max_tick),
                   (mode, (learning_rate, training_round), use_pretrain_optimizer),
                   (step_size, adoptive_step_size, layer_skip_average, layer_skip_average_keyword),
-                  (rebuild_norm_lr, rebuild_normalization_round, rebuild_norm_specified_layers, dedicated_rebuild_norm_dataloader),
+                  (rebuild_norm_lr, rebuild_normalization_round, rebuild_norm_specified_layers, dedicated_rebuild_norm_dataloader, rebuild_norm_reuse_train_optimizer),
                   (pathway_depth, existing_pathway),
                   (worker_count, total_cpu_count, save_format, save_ticks, use_cpu) ) for (start_file, end_file) in paths_to_find]
     elif mode == TrainMode.default_until_loss:
         args = [( (output_folder_path, start_file, end_file, current_ml_setup, max_tick),
                   (mode, loss, use_pretrain_optimizer),
                   (step_size, adoptive_step_size, layer_skip_average, layer_skip_average_keyword),
-                  (rebuild_norm_lr, rebuild_normalization_round, rebuild_norm_specified_layers, dedicated_rebuild_norm_dataloader),
+                  (rebuild_norm_lr, rebuild_normalization_round, rebuild_norm_specified_layers, dedicated_rebuild_norm_dataloader, rebuild_norm_reuse_train_optimizer),
                   (pathway_depth, existing_pathway),
                   (worker_count, total_cpu_count, save_format, save_ticks, use_cpu) ) for (start_file, end_file) in paths_to_find]
     else:
