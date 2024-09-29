@@ -181,6 +181,12 @@ def rebuild_norm_layers(model, model_state, arg_ml_setup, epoch_of_rebuild, data
 
     rebuild_states = []
     rebuilding_normalization_count = 0
+
+    # freeze unprocessed layers
+    for layer_name, param in model.named_parameters():
+        if layer_name not in rebuild_norm_layers_to_process:
+            param.requires_grad = False
+
     for epoch in range(epoch_of_rebuild):
         exit_flag = False
         for (rebuilding_normalization_index, (data, label)) in enumerate(dataloader):
@@ -191,12 +197,6 @@ def rebuild_norm_layers(model, model_state, arg_ml_setup, epoch_of_rebuild, data
             rebuilding_loss.backward()
             rebuilding_loss_val = rebuilding_loss.item()
             optimizer_rebuild_norm.step()
-            # reset all layers except normalization
-            current_model_stat = model.state_dict()
-            for layer_name, layer_weights in current_model_stat.items():
-                if layer_name not in rebuild_norm_layers_to_process:
-                    current_model_stat[layer_name] = model_state[layer_name]
-            model.load_state_dict(current_model_stat)
             rebuilding_normalization_count += 1
             rebuild_states.append((rebuilding_normalization_count, rebuilding_loss_val))
             if display:
