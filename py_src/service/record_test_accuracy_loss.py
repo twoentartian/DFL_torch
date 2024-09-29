@@ -38,7 +38,7 @@ class ServiceTestAccuracyLossRecorder(Service):
 
         self.initialize_without_runtime_parameters(output_path, node_names, ml_setup.model, ml_setup.criterion, ml_setup.testing_data, config_file, cuda_env)
 
-    def initialize_without_runtime_parameters(self, output_path, node_names, model, criterion, test_dataset, config_file=None, cuda_env=None):
+    def initialize_without_runtime_parameters(self, output_path, node_names, model, criterion, test_dataset, use_cuda=None, config_file=None, cuda_env=None):
         self.accuracy_file = open(os.path.join(output_path, f"{self.accuracy_file_name}"), "w+")
         self.loss_file = open(os.path.join(output_path, f"{self.loss_file_name}"), "w+")
         self.node_order = node_names
@@ -69,7 +69,14 @@ class ServiceTestAccuracyLossRecorder(Service):
         else:
             self.test_dataset = DataLoader(test_dataset, batch_size=self.test_batch_size, shuffle=True)
         # move to cuda?
-        self.is_using_cuda = (config_file is not None) and (not config_file.force_use_cpu) and (cuda_env is not None) and cuda_env.cuda_available
+        if (config_file is not None) and (cuda_env is not None):
+            assert use_cuda is None
+            self.is_using_cuda = (not config_file.force_use_cpu) and cuda_env.cuda_available
+        elif use_cuda is not None:
+            assert (config_file is None) and (cuda_env is None)
+            self.is_using_cuda = use_cuda
+        else:
+            raise ValueError(f"provide cuda_env & config_file or just provide use_cuda")
         if self.is_using_cuda:
             self.test_model = self.test_model.cuda()  # use default CUDA device
 

@@ -24,7 +24,6 @@ INFO_FILE_NAME = 'info.json'
 
 MAX_CPU_COUNT: Final[int] = 32
 
-ENABLE_DEDICATED_TRAINING_DATASET_FOR_REBUILDING_NORM: Final[bool] = True
 ENABLE_NAN_CHECKING: Final[bool] = False
 
 
@@ -215,12 +214,12 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
     global __print_norm_to_rebuild_layers
 
     arg_output_folder_path, start_model_path, end_model_path, arg_ml_setup, arg_max_tick = arg_env
-    arg_rebuild_norm_lr, arg_rebuild_norm_round, arg_rebuild_norm_specified_layers = arg_rebuild_norm
+    arg_rebuild_norm_lr, arg_rebuild_norm_round, arg_rebuild_norm_specified_layers, arg_dedicated_rebuild_norm_dataloader = arg_rebuild_norm
     arg_step_size, arg_adoptive_step_size, arg_layer_skip_average, arg_layer_skip_average_keyword = arg_average
     arg_path_way_depth, arg_existing_pathway = arg_pathway
     arg_worker_count, arg_total_cpu_count, arg_save_format, arg_save_ticks, arg_use_cpu = arg_compute
 
-    training_mode, training_parameter = arg_training_parameters
+    training_mode, training_parameter, use_pretrain_optimizer = arg_training_parameters
     if training_mode == TrainMode.default_x_rounds:
         train_lr, train_round = training_parameter
     elif training_mode == TrainMode.default_until_loss:
@@ -246,10 +245,6 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
     thread_per_process = arg_total_cpu_count // arg_worker_count
     torch.set_num_threads(thread_per_process)
 
-    # check optimizer
-    start_optimizer_path = start_model_path.replace('model.pt', 'optimizer.pt')
-    assert os.path.exists(start_optimizer_path), f'starting optimizer {start_optimizer_path} is missing'
-
     # output folders
     arg_output_folder_path = os.path.join(arg_output_folder_path, f"{start_file_name}-{end_file_name}")
     if os.path.exists(arg_output_folder_path):
@@ -257,43 +252,65 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
     else:
         os.makedirs(arg_output_folder_path)
 
-    # load models
+    """load models"""
     cpu_device = torch.device("cpu")
     start_model = copy.deepcopy(arg_ml_setup.model)
+    initial_model_stat = start_model.state_dict()
     start_model_stat_dict, start_model_name = util.load_model_state_file(start_model_path)
     end_model_stat_dict, end_model_name = util.load_model_state_file(end_model_path)
-    initial_model_stat = copy.deepcopy(start_model_stat_dict)
     util.assert_if_both_not_none(start_model_name, end_model_name)
-
     start_model.load_state_dict(start_model_stat_dict)
-    start_model_optimizer_stat, _ = util.load_optimizer_state_file(start_optimizer_path)
 
     # assert start_model_state_dict != end_model_stat_dict
     for key in start_model_stat_dict.keys():
         assert not torch.equal(start_model_stat_dict[key], end_model_stat_dict[key]), f'starting model({start_model_path}) is same as ending model({end_model_path})'
         break
 
-    # load training data
+    """load training data"""
     training_dataset = arg_ml_setup.training_data
     dataloader = DataLoader(training_dataset, batch_size=arg_ml_setup.training_batch_size, shuffle=True)
     criterion = arg_ml_setup.criterion
     optimizer = get_optimizer_to_find_high_accuracy_path(arg_ml_setup.model_name, start_model.parameters())
 
-    # try loading optimizer state to optimizer
-    optimizer_test = copy.deepcopy(optimizer)
-    load_optimizer_success = False
-    try:
-        optimizer_test.load_state_dict(start_model_optimizer_stat)
-        optimizer.load_state_dict(start_model_optimizer_stat)
-        child_logger.info(f"successfully load optimizer state")
-        load_optimizer_success = True
-    except Exception as e:
-        child_logger.info(f"fail to load optimizer state: {str(e)}, now skip")
-    del optimizer_test
+    """Optimizer related config"""
+    if use_pretrain_optimizer:
+        """pre-train an optimizer"""
+        child_logger.info(f"pre training")
+        temp_model_state = start_model.state_dict()
+        cuda.CudaEnv.model_state_dict_to(temp_model_state, cpu_device)
+        start_model.train()
+        start_model.to(device)
+        for (training_index, (data, label)) in enumerate(dataloader):
+            data, label = data.to(device), label.to(device)
+            optimizer.zero_grad(set_to_none=True)
+            output = start_model(data)
+            loss = criterion(output, label)
+            loss.backward()
+            optimizer.step()
+            loss_val = loss.item()
+            if training_index == 100:
+                break
+        start_model.load_state_dict(temp_model_state)
+    else:
+        """use existing optimizer"""
+        # check optimizer
+        start_optimizer_path = start_model_path.replace('model.pt', 'optimizer.pt')
+        assert os.path.exists(start_optimizer_path), f'starting optimizer {start_optimizer_path} is missing'
+        start_model_optimizer_stat, _ = util.load_optimizer_state_file(start_optimizer_path)
+
+        # try loading optimizer state to optimizer
+        optimizer_test = copy.deepcopy(optimizer)
+        try:
+            optimizer_test.load_state_dict(start_model_optimizer_stat)
+            optimizer.load_state_dict(start_model_optimizer_stat)
+            child_logger.info(f"successfully load optimizer state")
+        except Exception as e:
+            child_logger.info(f"fail to load optimizer state: {str(e)}, now skip")
+        del optimizer_test
 
     # set dataloader for rebuilding norm
     if arg_rebuild_norm_round != 0:
-        if ENABLE_DEDICATED_TRAINING_DATASET_FOR_REBUILDING_NORM:
+        if arg_dedicated_rebuild_norm_dataloader:
             epoch_for_rebuilding_norm = 1
             dataset_for_rebuilding_norm = arg_ml_setup.training_data_for_rebuilding_normalization
             dataset_rebuild_norm_size = arg_rebuild_norm_round * arg_ml_setup.training_batch_size
@@ -347,7 +364,7 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
     else:
         record_model_service = None
     record_test_accuracy_loss_service = record_test_accuracy_loss.ServiceTestAccuracyLossRecorder(1, 100, use_fixed_testing_dataset=True)
-    record_test_accuracy_loss_service.initialize_without_runtime_parameters(arg_output_folder_path, [0], start_model, criterion, training_dataset)
+    record_test_accuracy_loss_service.initialize_without_runtime_parameters(arg_output_folder_path, [0], start_model, criterion, training_dataset, use_cuda=True)
     record_training_loss_service = record_training_loss.ServiceTrainingLossRecorder(1)
     record_training_loss_service.initialize_without_runtime_parameters(arg_output_folder_path, [0])
 
@@ -392,7 +409,7 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
                     count = 0
                     for data, label in dataloader:
                         data, label = data.to(device), label.to(device)
-                        ft_optimizer.zero_grad()
+                        ft_optimizer.zero_grad(set_to_none=True)
                         outputs = target_model(data)
                         loss = criterion(outputs, label)
                         loss.backward()
@@ -632,11 +649,13 @@ if __name__ == '__main__':
     parser.add_argument("--lr", type=float, default=0.001, help='train the model with this learning rate, joint with "--training_round"')
     parser.add_argument("--training_round", type=int, default=1, help='train the model for x rounds, joint with "--lr"')
     parser.add_argument("--loss", type=float, default=-1, help='train the model until loss is smaller than, cannot use with "--training_round" or "--lr"')
+    parser.add_argument("--pretrain_optimizer", action='store_true', help='pretrain an optimizer rather than using existing optimizer state')
 
     # rebuild norm parameter
     parser.add_argument("-r", "--rebuild_norm_round", type=int, default=0, help='train for x rounds to rebuild the norm layers')
     parser.add_argument("--rebuild_norm_lr", type=float, default=0.001)
     parser.add_argument("--rebuild_norm_layers", type=str, nargs="+", default=[], help='specify which layers to rebuild, default means all norm layers')
+    parser.add_argument("--dedicated_rebuild_norm_dataloader", action='store_true', help='use a dedicated, sample order preserved dataloader')
 
     # find pathway points parameters
     parser.add_argument("-p", "--pathway_depth", type=int, default=0, help='the depth of find pathway points, 1->find a mid point, 2->find 3 points(25% each), 3->find 7 points(12.5% each)')
@@ -654,29 +673,37 @@ if __name__ == '__main__':
     set_logging(logger, "main")
     logger.info("logging setup complete")
 
+    # train parameters
     mode = TrainMode.default_x_rounds
     learning_rate = args.lr
     training_round = args.training_round
+    use_pretrain_optimizer = args.pretrain_optimizer
     loss = args.loss
     if loss != -1:
         assert learning_rate == 0.001 and training_round == 1
         mode = TrainMode.default_until_loss
 
+    # general info
     start_folder = args.start_folder
     end_folder = args.end_folder
     mapping_mode = args.mapping_mode
-
     max_tick = args.max_tick
+
+    # average parameters
     step_size = args.step_size
     adoptive_step_size = args.adoptive_step_size
+    layer_skip_average = args.layer_skip_average if args.layer_skip_average is not None else []
+    layer_skip_average_keyword = args.layer_skip_average_keyword if args.layer_skip_average_keyword is not None else []
 
+    # rebuild norm
     rebuild_normalization_round = args.rebuild_norm_round
-
-    pathway_depth = args.pathway_depth
-    existing_pathway = args.existing_pathway
-
     rebuild_norm_lr = args.rebuild_norm_lr
     rebuild_norm_specified_layers = args.rebuild_norm_layers
+    dedicated_rebuild_norm_dataloader = args.dedicated_rebuild_norm_dataloader
+
+    # find pathway points parameters
+    pathway_depth = args.pathway_depth
+    existing_pathway = args.existing_pathway
 
     use_cpu = args.cpu
     paths_to_find = get_files_to_process(args.start_folder, args.end_folder, mapping_mode)
@@ -685,8 +712,7 @@ if __name__ == '__main__':
     else:
         save_ticks = None
     save_format = args.save_format
-    layer_skip_average = args.layer_skip_average if args.layer_skip_average is not None else []
-    layer_skip_average_keyword = args.layer_skip_average_keyword if args.layer_skip_average_keyword is not None else []
+
     paths_to_find_count = len(paths_to_find)
     logger.info(f"totally {paths_to_find_count} paths to process: {paths_to_find}")
 
@@ -747,16 +773,16 @@ if __name__ == '__main__':
 
     if mode == TrainMode.default_x_rounds:
         args = [( (output_folder_path, start_file, end_file, current_ml_setup, max_tick),
-                  (mode, (learning_rate, training_round)),
+                  (mode, (learning_rate, training_round), use_pretrain_optimizer),
                   (step_size, adoptive_step_size, layer_skip_average, layer_skip_average_keyword),
-                  (rebuild_norm_lr, rebuild_normalization_round, rebuild_norm_specified_layers),
+                  (rebuild_norm_lr, rebuild_normalization_round, rebuild_norm_specified_layers, dedicated_rebuild_norm_dataloader),
                   (pathway_depth, existing_pathway),
                   (worker_count, total_cpu_count, save_format, save_ticks, use_cpu) ) for (start_file, end_file) in paths_to_find]
     elif mode == TrainMode.default_until_loss:
         args = [( (output_folder_path, start_file, end_file, current_ml_setup, max_tick),
-                  (mode, loss),
+                  (mode, loss, use_pretrain_optimizer),
                   (step_size, adoptive_step_size, layer_skip_average, layer_skip_average_keyword),
-                  (rebuild_norm_lr, rebuild_normalization_round, rebuild_norm_specified_layers),
+                  (rebuild_norm_lr, rebuild_normalization_round, rebuild_norm_specified_layers, dedicated_rebuild_norm_dataloader),
                   (pathway_depth, existing_pathway),
                   (worker_count, total_cpu_count, save_format, save_ticks, use_cpu) ) for (start_file, end_file) in paths_to_find]
     else:
