@@ -157,13 +157,18 @@ def process_file_func(output_folder_path, start_model_path, end_model_path, arg_
             break
     start_model.load_state_dict(start_model_stat)
 
+    ignore_layers = []
+    for layer_name in start_model_stat_dict.keys():
+        if special_torch_layers.is_ignored_layer_averaging(layer_name):
+            ignore_layers.append(layer_name)
+
     current_tick = 0
     while current_tick < arg_max_tick:
         """record variance"""
         variance_record = model_variance_correct.VarianceCorrector(model_variance_correct.VarianceCorrectionType.FollowOthers)
         variance_record.add_variance(start_model_stat)
         """move tensor"""
-        start_model_stat = model_average.move_model_state_toward(start_model_stat, end_model_state_dict, arg_step_size, arg_adoptive_step_size)
+        start_model_stat = model_average.move_model_state_toward(start_model_stat, end_model_state_dict, arg_step_size, arg_adoptive_step_size, ignore_layers=ignore_layers)
         """rescale variance"""
         target_variance = variance_record.get_variance()
         for layer_name, single_layer_variance in target_variance.items():
