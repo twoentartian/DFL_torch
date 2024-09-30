@@ -294,6 +294,7 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
         cuda.CudaEnv.model_state_dict_to(temp_model_state, cpu_device)
         start_model.train()
         start_model.to(device)
+        cuda.CudaEnv.optimizer_to(optimizer, device)
         for (training_index, (data, label)) in enumerate(dataloader):
             data, label = data.to(device), label.to(device)
             optimizer.zero_grad(set_to_none=True)
@@ -324,6 +325,7 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
 
     # set dataloader for rebuilding norm
     if arg_rebuild_norm_round != 0:
+        child_logger.info(f"rebuild norm layers for {arg_rebuild_norm_round} rounds")
         if arg_dedicated_rebuild_norm_dataloader:
             epoch_for_rebuilding_norm = 1
             dataset_for_rebuilding_norm = arg_ml_setup.training_data_for_rebuilding_normalization
@@ -336,9 +338,11 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
             indices = torch.randperm(len(dataset_for_rebuilding_norm))[:dataset_rebuild_norm_size]
             sub_dataset = torch.utils.data.Subset(dataset_for_rebuilding_norm, indices.tolist())
             dataloader_for_rebuilding_norm = DataLoader(sub_dataset, batch_size=arg_ml_setup.training_batch_size)
+            child_logger.info(f"use dedicated dataloader for rebuilding norm")
         else:
             dataloader_for_rebuilding_norm = dataloader  # use the training dataloader
             epoch_for_rebuilding_norm = 1
+            child_logger.info(f"use training dataloader for rebuilding norm")
     else:
         dataloader_for_rebuilding_norm = None
         epoch_for_rebuilding_norm = None
@@ -511,13 +515,13 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
 
     start_model_stat = start_model_stat_dict
     target_direction_points = pathway_points[1:]
-    current_tick = 0
 
     """record variance"""
     variance_record = model_variance_correct.VarianceCorrector(model_variance_correct.VarianceCorrectionType.FollowOthers)
     variance_record.add_variance(start_model_stat)
     target_variance = variance_record.get_variance()
 
+    current_tick = 0
     previous_pathway_index = -1
     while current_tick < arg_max_tick:
         cuda.CudaEnv.model_state_dict_to(start_model_stat, device)
@@ -567,7 +571,6 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
                 training_loss_val = training_loss.item()
                 if training_index == train_round:
                     break
-                assert training_index < train_round
         elif training_mode == TrainMode.default_until_loss:
             moving_max_size = 2
             moving_max = util.MovingMax(moving_max_size)
@@ -595,23 +598,62 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
 
         start_model_stat = start_model.state_dict()
 
+
         """rebuilding normalization"""
         if arg_rebuild_norm_round != 0:
-            if arg_rebuild_norm_reuse_train_optimizer:
-                i = optimizer
-            else:
-                i = optimizer.state_dict()
-            start_model_stat, rebuild_states, layers_rebuild = rebuild_norm_layers(start_model, start_model_stat, arg_ml_setup, epoch_for_rebuilding_norm,
-                                                                   dataloader_for_rebuilding_norm, arg_rebuild_norm_round, i,
-                                                                   rebuild_on_device=device, initial_model_stat=initial_model_stat,
-                                                                   reset_norm_to_initial=True, rebuild_norm_layers_override=arg_rebuild_norm_specified_layers)
-            if __print_norm_to_rebuild_layers:
-                __print_norm_to_rebuild_layers = False
-                child_logger.info(f"layers to rebuild: {layers_rebuild}")
-            rebuild_iter, rebuilding_loss_val = rebuild_states[-1]
-            child_logger.info(f"current tick: {current_tick}, rebuilding finished at {rebuild_iter} rounds, rebuilding loss = {rebuilding_loss_val:.3f}")
-            # remove norm layer variance
-            # target_variance = {k: v for k, v in target_variance.items() if k not in layers_rebuild}
+            def __is_normalization_layer(layer_name):
+                NORMALIZATION_LAYER_KEYWORD = ['bn']
+                output = False
+                for i in NORMALIZATION_LAYER_KEYWORD:
+                    if i in layer_name:
+                        output = True
+                        break
+                return output
+            start_model_stat = start_model.state_dict()
+            # reset normalization layers
+            for layer_name, layer_weights in start_model_stat.items():
+                if __is_normalization_layer(layer_name):
+                    start_model_stat[layer_name] = initial_model_stat[layer_name]
+            start_model.load_state_dict(start_model_stat)
+            for (rebuilding_normalization_index, (data, label)) in enumerate(dataloader):
+                data, label = data.to(device), label.to(device)
+                optimizer.zero_grad(set_to_none=True)
+                output = start_model(data)
+                loss = criterion(output, label)
+                loss.backward()
+                optimizer.step()
+                loss_val = loss.item()
+                # reset all layers except normalization
+                current_model_stat = start_model.state_dict()
+                for layer_name, layer_weights in current_model_stat.items():
+                    if not __is_normalization_layer(layer_name):
+                        current_model_stat[layer_name] = start_model_stat[layer_name]
+                start_model.load_state_dict(current_model_stat)
+                if rebuilding_normalization_index == arg_rebuild_norm_round:
+                    break
+                assert (rebuilding_normalization_index < arg_rebuild_norm_round)
+        start_model_stat = start_model.state_dict()
+
+
+        # """rebuilding normalization"""
+        # if arg_rebuild_norm_round != 0:
+        #     if arg_rebuild_norm_reuse_train_optimizer:
+        #         i = optimizer
+        #     else:
+        #         i = optimizer.state_dict()
+        #
+        #     start_model_stat, rebuild_states, layers_rebuild = rebuild_norm_layers(start_model, start_model_stat, arg_ml_setup, epoch_for_rebuilding_norm,
+        #                                                            dataloader_for_rebuilding_norm, arg_rebuild_norm_round, i,
+        #                                                            rebuild_on_device=device, initial_model_stat=initial_model_stat,
+        #                                                            reset_norm_to_initial=True, rebuild_norm_layers_override=arg_rebuild_norm_specified_layers)
+        #
+        #     if __print_norm_to_rebuild_layers:
+        #         __print_norm_to_rebuild_layers = False
+        #         child_logger.info(f"layers to rebuild: {layers_rebuild}")
+        #     rebuild_iter, rebuilding_loss_val = rebuild_states[-1]
+        #     child_logger.info(f"current tick: {current_tick}, rebuilding finished at {rebuild_iter} rounds, rebuilding loss = {rebuilding_loss_val:.3f}")
+        #     # remove norm layer variance
+        #     # target_variance = {k: v for k, v in target_variance.items() if k not in layers_rebuild}
 
         if ENABLE_NAN_CHECKING:
             util.check_for_nans_in_state_dict(start_model_stat)
