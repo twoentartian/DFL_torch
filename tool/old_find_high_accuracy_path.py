@@ -136,7 +136,7 @@ def process_file_func(output_folder_path, start_model_path, end_model_path, arg_
     else:
         record_model_service = None
     record_test_accuracy_loss_service = record_test_accuracy_loss.ServiceTestAccuracyLossRecorder(1, 100, use_fixed_testing_dataset=True)
-    record_test_accuracy_loss_service.initialize_without_runtime_parameters(output_folder_path, [0], start_model, criterion, training_dataset)
+    record_test_accuracy_loss_service.initialize_without_runtime_parameters(output_folder_path, [0], start_model, criterion, training_dataset, use_cuda=True)
 
     # begin finding path
     """pre training"""
