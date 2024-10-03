@@ -691,6 +691,7 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
         current_tick += 1
 
     # save final model and optimizer
+    cuda.CudaEnv.optimizer_to(optimizer, cpu_device)
     util.save_model_state(os.path.join(arg_output_folder_path, "final.model.pt"), start_model_stat, arg_ml_setup.model_name)
     util.save_optimizer_state(os.path.join(arg_output_folder_path, "final.optimizer.pt"), optimizer.state_dict(), arg_ml_setup.model_name)
 
