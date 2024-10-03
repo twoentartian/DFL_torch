@@ -643,8 +643,10 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
         """rebuilding normalization"""
         if arg_rebuild_norm_round != 0:
             if arg_rebuild_norm_reuse_train_optimizer:
+                optimizer_info = "optimizer"
                 i = optimizer
             else:
+                optimizer_info = "optimizer state"
                 i = optimizer.state_dict()
 
             start_model_stat, rebuild_states, layers_rebuild = rebuild_norm_layers(start_model, start_model_stat, arg_ml_setup, epoch_for_rebuilding_norm,
@@ -656,7 +658,7 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
                 __print_norm_to_rebuild_layers = False
                 child_logger.info(f"layers to rebuild: {layers_rebuild}")
             rebuild_iter, rebuilding_loss_val = rebuild_states[-1]
-            child_logger.info(f"current tick: {current_tick}, rebuilding finished at {rebuild_iter} rounds, rebuilding loss = {rebuilding_loss_val:.3f}")
+            child_logger.info(f"current tick: {current_tick}, rebuilding finished at {rebuild_iter} rounds with {optimizer_info}, rebuilding loss = {rebuilding_loss_val:.3f}")
             # remove norm layer variance
             # target_variance = {k: v for k, v in target_variance.items() if k not in layers_rebuild}
 
