@@ -136,7 +136,7 @@ def get_files_to_process(arg_start_folder, arg_end_folder, arg_mode):
 
 # rebuild_norm_layers=None indicates rebuild all norm layers, when specified, then only rebuild norm for these layers
 
-def rebuild_norm_layers(model, model_state, arg_ml_setup, epoch_of_rebuild, dataloader, rebuild_norm_round, existing_optimizer_state_or_optimizer,
+def rebuild_norm_layers(model, model_state, arg_ml_setup, dataloader, rebuild_norm_round, existing_optimizer_state_or_optimizer,
                         rebuild_on_device=None, reset_norm_to_initial=False, initial_model_stat=None, display=False, rebuild_norm_layers_override=None):
     global __print_norm_to_rebuild_layers
     if rebuild_norm_layers_override is None:
@@ -200,7 +200,7 @@ def rebuild_norm_layers(model, model_state, arg_ml_setup, epoch_of_rebuild, data
     #     if layer_name not in rebuild_norm_layers_to_process:
     #         param.requires_grad = False
     start_model_stat = model.state_dict()
-    for epoch in range(epoch_of_rebuild):
+    while True:
         exit_flag = False
         for (rebuilding_normalization_index, (data, label)) in enumerate(dataloader):
             data, label = data.to(rebuild_on_device), label.to(rebuild_on_device)
@@ -332,21 +332,11 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
     if arg_rebuild_norm_round != 0:
         child_logger.info(f"rebuild norm layers for {arg_rebuild_norm_round} rounds")
         if arg_dedicated_rebuild_norm_dataloader:
-            epoch_for_rebuilding_norm = 1
             dataset_for_rebuilding_norm = arg_ml_setup.training_data_for_rebuilding_normalization
-            dataset_rebuild_norm_size = arg_rebuild_norm_round * arg_ml_setup.training_batch_size
-            if dataset_rebuild_norm_size > len(dataset_for_rebuilding_norm):
-                ratio = int(dataset_rebuild_norm_size // len(dataset_for_rebuilding_norm) + 1)
-                assert dataset_rebuild_norm_size % ratio == 0
-                dataset_rebuild_norm_size = dataset_rebuild_norm_size // ratio
-                epoch_for_rebuilding_norm = epoch_for_rebuilding_norm * ratio
-            indices = torch.randperm(len(dataset_for_rebuilding_norm))[:dataset_rebuild_norm_size]
-            sub_dataset = torch.utils.data.Subset(dataset_for_rebuilding_norm, indices.tolist())
-            dataloader_for_rebuilding_norm = DataLoader(sub_dataset, batch_size=arg_ml_setup.training_batch_size)
+            dataloader_for_rebuilding_norm = DataLoader(dataset_for_rebuilding_norm, batch_size=arg_ml_setup.training_batch_size)
             child_logger.info(f"use dedicated dataloader for rebuilding norm")
         else:
             dataloader_for_rebuilding_norm = dataloader  # use the training dataloader
-            epoch_for_rebuilding_norm = 1
             child_logger.info(f"use training dataloader for rebuilding norm")
     else:
         dataloader_for_rebuilding_norm = None
@@ -649,7 +639,7 @@ def process_file_func(arg_env, arg_training_parameters, arg_average, arg_rebuild
                 optimizer_info = "optimizer state"
                 i = optimizer.state_dict()
 
-            start_model_stat, rebuild_states, layers_rebuild = rebuild_norm_layers(start_model, start_model_stat, arg_ml_setup, epoch_for_rebuilding_norm,
+            start_model_stat, rebuild_states, layers_rebuild = rebuild_norm_layers(start_model, start_model_stat, arg_ml_setup,
                                                                    dataloader_for_rebuilding_norm, arg_rebuild_norm_round, i,
                                                                    rebuild_on_device=device, initial_model_stat=initial_model_stat,
                                                                    reset_norm_to_initial=True, rebuild_norm_layers_override=arg_rebuild_norm_specified_layers)
