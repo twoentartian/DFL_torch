@@ -1,0 +1,47 @@
+[
+  {
+    "tick": 10000,
+    "step_size": 0.001,
+    "adoptive_step_size": 0.0005,
+    "lr": 0.001,
+    "training_round": 1,
+    "pretrain_optimizer": true,
+    "rebuild_norm_round": 100,
+    "rebuild_norm_with_dedicated_dataloader": true,
+    "rebuild_norm_with_training_optimizer": true
+  },
+  {
+    "loss": 0.05,
+    "tick": 5000,
+    "step_size": 0,
+    "adoptive_step_size": 0.001,
+    "layer_skip_average_keyword": ["layer1", "layer2","layer3", "layer4"]
+  },
+  {
+    "loss": 0.05,
+    "tick": 5000,
+    "step_size": 0,
+    "adoptive_step_size": 0.001,
+    "layer_skip_average_keyword": ["layer2","layer3", "layer4"]
+  },
+  {
+    "loss": 0.05,
+    "tick": 5000,
+    "step_size": 0,
+    "adoptive_step_size": 0.001,
+    "layer_skip_average_keyword": ["layer3", "layer4"]
+  },
+  {
+    "loss": 0.05,
+    "tick": 5000,
+    "step_size": 0,
+    "adoptive_step_size": 0.001,
+    "layer_skip_average_keyword": ["layer4"]
+  },
+  {
+    "loss": 0.05,
+    "tick": 5000,
+    "step_size": 0,
+    "adoptive_step_size": 0.001
+  }
+]
