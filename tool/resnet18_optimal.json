@@ -7,7 +7,7 @@
     "training_round": 1,
     "pretrain_optimizer": true,
     "rebuild_norm_round": 100,
-    "rebuild_norm_with_dedicated_dataloader": true,
+    "rebuild_norm_with_dedicated_dataloader": false,
     "rebuild_norm_with_training_optimizer": true
   },
   {
