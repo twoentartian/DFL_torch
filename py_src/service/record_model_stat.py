@@ -21,6 +21,7 @@ class ModelStatRecorder(Service):
         self.record_phase = phase
         self.save_format = None
         self.save_lmdb = None
+        self.write_count = 0
 
     @staticmethod
     def get_service_name() -> str:
@@ -61,7 +62,7 @@ class ModelStatRecorder(Service):
             self.save_path = os.path.join(output_path, "model_stat")
         os.mkdir(self.save_path)
         if self.save_format == "lmdb":
-            lmdb_inst = lmdb.open(self.save_path, map_size=1099511627776)
+            lmdb_inst = lmdb.open(self.save_path, map_size=4 * 1024**4) # 4TB
             self.save_lmdb = lmdb_inst
         elif self.save_format == "file":
             self.save_path_for_each_node = {}
@@ -72,6 +73,7 @@ class ModelStatRecorder(Service):
 
     def trigger_without_runtime_parameters(self, tick, node_names, model_stats):
         assert len(node_names) == len(model_stats)
+        self.write_count += 1
         if self.save_format == "lmdb":
             lmdb_inst = self.save_lmdb
             with lmdb_inst.begin(write=True) as txn:
@@ -81,6 +83,9 @@ class ModelStatRecorder(Service):
                     buffer = io.BytesIO()
                     torch.save(model_stat, buffer)
                     txn.put(lmdb_tx_name.encode(), buffer.getvalue())
+            if self.write_count >= 1000:
+                self._monitor_and_adjust_map_size()
+                self.write_count = 0
         elif self.save_format == "file":
             for index, node_name in enumerate(node_names):
                 assert node_name in self.save_path_for_each_node.keys()
@@ -94,6 +99,26 @@ class ModelStatRecorder(Service):
         if (self.record_node is not None) and (node_name not in self.record_node):
             record_current_node = False
         return record_current_node
+
+    def _get_lmdb_size(self):
+        data_file = os.path.join(self.save_path, 'data.mdb')
+        lock_file = os.path.join(self.save_path, 'lock.mdb')
+        # Check if the files exist and get their combined size
+        total_size = 0
+        if os.path.exists(data_file):
+            total_size += os.path.getsize(data_file)
+        if os.path.exists(lock_file):
+            total_size += os.path.getsize(lock_file)
+        return total_size
+
+    def _monitor_and_adjust_map_size(self, threshold=0.8):
+        current_size = self._get_lmdb_size()
+        current_mapsize = self.save_lmdb.info()['map_size']
+
+        if current_size > current_mapsize * threshold:
+            # Increase map size (e.g., double the current size)
+            new_mapsize = current_mapsize * 2
+            self.save_lmdb.set_mapsize(new_mapsize)
 
     def __del__(self):
         if self.save_format == "lmdb":
