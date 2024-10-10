@@ -3,9 +3,13 @@ from enum import Enum
 import torch.nn as nn
 import torch.nn.functional as nnF
 import numpy as np
-import torchvision.transforms.functional as visionF
 from torchvision import transforms, models, datasets
 from py_src.models import simple_net
+
+import sys
+import os
+sys.path.append(os.path.join(os.path.dirname(__file__), "third_party", "Compact-Transformers", "src"))
+
 
 def replace_bn_with_ln(model):
     for name, module in model.named_children():
@@ -99,6 +103,10 @@ class LeNet5(nn.Module):
 def lenet5():
     return LeNet5()
 
+""" CCT-7/3x1 """
+
+
+
 
 """ MNIST + LeNet5 """
 def lenet5_mnist():
@@ -116,8 +124,6 @@ def lenet5_mnist():
 
 
 """ CIFAR10 + ResNet18 """
-
-
 class GroupNorm(nn.Module):
     def __init__(self, num_channels):
         super(GroupNorm, self).__init__()
