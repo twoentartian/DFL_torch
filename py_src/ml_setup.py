@@ -8,8 +8,7 @@ from py_src.models import simple_net
 
 import sys
 import os
-sys.path.append(os.path.join(os.path.dirname(__file__), "third_party", "Compact-Transformers", "src"))
-
+import py_src.third_party.compact_transformers.src.cct as cct
 
 def replace_bn_with_ln(model):
     for name, module in model.named_children():
@@ -103,10 +102,6 @@ class LeNet5(nn.Module):
 def lenet5():
     return LeNet5()
 
-""" CCT-7/3x1 """
-
-
-
 
 """ MNIST + LeNet5 """
 def lenet5_mnist():
@@ -120,6 +115,20 @@ def lenet5_mnist():
     output_ml_setup.learning_rate = 0.001
     output_ml_setup.weights_init_func = weights_init_xavier
     output_ml_setup.has_normalization_layer = False
+    return output_ml_setup
+
+
+""" CIFAR10 + CCT7/3x1 """
+def cct7_cifar10():
+    output_ml_setup = MlSetup()
+    output_ml_setup.model = cct.cct_7_3x1_32()
+    output_ml_setup.model_name = "cct7"
+    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label = dataset_cifar10(random_crop_flip=True)
+    output_ml_setup.training_data_for_rebuilding_normalization, _, _ = dataset_cifar10(random_crop_flip=False)
+    output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
+    output_ml_setup.training_batch_size = 128
+    output_ml_setup.learning_rate = 0.0006
+    output_ml_setup.has_normalization_layer = True
     return output_ml_setup
 
 
@@ -172,6 +181,7 @@ class ModelType(Enum):
     lenet5 = 0
     resnet18 = 1
     simplenet = 2
+    cct7 = 3
 
 class NormType(Enum):
     auto = 0
@@ -192,6 +202,8 @@ def get_ml_setup_from_config(model_type: str, norm_type: str = 'auto'):
             raise NotImplementedError(f'{norm_type} is not implemented for {model_type} yet')
     elif model_type == ModelType.simplenet:
         output_ml_setup = simplenet_cifar10()
+    elif model_type == ModelType.cct7:
+        output_ml_setup = cct7_cifar10()
     else:
         raise ValueError(f'Invalid model type: {model_type}')
     return output_ml_setup
@@ -206,6 +218,8 @@ def get_ml_setup_from_model_type(model_name):
         output_ml_setup = resnet18_cifar10(enable_replace_bn_with_group_norm=True)
     elif model_name == 'simplenet':
         output_ml_setup = simplenet_cifar10()
+    elif model_name == 'cct7':
+        output_ml_setup = cct7_cifar10()
     else:
         raise ValueError(f'Invalid model type: {model_name}')
     return output_ml_setup
