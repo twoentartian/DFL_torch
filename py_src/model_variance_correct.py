@@ -15,6 +15,13 @@ class VarianceCorrector:
         self.variance_record = None
         self.model_counter = 0
 
+    @staticmethod
+    def calculate_variance_for_tensor(tensor):
+        if tensor.numel() == 1:
+            return 0.0
+        else:
+            return torch.var(tensor).item()
+
     def add_variance(self, model_stat):
         if (self.variance_correction_type == VarianceCorrectionType.FollowConservative) or (self.variance_correction_type == VarianceCorrectionType.FollowOthers):
             if self.variance_record is None:
@@ -24,7 +31,7 @@ class VarianceCorrector:
             for name, param in model_stat.items():
                 if special_torch_layers.is_ignored_layer_variance_correction(name):
                     continue
-                variance = torch.var(param).item()
+                variance = self.calculate_variance_for_tensor(param)
                 self.variance_record[name] += variance
             self.model_counter += 1
 
@@ -37,7 +44,7 @@ class VarianceCorrector:
             conservative = float(conservative)
             self_variance = {}
             for name, param in self_model_stat.items():
-                self_variance[name] = torch.var(param).item()
+                self_variance[name] = self.calculate_variance_for_tensor(param)
             output = self_variance
         if self.variance_correction_type == VarianceCorrectionType.FollowConservative:
             assert self.variance_record is not None
@@ -47,7 +54,7 @@ class VarianceCorrector:
             output = {}
             self_variance = {}
             for name, param in self_model_stat.items():
-                self_variance[name] = torch.var(param).item()
+                self_variance[name] = self.calculate_variance_for_tensor(param)
             for name, var in self.variance_record.items():
                 output[name] = self_variance[name] * conservative + (var/self.model_counter) * (1-conservative)
         if self.variance_correction_type == VarianceCorrectionType.FollowOthers:
@@ -62,10 +69,14 @@ class VarianceCorrector:
 
     @staticmethod
     def scale_tensor_to_variance(layer_tensor, target_variance):
-        current_mean = torch.mean(layer_tensor)
-        current_variance = torch.var(layer_tensor)
-        scaling_factor = torch.sqrt(target_variance / current_variance)
-        rescaled_tensor = (layer_tensor - current_mean) * scaling_factor + current_mean
+        if layer_tensor.numel() == 1:
+            assert target_variance == 0.0, f"var {target_variance} != 0.0"
+            rescaled_tensor = layer_tensor
+        else:
+            current_mean = torch.mean(layer_tensor)
+            current_variance = torch.var(layer_tensor)
+            scaling_factor = torch.sqrt(target_variance / current_variance)
+            rescaled_tensor = (layer_tensor - current_mean) * scaling_factor + current_mean
         return rescaled_tensor
 
     @staticmethod

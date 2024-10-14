@@ -2,6 +2,7 @@ import torch
 import math
 
 from py_src import ml_setup
+from timm.scheduler.cosine_lr import CosineLRScheduler
 
 class FastTrainingSetup(object):
     @staticmethod
@@ -34,33 +35,43 @@ class FastTrainingSetup(object):
             lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones, gamma=0.1)
             return optimizer, lr_scheduler, epochs
         elif arg_ml_setup.model_name == 'cct7':
-            lr = 6e-4
+            steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
+            initial_lr = 55e-5
             weight_decay = 6e-2
-            optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=weight_decay)
+            warmup_lr = 1e-5
             min_lr = 1e-5
-            warmup_lr = 1e-6
             warmup_epochs = 10
-            decay_epochs = 280
-            cooldown_epochs = 10
-            total_epochs = warmup_epochs + decay_epochs + cooldown_epochs
-            def lr_lambda(current_epoch):
-                if current_epoch < warmup_epochs:
-                    # Linear warmup from warmup_lr to lr
-                    lr_current = warmup_lr + (lr - warmup_lr) * (current_epoch / warmup_epochs)
-                    return lr_current / lr
-                elif current_epoch < warmup_epochs + decay_epochs:
-                    # Cosine decay from lr to min_lr
-                    t = current_epoch - warmup_epochs
-                    T = decay_epochs
-                    cosine_decay = 0.5 * (1 + math.cos(math.pi * t / T))
-                    lr_current = min_lr + (lr - min_lr) * cosine_decay
-                    return lr_current / lr
-                else:
-                    # Cooldown: learning rate held at min_lr
-                    return min_lr / lr
-
             epochs = 300
-            optimizer = torch.optim.AdamW(model.parameters(), lr=lr, weight_decay=6e-2)
+            cooldown_epochs = 10
+            warmup_steps = warmup_epochs * steps_per_epoch
+            cosine_steps = (epochs - warmup_epochs) * steps_per_epoch
+            cooldown_steps = cooldown_epochs * steps_per_epoch
+            total_steps = warmup_steps + cosine_steps + cooldown_steps
+            optimizer = torch.optim.AdamW(model.parameters(), lr=initial_lr, weight_decay=weight_decay)
+            # lr_scheduler = CosineLRScheduler(
+            #     optimizer,
+            #     t_initial,
+            #     lr_min=min_lr,
+            #     warmup_lr_init=warmup_lr,
+            #     warmup_t=warmup_epochs,
+            #     initialize=True,
+            #     cycle_limit=1,
+            #     t_in_epochs=False
+            # )
+
+            def lr_lambda(current_step):
+                if current_step < warmup_steps:
+                    # Linear warmup
+                    lr = warmup_lr + (initial_lr - warmup_lr) * (current_step / warmup_steps)
+                elif current_step < warmup_steps + cosine_steps:
+                    # Cosine annealing
+                    t = current_step - warmup_steps
+                    T = cosine_steps
+                    lr = min_lr + 0.5 * (initial_lr - min_lr) * (1 + math.cos(math.pi * t / T))
+                else:
+                    # Cooldown phase
+                    lr = min_lr
+                return lr / initial_lr
             lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
             return optimizer, lr_scheduler, epochs
         else:

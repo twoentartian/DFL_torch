@@ -130,6 +130,8 @@ def get_optimizer_to_find_high_accuracy_path(model_name, model_parameter):
         optimizer = torch.optim.SGD(model_parameter, lr=0.001)
     elif model_name == "simplenet":
         optimizer = torch.optim.Adadelta(model_parameter, lr=0.01, rho=0.9, eps=1e-3, weight_decay=0.001)
+    elif model_name == "cct7":
+        optimizer = torch.optim.SGD(model_parameter, lr=0.001)
     else:
         raise NotImplementedError(f"{model_name} not implemented for finding high accuracy path")
     return optimizer
@@ -146,6 +148,10 @@ def get_enable_merge_bias_weight_during_moving(model_name):
         return True
     elif model_name == "resnet18_bn":
         return False
+    elif model_name == "simplenet":
+        return False
+    elif model_name == "cct7":
+        return True
     else:
         raise NotImplementedError(f"{model_name} not implemented for get_enable_merge_bias_weight_during_moving")
 
@@ -788,7 +794,7 @@ if __name__ == '__main__':
     # parser.add_argument("--use_predefined_optimal", action='store_true', help='use predefined optimal parameters')
 
     # load json file for multiple configs?
-    parser.add_argument("--json", type=str, default='', help='specify the json file for multiple stages')
+    parser.add_argument("--json", type=str, default=None, help='specify the json file for multiple stages')
 
     args = parser.parse_args()
 
@@ -828,7 +834,7 @@ if __name__ == '__main__':
 
         # rebuild norm
         find_path_arg.rebuild_norm_round = args.rebuild_norm_round
-        find_path_arg.rebuild_norm_layers = args.args.dedicated_rebuild_norm_dataloader
+        find_path_arg.rebuild_norm_layers = args.dedicated_rebuild_norm_dataloader
         find_path_arg.rebuild_norm_with_dedicated_dataloader = args.dedicated_rebuild_norm_dataloader
         find_path_arg.rebuild_norm_with_training_optimizer = args.rebuild_norm_reuse_train_optimizer
 

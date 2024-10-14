@@ -9,10 +9,37 @@ import numpy as np
 from datetime import datetime
 import concurrent.futures
 from torch.utils.data import DataLoader
+import logging
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from py_src import ml_setup, complete_ml_setup, util
 from py_src.service import record_model_stat
+
+logger = logging.getLogger("generate_high_accuracy_model")
+
+def set_logging(target_logger, task_name, log_file_path=None):
+    class ExitOnExceptionHandler(logging.StreamHandler):
+        def emit(self, record):
+            if record.levelno == logging.CRITICAL:
+                raise SystemExit(-1)
+
+    formatter = logging.Formatter(f"[%(asctime)s] [%(levelname)8s] [{task_name}] --- %(message)s (%(filename)s:%(lineno)s)")
+
+    console = logging.StreamHandler(sys.stdout)
+    console.setLevel(logging.INFO)
+    console.setFormatter(formatter)
+
+    target_logger.setLevel(logging.DEBUG)
+    target_logger.addHandler(console)
+    target_logger.addHandler(ExitOnExceptionHandler())
+
+    if log_file_path is not None:
+        file = logging.FileHandler(log_file_path)
+        file.setLevel(logging.DEBUG)
+        file.setFormatter(formatter)
+        target_logger.addHandler(file)
+
+    del console, formatter
 
 def re_initialize_model(model, arg_ml_setup):
     random_data = os.urandom(4)
@@ -28,9 +55,13 @@ def re_initialize_model(model, arg_ml_setup):
         model.apply(arg_ml_setup.weights_init_func)
 
 
-def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_setup, arg_use_cpu: bool, arg_worker_count, arg_total_cpu_count, arg_save_format):
+def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_setup, arg_use_cpu: bool, arg_worker_count, arg_total_cpu_count, arg_save_format, arg_amp):
     thread_per_process = arg_total_cpu_count // arg_worker_count
     torch.set_num_threads(thread_per_process)
+
+    child_logger = logging.getLogger(f"find_high_accuracy_path.{index}")
+    set_logging(child_logger, f"{index}")
+
     if arg_use_cpu:
         device = torch.device("cpu")
     else:
@@ -59,17 +90,28 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
     log_file.flush()
 
     model.train()
-    print(f"INDEX[{index}] begin training")
+    child_logger.info(f"begin training")
+    if arg_amp:
+        scaler = torch.cuda.amp.GradScaler()
     for epoch in range(epochs):
         train_loss = 0
         count = 0
         for data, label in dataloader:
             data, label = data.to(device), label.to(device)
             optimizer.zero_grad()
-            outputs = model(data)
-            loss = criterion(outputs, label)
-            loss.backward()
-            optimizer.step()
+            if arg_amp:
+                with torch.cuda.amp.autocast():
+                    outputs = model(data)
+                    loss = criterion(outputs, label)
+                    scaler.scale(loss).backward()
+                    scaler.step(optimizer)
+                    scaler.update()
+            else:
+
+                outputs = model(data)
+                loss = criterion(outputs, label)
+                loss.backward()
+                optimizer.step()
             if lr_scheduler is not None:
                 lr_scheduler.step()
             train_loss += loss.item()
@@ -77,7 +119,7 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
         lrs = []
         for param_group in optimizer.param_groups:
             lrs.append(param_group['lr'])
-        print(f"INDEX[{index}] epoch[{epoch}] loss={train_loss/count} lrs={lrs}")
+        child_logger.info(f"epoch[{epoch}] loss={train_loss/count} lrs={lrs}")
         log_file.write(f"{epoch},{train_loss/count},{lrs}" + "\n")
         log_file.flush()
 
@@ -85,7 +127,7 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
         if record_model_service is not None:
             model_stat = model.state_dict()
             record_model_service.trigger_without_runtime_parameters(epoch, [0], [model_stat])
-    print(f"INDEX[{index}] finish training")
+    child_logger.info(f"finish training")
     log_file.flush()
     log_file.close()
 
@@ -110,6 +152,8 @@ if __name__ == "__main__":
     parser.add_argument("--cpu", action='store_true', help='force using CPU for training')
     parser.add_argument("-o", "--output_folder_name", default=None, help='specify the output folder name')
     parser.add_argument("--save_format", type=str, default='none', choices=['none', 'file', 'lmdb'], help='which format to save the training states')
+    parser.add_argument("--amp", action='store_true', help='enable auto mixed precision')
+
 
     args = parser.parse_args()
 
@@ -121,11 +165,16 @@ if __name__ == "__main__":
     output_folder_name = args.output_folder_name
     save_format = args.save_format
     norm_method = args.norm_method
+    amp = args.amp
+
+    # logger
+    set_logging(logger, "main")
+    logger.info("logging setup complete")
 
     # prepare model and dataset
     current_ml_setup = ml_setup.get_ml_setup_from_config(model_type, norm_method)
     output_model_name = current_ml_setup.model_name
-    print(f"model name: {output_model_name}")
+    logger.info(f"model name: {output_model_name}")
 
     # create output folder
     if output_folder_name is None:
@@ -149,7 +198,7 @@ if __name__ == "__main__":
     # training
     if worker_count > number_of_models:
         worker_count = number_of_models
-    args = [(output_folder_path, i, number_of_models, current_ml_setup, use_cpu, worker_count, total_cpu_cores, save_format) for i in range(number_of_models)]
+    args = [(output_folder_path, i, number_of_models, current_ml_setup, use_cpu, worker_count, total_cpu_cores, save_format, amp) for i in range(number_of_models)]
     with concurrent.futures.ProcessPoolExecutor(max_workers=worker_count) as executor:
         futures = [executor.submit(training_model, *arg) for arg in args]
         for future in concurrent.futures.as_completed(futures):
