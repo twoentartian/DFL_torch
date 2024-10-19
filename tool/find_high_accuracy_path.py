@@ -55,6 +55,7 @@ class FindPathArgs:
 
     # rebuild norm options
     rebuild_norm_round = None
+    rebuild_norm_loss = None
     rebuild_norm_layers = None
     rebuild_norm_with_dedicated_dataloader = None
     rebuild_norm_with_training_optimizer = None
@@ -69,6 +70,7 @@ class FindPathArgs:
     save_format = None
     save_ticks = None
     use_cpu = None
+    use_amp = None
 
     def set_default(self):
         self.worker_count = 1
@@ -216,8 +218,9 @@ def get_files_to_process(arg_start_folder, arg_end_folder, arg_mode):
 
 # rebuild_norm_layers=None indicates rebuild all norm layers, when specified, then only rebuild norm for these layers
 
-def rebuild_norm_layers(model, model_state, arg_ml_setup, dataloader, rebuild_norm_round, existing_optimizer_state_or_optimizer,
-                        rebuild_on_device=None, reset_norm_to_initial=False, initial_model_stat=None, display=False, rebuild_norm_layers_override=None):
+def rebuild_norm_layers(model, model_state, arg_ml_setup, dataloader, rebuild_norm_round, rebuild_norm_loss, existing_optimizer_state_or_optimizer,
+                        rebuild_on_device=None, reset_norm_to_initial=False, initial_model_stat=None, display=False, rebuild_norm_layers_override=None,
+                        use_amp=False):
     global __print_norm_to_rebuild_layers
     if rebuild_norm_layers_override is None:
         rebuild_norm_layers_override = []
@@ -280,16 +283,28 @@ def rebuild_norm_layers(model, model_state, arg_ml_setup, dataloader, rebuild_no
     #     if layer_name not in rebuild_norm_layers_to_process:
     #         param.requires_grad = False
     start_model_stat = model.state_dict()
+    if use_amp:
+        scaler = torch.cuda.amp.GradScaler()
+    moving_max_size = 2
+    moving_max = util.MovingMax(moving_max_size)
     while True:
         exit_flag = False
         for (rebuilding_normalization_index, (data, label)) in enumerate(dataloader):
             data, label = data.to(rebuild_on_device), label.to(rebuild_on_device)
             optimizer_rebuild_norm.zero_grad(set_to_none=True)
-            output = model(data)
-            rebuilding_loss = criterion(output, label)
-            rebuilding_loss.backward()
+            if use_amp:
+                with torch.cuda.amp.autocast():
+                    outputs = model(data)
+                    rebuilding_loss = criterion(outputs, label)
+                    rebuilding_loss.scale(rebuilding_loss).backward()
+                    scaler.step(optimizer_rebuild_norm)
+                    scaler.update()
+            else:
+                outputs = model(data)
+                rebuilding_loss = criterion(outputs, label)
+                rebuilding_loss.backward()
+                optimizer_rebuild_norm.step()
             rebuilding_loss_val = rebuilding_loss.item()
-            optimizer_rebuild_norm.step()
             rebuilding_normalization_count += 1
             rebuild_states.append((rebuilding_normalization_count, rebuilding_loss_val))
             current_model_stat = model.state_dict()
@@ -300,6 +315,10 @@ def rebuild_norm_layers(model, model_state, arg_ml_setup, dataloader, rebuild_no
             if display:
                 print(f"tick: {rebuilding_normalization_count}  loss: {rebuilding_loss_val}")
             if rebuilding_normalization_count >= rebuild_norm_round:
+                exit_flag = True
+                break
+            max_loss = moving_max.add(rebuilding_loss_val)
+            if max_loss < rebuild_norm_loss and rebuilding_normalization_index + 1 >= moving_max_size:
                 exit_flag = True
                 break
         if exit_flag:
@@ -612,6 +631,8 @@ def process_file_func(args: [FindPathArgs]):
 
         """begin find path for this stage"""
         previous_pathway_index = -1
+        if arg.use_amp:
+            scaler = torch.cuda.amp.GradScaler()
         while current_tick < arg.tick + start_tick_of_this_stage:
             cuda.CudaEnv.model_state_dict_to(start_model_stat, device)
 
@@ -659,10 +680,18 @@ def process_file_func(args: [FindPathArgs]):
                     training_round_counter += 1
                     data, label = data.to(device), label.to(device)
                     optimizer.zero_grad(set_to_none=True)
-                    output = start_model(data)
-                    training_loss = criterion(output, label)
-                    training_loss.backward()
-                    optimizer.step()
+                    if arg.use_amp:
+                        with torch.cuda.amp.autocast():
+                            outputs = start_model(data)
+                            training_loss = criterion(outputs, label)
+                            training_loss.scale(training_loss).backward()
+                            scaler.step(optimizer)
+                            scaler.update()
+                    else:
+                        outputs = start_model(data)
+                        training_loss = criterion(outputs, label)
+                        training_loss.backward()
+                        optimizer.step()
                     training_loss_val = training_loss.item()
                     if training_round_counter == train_round:
                         break
@@ -702,10 +731,16 @@ def process_file_func(args: [FindPathArgs]):
                     optimizer_info = "optimizer state"
                     i = optimizer.state_dict()
 
-                start_model_stat, rebuild_states, layers_rebuild = rebuild_norm_layers(start_model, start_model_stat, arg.ml_setup,
-                                                                       dataloader_for_rebuilding_norm, arg.rebuild_norm_round, i,
-                                                                       rebuild_on_device=device, initial_model_stat=initial_model_stat,
-                                                                       reset_norm_to_initial=True, rebuild_norm_layers_override=arg.rebuild_norm_layers)
+                start_model_stat, rebuild_states, layers_rebuild = rebuild_norm_layers(start_model, start_model_stat,
+                                                                                       arg.ml_setup,
+                                                                                       dataloader_for_rebuilding_norm,
+                                                                                       arg.rebuild_norm_round,
+                                                                                       arg.rebuild_norm_loss,
+                                                                                       i, rebuild_on_device=device,
+                                                                                       initial_model_stat=initial_model_stat,
+                                                                                       reset_norm_to_initial=True,
+                                                                                       rebuild_norm_layers_override=arg.rebuild_norm_layers,
+                                                                                       use_amp=arg.use_amp)
 
                 if __print_norm_to_rebuild_layers:
                     __print_norm_to_rebuild_layers = False
@@ -777,7 +812,8 @@ if __name__ == '__main__':
     parser.add_argument("--pretrain_optimizer", action='store_true', help='pretrain an optimizer rather than using existing optimizer state')
 
     # rebuild norm parameter
-    parser.add_argument("-r", "--rebuild_norm_round", type=int, default=0, help='train for x rounds to rebuild the norm layers')
+    parser.add_argument("-r", "--rebuild_norm_round", type=int, default=0, help='rebuild norm for x rounds to rebuild the norm layers')
+    parser.add_argument("--rebuild_norm_loss", type=float, default=0, help='rebuild norm until loss is smaller than this threshold')
     parser.add_argument("--rebuild_norm_layers", type=str, nargs="+", default=[], help='specify which layers to rebuild, default means all norm layers')
     parser.add_argument("--dedicated_rebuild_norm_dataloader", action='store_true', help='use a dedicated, sample order preserved dataloader')
     parser.add_argument("--rebuild_norm_reuse_train_optimizer", action='store_true', help='reuse the training optimizer for building norm layers')
@@ -790,6 +826,7 @@ if __name__ == '__main__':
     parser.add_argument("--save_ticks", type=str, help='specify when to record the models (e.g. [1,2,3,5-10]), only works when --save_format is set to work.')
     parser.add_argument("--save_format", type=str, default='none', choices=['none', 'file', 'lmdb'])
     parser.add_argument("--cpu", action='store_true', help='force using CPU for training')
+    parser.add_argument("--amp", action='store_true', help='enable auto mixed precision')
     parser.add_argument("-o", "--output_folder_name", default=None, help='specify the output folder name')
     # parser.add_argument("--use_predefined_optimal", action='store_true', help='use predefined optimal parameters')
 
@@ -834,7 +871,8 @@ if __name__ == '__main__':
 
         # rebuild norm
         find_path_arg.rebuild_norm_round = args.rebuild_norm_round
-        find_path_arg.rebuild_norm_layers = args.dedicated_rebuild_norm_dataloader
+        find_path_arg.rebuild_norm_loss = args.rebuild_norm_loss
+        find_path_arg.rebuild_norm_layers = args.rebuild_norm_layers
         find_path_arg.rebuild_norm_with_dedicated_dataloader = args.dedicated_rebuild_norm_dataloader
         find_path_arg.rebuild_norm_with_training_optimizer = args.rebuild_norm_reuse_train_optimizer
 
@@ -845,6 +883,7 @@ if __name__ == '__main__':
         # general_info
         find_path_arg.tick = args.tick
         find_path_arg.use_cpu = args.cpu
+        find_path_arg.use_amp = args.amp
         find_path_arg.save_format = args.save_format
         if args.save_ticks is not None:
             find_path_arg.save_ticks = util.expand_int_args(args.save_ticks)
