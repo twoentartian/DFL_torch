@@ -296,7 +296,7 @@ def rebuild_norm_layers(model, model_state, arg_ml_setup, dataloader, rebuild_no
                 with torch.cuda.amp.autocast():
                     outputs = model(data)
                     rebuilding_loss = criterion(outputs, label)
-                    rebuilding_loss.scale(rebuilding_loss).backward()
+                    scaler.scale(rebuilding_loss).backward()
                     scaler.step(optimizer_rebuild_norm)
                     scaler.update()
             else:
@@ -684,7 +684,7 @@ def process_file_func(args: [FindPathArgs]):
                         with torch.cuda.amp.autocast():
                             outputs = start_model(data)
                             training_loss = criterion(outputs, label)
-                            training_loss.scale(training_loss).backward()
+                            scaler.scale(training_loss).backward()
                             scaler.step(optimizer)
                             scaler.update()
                     else:
