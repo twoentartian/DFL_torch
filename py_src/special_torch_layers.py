@@ -20,7 +20,7 @@ def is_keyword_in_layer_name(layer_name, keywords):
 
 
 __ignore_layer_list_normalization = ["num_batches_tracked", "running_mean", "running_var"]
-__normalization_layer_layer_keyword = {'lenet5': None, 'resnet18_bn': ['bn'], 'resnet18_gn': ['bn'], 'cct7':['norm']}
+__normalization_layer_layer_keyword = {'lenet5': None, 'resnet18_bn': ['bn'], 'resnet18_gn': ['bn'], 'cct7':['classifier.norm']}
 def is_normalization_layer(model_name, layer_name):
     output = False
     if model_name not in __normalization_layer_layer_keyword.keys():

@@ -318,9 +318,10 @@ def rebuild_norm_layers(model, model_state, arg_ml_setup, dataloader, rebuild_no
                 exit_flag = True
                 break
             max_loss = moving_max.add(rebuilding_loss_val)
-            if max_loss < rebuild_norm_loss and rebuilding_normalization_index + 1 >= moving_max_size:
-                exit_flag = True
-                break
+            if rebuild_norm_loss is not None:
+                if max_loss < rebuild_norm_loss and rebuilding_normalization_index + 1 >= moving_max_size:
+                    exit_flag = True
+                    break
         if exit_flag:
             break
     output_model_state = model.state_dict()
