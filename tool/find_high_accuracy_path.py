@@ -432,11 +432,14 @@ def process_file_func(args: [FindPathArgs]):
     variance_service.initialize_without_runtime_parameters([0], [start_model_stat_dict], arg_output_folder_path)
     if arg0.save_format != 'none':
         if not arg0.save_ticks:
+            child_logger.info("record_model_service is ON at every tick")
             record_model_service = record_model_stat.ModelStatRecorder(1)
         else:
+            child_logger.info("record_model_service is ON at certain ticks")
             record_model_service = record_model_stat.ModelStatRecorder(sys.maxsize) # we don't set the interval here because only certain ticks should be recorded
         record_model_service.initialize_without_runtime_parameters([0], arg_output_folder_path, save_format=arg0.save_format)
     else:
+        child_logger.info("record_model_service is OFF")
         record_model_service = None
     record_test_accuracy_loss_service = record_test_accuracy_loss.ServiceTestAccuracyLossRecorder(1, 100, use_fixed_testing_dataset=True)
     record_test_accuracy_loss_service.initialize_without_runtime_parameters(arg_output_folder_path, [0], start_model, criterion, training_dataset, use_cuda=True)
@@ -569,6 +572,7 @@ def process_file_func(args: [FindPathArgs]):
             util.save_model_state(os.path.join(output_path_pathway_points, f"{index}_over_{len(pathway_points) - 1}.model.pt"), pathway_model, arg0.ml_setup.model_name)
             optimizer_paths_for_pathway_points.append(os.path.join(output_path_pathway_points, f"{index}_over_{len(pathway_points) - 1}.optimizer.pt"))
     else:
+        child_logger.info("skipping finding pathway points")
         pathway_points = [start_model_stat_dict, end_model_stat_dict]
 
     start_model_stat = start_model_stat_dict
