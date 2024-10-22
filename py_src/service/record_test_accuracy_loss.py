@@ -74,7 +74,7 @@ class ServiceTestAccuracyLossRecorder(Service):
             self.is_using_cuda = (not config_file.force_use_cpu) and cuda_env.cuda_available
         elif use_cuda is not None:
             assert (config_file is None) and (cuda_env is None)
-            self.is_using_cuda = use_cuda
+            self.is_using_cuda = use_cuda if torch.cuda.is_available() else False
         else:
             raise ValueError(f"provide cuda_env & config_file or just provide use_cuda")
         if self.is_using_cuda:
