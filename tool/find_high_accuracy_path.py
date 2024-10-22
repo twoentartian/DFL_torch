@@ -888,8 +888,6 @@ if __name__ == '__main__':
 
         # general_info
         find_path_arg.tick = args.tick
-        find_path_arg.use_cpu = args.cpu
-        find_path_arg.use_amp = args.amp
         find_path_arg.save_format = args.save_format
         if args.save_ticks is not None:
             find_path_arg.save_ticks = util.expand_int_args(args.save_ticks)
@@ -899,6 +897,8 @@ if __name__ == '__main__':
         """add to list"""
         find_path_arg_template.append(find_path_arg)
 
+    use_cpu = args.cpu
+    use_amp = args.amp
     start_folder = args.start_folder
     end_folder = args.end_folder
     mapping_mode = args.mapping_mode
@@ -957,6 +957,8 @@ if __name__ == '__main__':
             each_stage.worker_count = worker_count
             each_stage.total_cpu_count = total_cpu_count
             each_stage.ml_setup = current_ml_setup
+            each_stage.use_amp = use_amp
+            each_stage.use_cpu = use_cpu
         args.append(find_path_arg)
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=worker_count) as executor:
