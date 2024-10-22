@@ -583,6 +583,7 @@ def process_file_func(args: [FindPathArgs]):
     modeL_state_of_last_tick = copy.deepcopy(start_model_stat)
     cuda.CudaEnv.model_state_dict_to(modeL_state_of_last_tick, device)
 
+    child_logger.info(f"arg info:{args}")
     for stage_index, arg in enumerate(args):
         start_tick_of_this_stage = current_tick
 
