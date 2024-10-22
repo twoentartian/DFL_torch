@@ -2,7 +2,6 @@ import torch
 import math
 
 from py_src import ml_setup
-from timm.scheduler.cosine_lr import CosineLRScheduler
 
 class FastTrainingSetup(object):
     @staticmethod
