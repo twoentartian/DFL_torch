@@ -42,6 +42,7 @@ class FindPathArgs:
 
     # training_options
     training_options = None
+    load_optimizer = None
     pretrain_optimizer = None
     lr = None
     training_round = None
@@ -216,27 +217,34 @@ def get_files_to_process(arg_start_folder, arg_end_folder, arg_mode):
 
     return sorted(output_paths)
 
-def rebuild_norm_check_layers(model_state, arg_ml_setup, rebuild_norm_layers_override):
-    def is_processing_this_layer(model_name, layer_name, rebuild_norm_layers_override):
-        if len(rebuild_norm_layers_override) == 0:
+def rebuild_norm_check_layers(model_state, arg_ml_setup, rebuild_norm_layer, rebuild_norm_layer_keyword):
+    def is_processing_this_layer(model_name, layer_name_arg, rebuild_norm_layer_arg, rebuild_norm_layer_keyword_arg):
+        if len(rebuild_norm_layer_arg) == 0 and len(rebuild_norm_layer_keyword) == 0:
             if special_torch_layers.is_normalization_layer(model_name, layer_name):
                 return True
             else:
                 return False
         else:
             process_this_layer = False
-            for single_layer in rebuild_norm_layers_override:
-                if layer_name in single_layer:
+            for single_name in rebuild_norm_layer_arg:
+                if layer_name_arg == single_name:
+                    process_this_layer = True
+                    break
+            for single_keyword in rebuild_norm_layer_keyword_arg:
+                if single_keyword in layer_name_arg:
                     process_this_layer = True
                     break
             return process_this_layer
 
-    if rebuild_norm_layers_override is None:
-        rebuild_norm_layers_override = []
+    if rebuild_norm_layer is None:
+        rebuild_norm_layer = []
+    if rebuild_norm_layer_keyword is None:
+        rebuild_norm_layer_keyword = []
+
     # get the list of layers to rebuild norm
     rebuild_norm_layers_to_process = []
     for layer_name, layer_weights in model_state.items():
-        if is_processing_this_layer(arg_ml_setup.model_name, layer_name, rebuild_norm_layers_override):
+        if is_processing_this_layer(arg_ml_setup.model_name, layer_name, rebuild_norm_layer, rebuild_norm_layer_keyword):
             rebuild_norm_layers_to_process.append(layer_name)
     return rebuild_norm_layers_to_process
 
@@ -402,7 +410,7 @@ def process_file_func(args: List[FindPathArgs]):
             if training_index == 100:
                 break
         start_model.load_state_dict(temp_model_state)
-    else:
+    if arg0.load_optimizer:
         """use existing optimizer"""
         # check optimizer
         start_optimizer_path = arg0.start_model_path.replace('model.pt', 'optimizer.pt')
@@ -740,14 +748,14 @@ def process_file_func(args: List[FindPathArgs]):
                     optimizer_info = "optimizer state"
                     i = optimizer.state_dict()
 
-                norm_layers = rebuild_norm_check_layers(start_model_stat, arg.ml_setup, arg.rebuild_norm_layer)
+                norm_layers = rebuild_norm_check_layers(start_model_stat, arg.ml_setup, arg.rebuild_norm_layer, arg.rebuild_norm_layer_keyword)
                 start_model_stat, rebuild_states = rebuild_norm_layer_function(start_model, start_model_stat,
                                                                                arg.ml_setup,
                                                                                dataloader_for_rebuilding_norm,
                                                                                arg.rebuild_norm_round,
                                                                                arg.rebuild_norm_loss,
-                                                                               norm_layers,
-                                                                               i, rebuild_on_device=device,
+                                                                               i, norm_layers,
+                                                                               rebuild_on_device=device,
                                                                                initial_model_stat=initial_model_stat,
                                                                                reset_norm_to_initial=True,
                                                                                use_amp=arg.use_amp)
@@ -819,7 +827,8 @@ if __name__ == '__main__':
     parser.add_argument("--lr", type=float, default=0.001, help='train the model with this learning rate, joint with "--training_round"')
     parser.add_argument("--training_round", type=int, default=1, help='train the model for x rounds, joint with "--lr"')
     parser.add_argument("--loss", type=float, default=-1, help='train the model until loss is smaller than, cannot use with "--training_round" or "--lr"')
-    parser.add_argument("--pretrain_optimizer", action='store_true', help='pretrain an optimizer rather than using existing optimizer state')
+    parser.add_argument("--load_optimizer", action='store_true', help='load existing optimizer state')
+    parser.add_argument("--pretrain_optimizer", action='store_true', help='pretrain an optimizer')
 
     # rebuild norm parameter
     parser.add_argument("-r", "--rebuild_norm_round", type=int, default=0, help='rebuild norm for x rounds to rebuild the norm layers')
@@ -865,6 +874,7 @@ if __name__ == '__main__':
 
         # train parameters
         find_path_arg.pretrain_optimizer = args.pretrain_optimizer
+        find_path_arg.load_optimizer = args.load_optimizer
         loss = args.loss
         if loss != -1:
             assert args.lr == 0.001 and args.training_round == 1, "you can only specify loss or lr+training_round"
