@@ -5,7 +5,7 @@ import shutil
 import sys
 import json
 from enum import Enum
-from typing import Final, Optional
+from typing import Final, Optional, List
 import torch
 import re
 import torch.optim as optim
@@ -56,7 +56,8 @@ class FindPathArgs:
     # rebuild norm options
     rebuild_norm_round = None
     rebuild_norm_loss = None
-    rebuild_norm_layers = None
+    rebuild_norm_layer = None
+    rebuild_norm_layer_keyword = None
     rebuild_norm_with_dedicated_dataloader = None
     rebuild_norm_with_training_optimizer = None
 
@@ -215,16 +216,7 @@ def get_files_to_process(arg_start_folder, arg_end_folder, arg_mode):
 
     return sorted(output_paths)
 
-
-# rebuild_norm_layers=None indicates rebuild all norm layers, when specified, then only rebuild norm for these layers
-
-def rebuild_norm_layers(model, model_state, arg_ml_setup, dataloader, rebuild_norm_round, rebuild_norm_loss, existing_optimizer_state_or_optimizer,
-                        rebuild_on_device=None, reset_norm_to_initial=False, initial_model_stat=None, display=False, rebuild_norm_layers_override=None,
-                        use_amp=False):
-    global __print_norm_to_rebuild_layers
-    if rebuild_norm_layers_override is None:
-        rebuild_norm_layers_override = []
-
+def rebuild_norm_check_layers(model_state, arg_ml_setup, rebuild_norm_layers_override):
     def is_processing_this_layer(model_name, layer_name, rebuild_norm_layers_override):
         if len(rebuild_norm_layers_override) == 0:
             if special_torch_layers.is_normalization_layer(model_name, layer_name):
@@ -239,18 +231,29 @@ def rebuild_norm_layers(model, model_state, arg_ml_setup, dataloader, rebuild_no
                     break
             return process_this_layer
 
+    if rebuild_norm_layers_override is None:
+        rebuild_norm_layers_override = []
     # get the list of layers to rebuild norm
     rebuild_norm_layers_to_process = []
     for layer_name, layer_weights in model_state.items():
         if is_processing_this_layer(arg_ml_setup.model_name, layer_name, rebuild_norm_layers_override):
             rebuild_norm_layers_to_process.append(layer_name)
+    return rebuild_norm_layers_to_process
+
+
+# rebuild_norm_layers=None indicates rebuild all norm layers, when specified, then only rebuild norm for these layers
+def rebuild_norm_layer_function(model, model_state, arg_ml_setup, dataloader, rebuild_norm_round, rebuild_norm_loss,
+                                existing_optimizer_state_or_optimizer, norm_layers,
+                                rebuild_on_device=None, reset_norm_to_initial=False, initial_model_stat=None, display=False,
+                                use_amp=False):
+    global __print_norm_to_rebuild_layers
 
     # reset target layers to initial state?
     if reset_norm_to_initial:
         assert initial_model_stat is not None
         # reset normalization layers
         for layer_name, layer_weights in model_state.items():
-            if layer_name in rebuild_norm_layers_to_process:
+            if layer_name in norm_layers:
                 model_state[layer_name] = initial_model_stat[layer_name]
 
     model.load_state_dict(model_state)
@@ -309,7 +312,7 @@ def rebuild_norm_layers(model, model_state, arg_ml_setup, dataloader, rebuild_no
             rebuild_states.append((rebuilding_normalization_count, rebuilding_loss_val))
             current_model_stat = model.state_dict()
             for layer_name, layer_weights in current_model_stat.items():
-                if layer_name not in rebuild_norm_layers_to_process:
+                if layer_name not in norm_layers:
                     current_model_stat[layer_name] = start_model_stat[layer_name]
             model.load_state_dict(current_model_stat)
             if display:
@@ -325,11 +328,11 @@ def rebuild_norm_layers(model, model_state, arg_ml_setup, dataloader, rebuild_no
         if exit_flag:
             break
     output_model_state = model.state_dict()
-    return output_model_state, rebuild_states, rebuild_norm_layers_to_process
+    return output_model_state, rebuild_states
 
 
 __print_norm_to_rebuild_layers = True
-def process_file_func(args: [FindPathArgs]):
+def process_file_func(args: List[FindPathArgs]):
     global __print_norm_to_rebuild_layers
 
     assert len(args) >= 1
@@ -737,20 +740,21 @@ def process_file_func(args: [FindPathArgs]):
                     optimizer_info = "optimizer state"
                     i = optimizer.state_dict()
 
-                start_model_stat, rebuild_states, layers_rebuild = rebuild_norm_layers(start_model, start_model_stat,
-                                                                                       arg.ml_setup,
-                                                                                       dataloader_for_rebuilding_norm,
-                                                                                       arg.rebuild_norm_round,
-                                                                                       arg.rebuild_norm_loss,
-                                                                                       i, rebuild_on_device=device,
-                                                                                       initial_model_stat=initial_model_stat,
-                                                                                       reset_norm_to_initial=True,
-                                                                                       rebuild_norm_layers_override=arg.rebuild_norm_layers,
-                                                                                       use_amp=arg.use_amp)
+                norm_layers = rebuild_norm_check_layers(start_model_stat, arg.ml_setup, arg.rebuild_norm_layer)
+                start_model_stat, rebuild_states = rebuild_norm_layer_function(start_model, start_model_stat,
+                                                                               arg.ml_setup,
+                                                                               dataloader_for_rebuilding_norm,
+                                                                               arg.rebuild_norm_round,
+                                                                               arg.rebuild_norm_loss,
+                                                                               norm_layers,
+                                                                               i, rebuild_on_device=device,
+                                                                               initial_model_stat=initial_model_stat,
+                                                                               reset_norm_to_initial=True,
+                                                                               use_amp=arg.use_amp)
 
                 if __print_norm_to_rebuild_layers:
                     __print_norm_to_rebuild_layers = False
-                    child_logger.info(f"layers to rebuild: {layers_rebuild}")
+                    child_logger.info(f"layers to rebuild: {norm_layers}")
                 rebuild_iter, rebuilding_loss_val = rebuild_states[-1]
                 child_logger.info(f"current tick: {current_tick}, rebuilding finished at {rebuild_iter} rounds with {optimizer_info}, rebuilding loss = {rebuilding_loss_val:.3f}")
                 # remove norm layer variance
@@ -820,7 +824,8 @@ if __name__ == '__main__':
     # rebuild norm parameter
     parser.add_argument("-r", "--rebuild_norm_round", type=int, default=0, help='rebuild norm for x rounds to rebuild the norm layers')
     parser.add_argument("--rebuild_norm_loss", type=float, default=0, help='rebuild norm until loss is smaller than this threshold')
-    parser.add_argument("--rebuild_norm_layers", type=str, nargs="+", default=[], help='specify which layers to rebuild, default means all norm layers')
+    parser.add_argument("--rebuild_norm_layer", type=str, nargs="+", default=[], help='specify which layers to rebuild, default means all norm layers')
+    parser.add_argument("--rebuild_norm_layer_keyword", type=str, nargs="+", default=[], help='specify which layers to rebuild, default means all norm layers')
     parser.add_argument("--dedicated_rebuild_norm_dataloader", action='store_true', help='use a dedicated, sample order preserved dataloader')
     parser.add_argument("--rebuild_norm_reuse_train_optimizer", action='store_true', help='reuse the training optimizer for building norm layers')
 
@@ -856,7 +861,6 @@ if __name__ == '__main__':
             find_path_arg_template.append(stage)
     else:
         """for single arg"""
-        assert args.json is None
         find_path_arg = FindPathArgs()
 
         # train parameters
@@ -878,7 +882,8 @@ if __name__ == '__main__':
         # rebuild norm
         find_path_arg.rebuild_norm_round = args.rebuild_norm_round
         find_path_arg.rebuild_norm_loss = args.rebuild_norm_loss
-        find_path_arg.rebuild_norm_layers = args.rebuild_norm_layers
+        find_path_arg.rebuild_norm_layer = args.rebuild_norm_layer
+        find_path_arg.rebuild_norm_layer_keyword = args.rebuild_norm_layer_keyword
         find_path_arg.rebuild_norm_with_dedicated_dataloader = args.dedicated_rebuild_norm_dataloader
         find_path_arg.rebuild_norm_with_training_optimizer = args.rebuild_norm_reuse_train_optimizer
 
