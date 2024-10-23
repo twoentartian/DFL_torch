@@ -28,7 +28,7 @@ def load_models_from_lmdb(lmdb_path, arg_node_name):
         cursor = txn.cursor()
         for key, value in cursor:
             key = key.decode("utf-8")
-            key = key.replace('.pt', '')
+            key = key.replace('.model.pt', '')
             items = key.split('/')
             current_node_name = int(items[0])
             if current_node_name != arg_node_name:
