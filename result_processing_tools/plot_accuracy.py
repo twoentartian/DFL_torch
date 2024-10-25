@@ -80,7 +80,8 @@ if __name__ == '__main__':
         herd_effect_delay = calculate_herd_effect_delay(accuracy_df)
 
         ###################### accuracy
-        axs[plot_index].axvline(x=herd_effect_delay, color='r', label=f'herd effect delay={herd_effect_delay}')
+        if herd_effect_delay is not None:
+            axs[plot_index].axvline(x=herd_effect_delay, color='r', label=f'herd effect delay={herd_effect_delay}')
         for col in accuracy_df.columns:
             if draw_only_first_node:
                 if col == "0":
