@@ -70,6 +70,7 @@ class FindPathArgs:
     worker_count = None
     total_cpu_count = None
     save_format = None
+    save_interval = None
     save_ticks = None
     use_cpu = None
     use_amp = None
@@ -443,8 +444,8 @@ def process_file_func(args: List[FindPathArgs]):
     variance_service.initialize_without_runtime_parameters([0], [start_model_stat_dict], arg_output_folder_path)
     if arg0.save_format != 'none':
         if not arg0.save_ticks:
-            child_logger.info("record_model_service is ON at every tick")
-            record_model_service = record_model_stat.ModelStatRecorder(1)
+            child_logger.info(f"record_model_service is ON at every {arg0.save_interval} tick")
+            record_model_service = record_model_stat.ModelStatRecorder(sys.maxsize) # the interval here has no effect
         else:
             child_logger.info("record_model_service is ON at certain ticks")
             record_model_service = record_model_stat.ModelStatRecorder(sys.maxsize) # we don't set the interval here because only certain ticks should be recorded
@@ -595,8 +596,8 @@ def process_file_func(args: List[FindPathArgs]):
     target_variance = variance_record.get_variance()
 
     current_tick = 0
-    modeL_state_of_last_tick = copy.deepcopy(start_model_stat)
-    cuda.CudaEnv.model_state_dict_to(modeL_state_of_last_tick, device)
+    model_state_of_last_tick = copy.deepcopy(start_model_stat)
+    cuda.CudaEnv.model_state_dict_to(model_state_of_last_tick, device)
 
     child_logger.info(f"arg info:{args}")
     for stage_index, arg in enumerate(args):
@@ -780,14 +781,14 @@ def process_file_func(args: List[FindPathArgs]):
             for i in all_model_stats:
                 cuda.CudaEnv.model_state_dict_to(i, device)
             weight_diff_service.trigger_without_runtime_parameters(current_tick, all_model_stats)
-            weight_change_service.trigger_without_runtime_parameters(current_tick, [modeL_state_of_last_tick, start_model_stat])
-            modeL_state_of_last_tick = copy.deepcopy(start_model_stat)
+            weight_change_service.trigger_without_runtime_parameters(current_tick, [model_state_of_last_tick, start_model_stat])
+            model_state_of_last_tick = copy.deepcopy(start_model_stat)
             distance_to_origin_service.trigger_without_runtime_parameters(current_tick, {0: start_model_stat})
             variance_service.trigger_without_runtime_parameters(current_tick, [0], [start_model_stat])
             if record_model_service is not None:
                 record_flag = False
                 if arg.save_ticks is None:
-                    record_flag = True
+                    record_flag = current_tick % arg.save_interval == 0
                 else:
                     current_save_tick_for_this_stage = [i+start_tick_of_this_stage for i in arg.save_ticks]
                     if current_tick in current_save_tick_for_this_stage:
@@ -844,6 +845,7 @@ if __name__ == '__main__':
 
     # compute parameters
     parser.add_argument("--save_ticks", type=str, help='specify when to record the models (e.g. [1,2,3,5-10]), only works when --save_format is set to work.')
+    parser.add_argument("--save_interval", type=int, default=1, help='specify the saving interval')
     parser.add_argument("--save_format", type=str, default='none', choices=['none', 'file', 'lmdb'])
     parser.add_argument("--cpu", action='store_true', help='force using CPU for training')
     parser.add_argument("--amp", action='store_true', help='enable auto mixed precision')
@@ -904,6 +906,7 @@ if __name__ == '__main__':
         # general_info
         find_path_arg.tick = args.tick
         find_path_arg.save_format = args.save_format
+        find_path_arg.save_interval = args.save_interval
         if args.save_ticks is not None:
             find_path_arg.save_ticks = util.expand_int_args(args.save_ticks)
         else:
@@ -962,7 +965,7 @@ if __name__ == '__main__':
         worker_count = paths_to_find_count
     logger.info(f"worker: {worker_count}")
 
-    args = []
+    find_path_args = []
     for (start_file, end_file) in paths_to_find:
         find_path_arg = copy.deepcopy(find_path_arg_template)
         for each_stage in find_path_arg:
@@ -974,9 +977,10 @@ if __name__ == '__main__':
             each_stage.ml_setup = current_ml_setup
             each_stage.use_amp = use_amp
             each_stage.use_cpu = use_cpu
-        args.append(find_path_arg)
+
+        find_path_args.append(find_path_arg)
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=worker_count) as executor:
-        futures = [executor.submit(process_file_func, arg) for arg in args]
+        futures = [executor.submit(process_file_func, arg) for arg in find_path_args]
         for future in concurrent.futures.as_completed(futures):
             result = future.result()
