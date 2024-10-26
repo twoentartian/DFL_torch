@@ -8,6 +8,7 @@ import torch
 import umap
 import pickle
 import numpy as np
+from typing import Optional
 
 from datetime import datetime
 import matplotlib.pyplot as plt
@@ -15,35 +16,46 @@ from sklearn.manifold import TSNE
 from sklearn.decomposition import PCA
 from sklearn.cluster import DBSCAN
 from sklearn.preprocessing import StandardScaler
+from sklearn.neighbors import KernelDensity
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 plot_alpha = 0.5
 plot_size = 1
 
-def load_models_from_lmdb(lmdb_path, arg_node_name):
+def load_models_from_lmdb(lmdb_path, arg_node_name, desired_length:Optional[int]=None):
     lmdb_env = lmdb.open(lmdb_path, readonly=True)
     tick_and_models = {}
     with lmdb_env.begin() as txn:
+        read_sample_ratio = 1
+        if desired_length is not None:
+            length = txn.stat()['entries']
+            read_sample_ratio = length // desired_length
+
         cursor = txn.cursor()
+        count = 0
         for key, value in cursor:
-            key = key.decode("utf-8")
-            key = key.replace('.model.pt', '')
-            items = key.split('/')
-            current_node_name = int(items[0])
-            if current_node_name != arg_node_name:
-                continue
-            tick = int(items[1])
-            buffer = io.BytesIO(value)
-            state_dict = torch.load(buffer, map_location=torch.device('cpu'))
-            tick_and_models[tick] = state_dict
+            count += 1
+            if count == read_sample_ratio:
+                key = key.decode("utf-8")
+                key = key.replace('.model.pt', '')
+                items = key.split('/')
+                current_node_name = int(items[0])
+                if current_node_name != arg_node_name:
+                    continue
+                tick = int(items[1])
+                buffer = io.BytesIO(value)
+                state_dict = torch.load(buffer, map_location=torch.device('cpu'))
+                tick_and_models[tick] = state_dict
+                count = 0
     return tick_and_models
 
-def visualize_single_path_all_weights(arg_path_folder, arg_output_folder, arg_node_name: int):
+def visualize_single_path_all_weights(arg_path_folder, arg_output_folder, arg_node_name: int, sample_points=None):
+    assert len(arg_path_folder) == 1
     assert os.path.exists(arg_path_folder)
     lmdb_path = os.path.join(arg_path_folder, "model_stat.lmdb")
     assert os.path.exists(lmdb_path)
-    tick_and_models = load_models_from_lmdb(lmdb_path, arg_node_name)
+    tick_and_models = load_models_from_lmdb(lmdb_path, arg_node_name, desired_length=sample_points)
     max_tick = max(tick_and_models.keys())
     sample_model = tick_and_models[next(iter(tick_and_models))]
     print("model digest:")
@@ -82,7 +94,7 @@ def extract_weights(model_stat, layer_name):
     weights = model_stat[layer_name].numpy()
     return weights.flatten()
 
-def deduplicate_weights(weights_trajectory, shrink_ratio: float | None = None):
+def deduplicate_weights_dbscan(weights_trajectory, shrink_ratio: float | None = None):
     if shrink_ratio is not None:
         assert 0 < shrink_ratio < 1
 
@@ -124,15 +136,23 @@ def deduplicate_weights(weights_trajectory, shrink_ratio: float | None = None):
         print(f"De-duplicate extra sampling rate: {sample_rate}")
         return weights_trajectory_reduced[::sample_rate], index_reduced[::sample_rate]
 
+def deduplicate_weights_kde(weights_trajectory, n_samples):
+    kde = KernelDensity(bandwidth=0.1).fit(weights_trajectory.T)
+    density = np.exp(kde.score_samples(weights_trajectory.T))
+    prob = density / np.sum(density)
+    indices = np.random.choice(len(weights_trajectory), size=n_samples, replace=False, p=prob)
+    return weights_trajectory[indices], indices
+
 
 def check_lmdb_exists(path):
     return os.path.exists(os.path.join(path, "data.mdb")) and os.path.exists(os.path.join(path, "lock.mdb"))
 
 
-def visualize_single_path(arg_path_folder, arg_output_folder, arg_node_name: int, methods, dimension=None, arg_remove_duplicate_points=True):
+def visualize_single_path(arg_path_folder, arg_output_folder, arg_node_name: int, methods, dimension=None, arg_remove_duplicate_points=True, sample_points=None):
     if dimension is None:
         dimension = [2, 3]
     assert os.path.exists(arg_path_folder)
+    assert len(arg_path_folder) == 1
 
     while True:
         lmdb_path_1 = os.path.join(arg_path_folder, "model_stat.lmdb")
@@ -148,7 +168,7 @@ def visualize_single_path(arg_path_folder, arg_output_folder, arg_node_name: int
         print(f"lmdb not found in these paths: {[lmdb_path_1, lmdb_path_2]}")
         exit(-1)
 
-    tick_and_models = load_models_from_lmdb(lmdb_path, arg_node_name)
+    tick_and_models = load_models_from_lmdb(lmdb_path, arg_node_name, desired_length=sample_points)
     sample_model = tick_and_models[next(iter(tick_and_models))]
     ticks_ordered = sorted(tick_and_models.keys())
     print("model digest:")
@@ -172,7 +192,7 @@ def visualize_single_path(arg_path_folder, arg_output_folder, arg_node_name: int
                     pca_2d = PCA(n_components=2)
                     projected_2d = pca_2d.fit_transform(weights_array)
                     if arg_remove_duplicate_points:
-                        projected_2d, projection_index = deduplicate_weights(projected_2d)
+                        projected_2d, projection_index = deduplicate_weights_dbscan(projected_2d)
                     else:
                         projection_index = range(len(projected_2d))
                 elif method == 'tsne':
@@ -205,7 +225,7 @@ def visualize_single_path(arg_path_folder, arg_output_folder, arg_node_name: int
                     pca_3d = PCA(n_components=3)
                     projected_3d = pca_3d.fit_transform(weights_array)
                     if arg_remove_duplicate_points:
-                        projected_3d, projection_index = deduplicate_weights(projected_3d)
+                        projected_3d, projection_index = deduplicate_weights_dbscan(projected_3d)
                     else:
                         projection_index = range(len(projected_3d))
                 elif method == 'tsne':
@@ -233,7 +253,7 @@ def de_duplicate_weights_all_path(arg_trajectory, arg_trajectory_length_list, sh
     projection_slice_length = []
     count = 0
     for original_trajectory_length in arg_trajectory_length_list:
-        projection_slice, projection_slice_index = deduplicate_weights(arg_trajectory[count: count+original_trajectory_length], shrink_ratio=shrink_ratio)
+        projection_slice, projection_slice_index = deduplicate_weights_dbscan(arg_trajectory[count: count + original_trajectory_length], 100)
         count += original_trajectory_length
 
         projection_slice_length.append(len(projection_slice))
@@ -242,11 +262,14 @@ def de_duplicate_weights_all_path(arg_trajectory, arg_trajectory_length_list, sh
 
     return np.array(projection), np.array(projection_index), np.array(projection_slice_length)
 
-def visualize_all_path(arg_path_folder, arg_output_folder, arg_node_name: int, methods, only_layers=None, dimension=None, arg_remove_duplicate_points=True, shrink_ratio=None):
+def visualize_all_path(arg_path_folder, arg_output_folder, arg_node_name: int, methods, only_layers=None, dimension=None, arg_remove_duplicate_points=False, shrink_ratio=None, sample_points=None):
     if dimension is None:
         dimension = [2, 3]
-    assert os.path.exists(arg_path_folder)
-    all_sub_folders = [f.path for f in os.scandir(arg_path_folder) if f.is_dir()]
+    all_sub_folders = []
+    assert len(arg_path_folder) > 0
+    for folder in arg_path_folder:
+        assert os.path.exists(folder)
+        all_sub_folders = all_sub_folders + [f.path for f in os.scandir(folder) if f.is_dir()]
     assert len(all_sub_folders) > 0
     all_sub_folders = sorted(all_sub_folders)
 
@@ -257,7 +280,7 @@ def visualize_all_path(arg_path_folder, arg_output_folder, arg_node_name: int, m
     for single_sub_folder in all_sub_folders:
         lmdb_path = os.path.join(single_sub_folder, "model_stat.lmdb")
         print(f"loading lmdb: {lmdb_path}")
-        tick_and_models = load_models_from_lmdb(lmdb_path, arg_node_name)
+        tick_and_models = load_models_from_lmdb(lmdb_path, arg_node_name, desired_length=sample_points)
         ticks_ordered = sorted(tick_and_models.keys())
         sample_model = tick_and_models[next(iter(tick_and_models))]
         for layer_name in sample_model.keys():
@@ -312,7 +335,7 @@ def visualize_all_path(arg_path_folder, arg_output_folder, arg_node_name: int, m
                 plt.tight_layout()
                 file_name = os.path.join(arg_output_folder, f"{method}_2d_{layer_name}")
                 plt.savefig(f"{file_name}.pdf")
-                plt.savefig(f"{file_name}.png")
+                plt.savefig(f"{file_name}.png", dpi=400)
                 plt.close(fig)
 
             if 3 in dimension:
@@ -356,7 +379,8 @@ if __name__ == '__main__':
     parser.add_argument("mode", type=str, choices=['single_path_all_weights', 'all_path', 'single_path'], help="single_path_all_weights: draw the weights change for all weights."
                                                                                                                "all_path: reduce the dimension and plot the path for all models in this path, suitable for paths generated 'find_high_accuracy_path'"
                                                                                                                "single_path: draw path for single model path, provide a lmdb database path or a path containing a lmdb folder with name 'model_stat.lmdb'")
-    parser.add_argument("path_folder", type=str, help="high accuracy path data folder")
+    parser.add_argument("path_folder", type=str, nargs='+', help="high accuracy path data folder")
+    parser.add_argument("-p", "--points", type=int, help="number of sample points per path to visualize", default=0)
     parser.add_argument("-m", "--dimension_reduce_method", type=str, nargs='+', choices=['umap', 'tsne', 'pca'], help="the method to reduce dimension to 2 or 3")
     parser.add_argument("-l", "--layer", type=str, nargs='+', help="only plot these layers, default: plot all layers")
     parser.add_argument("--node_name", type=int, default=0)
@@ -369,6 +393,7 @@ if __name__ == '__main__':
     mode = args.mode
     path_folder = args.path_folder
     node_name = args.node_name
+    points = None if args.points == 0 else args.points
     plot_dimensions = [2, 3]
     if args.disable_3d:
         plot_dimensions.remove(3)
@@ -387,8 +412,8 @@ if __name__ == '__main__':
     os.mkdir(output_folder_path)
 
     if mode == 'single_path_all_weights':
-        visualize_single_path_all_weights(path_folder, output_folder_path, node_name)
+        visualize_single_path_all_weights(path_folder, output_folder_path, node_name, sample_points=points)
     elif mode == 'all_path':
-        visualize_all_path(path_folder, output_folder_path, node_name, dimension_reduction_methods, only_layers=only_layers, dimension=plot_dimensions, shrink_ratio=remove_duplicate_shrink_ratio)
+        visualize_all_path(path_folder, output_folder_path, node_name, dimension_reduction_methods, sample_points=points, only_layers=only_layers, dimension=plot_dimensions, shrink_ratio=remove_duplicate_shrink_ratio)
     elif mode == "single_path":
-        visualize_single_path(path_folder, output_folder_path, node_name, dimension_reduction_methods, dimension=plot_dimensions)
+        visualize_single_path(path_folder, output_folder_path, node_name, dimension_reduction_methods, dimension=plot_dimensions, sample_points=points)
