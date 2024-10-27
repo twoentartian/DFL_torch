@@ -109,3 +109,4 @@ def save_optimizer_state(path, optimizer_state, model_name=None):
 def assert_if_both_not_none(a, b):
     if a is not None and b is not None:
         assert a == b
+

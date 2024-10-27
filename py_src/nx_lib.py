@@ -1,3 +1,4 @@
+import os
 import networkx as nx
 from networkx.algorithms.community import kernighan_lin_bisection
 
@@ -63,3 +64,12 @@ def get_inter_community_edges(topology: nx.Graph, communities):
 
     return inter_community_edges
 
+
+def load_topology_from_edge_list_file(file_path):
+    assert os.path.exists(file_path)
+    graph = nx.Graph()
+    with open(file_path, 'r') as file:
+        for line in file:
+            node1, node2 = map(int, line.split())
+            graph.add_edge(node1, node2)
+    return graph

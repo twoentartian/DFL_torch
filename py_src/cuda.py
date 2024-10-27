@@ -163,7 +163,7 @@ class CudaEnv:
             pytorch_gpu_info.used_memory_MB = used_memory_MB
             pytorch_gpu_info.total_memory_MB = total_memory_MB
 
-    def generate_execution_strategy(self, node_count, override_use_model_stat: None | bool = None, override_allocate_all_models: None | bool = None):
+    def generate_execution_strategy(self, node_set, override_use_model_stat: None | bool = None, override_allocate_all_models: None | bool = None):
         self.__update_gpu_free_memory__()
         if GPU_SINGLE_THREAD_MODE:
             model_capacity_per_gpu = []
@@ -182,7 +182,7 @@ class CudaEnv:
                     for gpu in self.cuda_device_list:
                         model_capacity_for_this_gpu = int((gpu.total_memory_MB * (1 - GPU_RESERVED_MEMORY_RATIO) - gpu.used_memory_MB - self.memory_consumption_dataset_MB) // self.memory_consumption_model_MB)
                         model_capacity_per_gpu.append(model_capacity_for_this_gpu)
-                    use_model_stat = (sum(model_capacity_per_gpu) < node_count)
+                    use_model_stat = (sum(model_capacity_per_gpu) < len(node_set))
                 else:
                     use_model_stat = True
             self.use_model_stat = use_model_stat
@@ -190,7 +190,7 @@ class CudaEnv:
         else:
             raise NotImplementedError("multiprocess is not implemented yet")
 
-    def prepare_gpu_memory(self, model, config_file, config_ml_setup, node_count):
+    def prepare_gpu_memory(self, model, config_file, config_ml_setup, node_set):
         assert self.use_model_stat is not None
         if GPU_SINGLE_THREAD_MODE:
             if self.use_model_stat:
@@ -203,14 +203,15 @@ class CudaEnv:
                 para = RuntimeParameters()
                 para.phase = SimulationPhase.INITIALIZING
                 gpu.optimizer = config_file.get_optimizer(None, gpu.model, para, config_ml_setup)
-                gpu.nodes_allocated = set(range(node_count))
+                gpu.nodes_allocated = node_set
             else:
                 assert self.model_capacity_per_gpu is not None
                 # it's possible to allocate all model to GPU memory
                 logger.info(f"GPU execution strategy: DEDICATED_MODEL_ON_GPU each node has their own model on GPU")
                 node_allocated = 0
+                node_set_list = list(node_set)
                 for index, gpu in enumerate(self.cuda_device_list):
-                    gpu.nodes_allocated = set(range(node_allocated, node_allocated + self.model_capacity_per_gpu[index]))
+                    gpu.nodes_allocated = set(node_set_list[node_allocated: node_allocated + self.model_capacity_per_gpu[index]])
         else:
             raise NotImplementedError("multiprocess is not implemented yet")
 

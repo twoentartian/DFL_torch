@@ -39,19 +39,19 @@ def main(config_file_path, output_folder_name):
     runtime_parameters.current_tick = 0
     runtime_parameters.dataset_label = config_ml_setup.dataset_label
     runtime_parameters.phase = SimulationPhase.INITIALIZING
+    runtime_parameters.output_path = output_folder_path
 
     # check and create topology
     nodes_set = initial_checking.check_consistent_nodes(config_file.get_topology, config_file.max_tick)
-    runtime_parameters.topology = config_file.get_topology(runtime_parameters)
 
     # init cuda
     if not config_file.force_use_cpu:
         current_cuda_env.measure_memory_consumption_for_performing_ml(config_ml_setup)
         current_cuda_env.measure_memory_consumption_for_performing_ml(config_ml_setup)
-        current_cuda_env.generate_execution_strategy(len(nodes_set),
+        current_cuda_env.generate_execution_strategy(nodes_set,
                                                      override_use_model_stat=config_file.override_use_model_stat,
                                                      override_allocate_all_models=config_file.override_allocate_all_models)
-        current_cuda_env.prepare_gpu_memory(config_ml_setup.model, config_file, config_ml_setup, len(nodes_set))
+        current_cuda_env.prepare_gpu_memory(config_ml_setup.model, config_file, config_ml_setup, nodes_set)
         current_cuda_env.print_ml_info()
         current_cuda_env.print_gpu_info()
 
@@ -73,7 +73,7 @@ def main(config_file_path, output_folder_name):
                 if single_node in gpu.nodes_allocated:
                     allocated_gpu = gpu
                     break
-            assert allocated_gpu is not None
+            assert allocated_gpu is not None, f"node cannot find a suitable GPU, is there enough GPUs?"
             if current_cuda_env.use_model_stat:
                 temp_node = node.Node(single_node, config_ml_setup, use_model_stat=True, allocated_gpu=allocated_gpu, optimizer=allocated_gpu.optimizer)
             else:
@@ -96,7 +96,7 @@ def main(config_file_path, output_folder_name):
         # label distribution
         label_distribution = config_file.get_label_distribution(temp_node, runtime_parameters)
         assert label_distribution is not None
-        temp_node.set_label_distribution(label_distribution, training_dataset)
+        temp_node.set_label_distribution(label_distribution, dataset_with_fast_label=training_dataset)
         # add node to container
         runtime_parameters.node_container[single_node] = temp_node
 

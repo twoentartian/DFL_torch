@@ -6,6 +6,7 @@ import torch
 
 from datetime import datetime
 from mpi4py import MPI
+from typing_extensions import runtime
 
 from py_src import internal_names, configuration_file, dfl_logging, nx_lib, initial_checking, cuda, mpi_util, dataset, node, simulator_common
 from py_src.simulation_runtime_parameters import RuntimeParameters, SimulationPhase
@@ -57,6 +58,7 @@ def main(config_file_path, output_folder_name):
     runtime_parameters.current_tick = 0
     runtime_parameters.dataset_label = config_ml_setup.dataset_label
     runtime_parameters.phase = SimulationPhase.INITIALIZING
+    runtime_parameters.output_path = output_folder_path
 
     # check, create topology and split nodes
     if MPI_rank == 0:
@@ -168,7 +170,7 @@ def main(config_file_path, output_folder_name):
         # label distribution
         label_distribution = config_file.get_label_distribution(temp_node, runtime_parameters)
         assert label_distribution is not None
-        temp_node.set_label_distribution(label_distribution, training_dataset)
+        temp_node.set_label_distribution(label_distribution, dataset_with_fast_label=training_dataset)
         # add node to container
         runtime_parameters.node_container[single_node] = temp_node
 

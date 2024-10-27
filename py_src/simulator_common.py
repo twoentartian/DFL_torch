@@ -1,4 +1,6 @@
+import os
 import time
+import pickle
 from datetime import datetime
 from typing import Final
 from mpi4py import MPI
@@ -6,6 +8,7 @@ from mpi4py.util import pkl5
 
 from py_src import node, cpu, mpi_data_payload, mpi_util, ml_setup
 from py_src.simulation_runtime_parameters import SimulationPhase, RuntimeParameters
+from simulator_mpi import MPI_rank
 
 REPORT_FINISH_TIME_PER_TICK: Final[int] = 100
 
@@ -186,7 +189,30 @@ def simulation_phase_end_of_tick(runtime_parameters: RuntimeParameters, logger):
 def begin_simulation(runtime_parameters: RuntimeParameters, config_file, ml_config: ml_setup.MlSetup, current_cuda_env, logger, mpi_world: mpi_util.MpiWorld=None):
     # begin simulation
     timer = time.time()
+
     while runtime_parameters.current_tick <= config_file.max_tick:
+        # update topology?
+        if mpi_world is not None:
+            MPI_comm = MPI.COMM_WORLD
+            new_topology = config_file.get_topology(runtime_parameters)
+            new_topology = MPI_comm.bcast(new_topology, root=0)
+            if new_topology is not None:
+                if MPI_rank == 0:
+                    topology_folder = os.path.join(runtime_parameters.output_path, "topology")
+                    os.makedirs(topology_folder, exist_ok=True)
+                    topology_file = open(os.path.join(topology_folder, f"{runtime_parameters.current_tick}.pickle"), "wb")
+                    pickle.dump(new_topology, topology_file)
+                    topology_file.close()
+                runtime_parameters.topology = new_topology
+                logger.info(f"topology is updated at tick {runtime_parameters.current_tick}")
+
+        # update label distribution?
+        for _, single_node in runtime_parameters.node_container.items():
+            new_label_distribution = config_file.get_label_distribution(single_node, runtime_parameters)
+            if new_label_distribution is not None:
+                single_node.set_label_distribution(new_label_distribution)
+                logger.info(f"update label distribution to {new_label_distribution} for {single_node.name}.")
+
         # report remaining time
         if runtime_parameters.current_tick % REPORT_FINISH_TIME_PER_TICK == 0 and runtime_parameters.current_tick != 0:
             time_elapsed = time.time() - timer

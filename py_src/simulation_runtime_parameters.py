@@ -25,3 +25,4 @@ class RuntimeParameters:
 
         self.service_container = {}
         self.mpi_enabled = None
+        self.output_path = None
