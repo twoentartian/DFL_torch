@@ -36,7 +36,8 @@ class ServiceTestAccuracyLossRecorder(Service):
         for node_name, target_node in parameters.node_container.items():
             node_names.append(node_name)
 
-        self.initialize_without_runtime_parameters(output_path, node_names, ml_setup.model, ml_setup.criterion, ml_setup.testing_data, config_file, cuda_env)
+        self.initialize_without_runtime_parameters(output_path, node_names, ml_setup.model, ml_setup.criterion, ml_setup.testing_data,
+                                                   config_file=config_file, cuda_env=cuda_env)
 
     def initialize_without_runtime_parameters(self, output_path, node_names, model, criterion, test_dataset, use_cuda=None, config_file=None, cuda_env=None):
         self.accuracy_file = open(os.path.join(output_path, f"{self.accuracy_file_name}"), "w+")
