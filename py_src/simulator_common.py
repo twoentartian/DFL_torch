@@ -167,6 +167,8 @@ def simulation_phase_averaging(runtime_parameters: RuntimeParameters, logger, mp
                 if averaged:
                     nodes_averaged.add(dst_node)
 
+        MPI_comm.barrier()
+
     # logger
     if len(nodes_averaged) > 0:
         logger.info(f"tick: {runtime_parameters.current_tick}, averaging on {len(nodes_averaged)} nodes: {nodes_averaged}")
