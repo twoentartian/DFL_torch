@@ -34,7 +34,7 @@ def merge_topology_file(working_path):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Merge MPI results to follow normal result style')
-    parser.add_argument("mpi_folder", type=str, help="folder containing MPI results", default=".")
+    parser.add_argument("-f", "--mpi_folder", type=str, help="folder containing MPI results", default=".")
 
     args = parser.parse_args()
 
