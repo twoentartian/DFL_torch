@@ -198,12 +198,24 @@ def begin_simulation(runtime_parameters: RuntimeParameters, config_file, ml_conf
             new_topology = MPI_comm.bcast(new_topology, root=0)
             if new_topology is not None:
                 if MPI_rank == 0:
+                    # save this topology
                     topology_folder = os.path.join(runtime_parameters.output_path, "topology")
                     os.makedirs(topology_folder, exist_ok=True)
-                    topology_file = open(os.path.join(topology_folder, f"{runtime_parameters.current_tick}.pickle"), "wb")
+                    topology_file = open(os.path.join(topology_folder, f"{runtime_parameters.current_tick}.topology"), "wb")
                     pickle.dump(new_topology, topology_file)
                     topology_file.close()
                 runtime_parameters.topology = new_topology
+                logger.info(f"topology is updated at tick {runtime_parameters.current_tick}")
+        else:
+            new_topology = config_file.get_topology(runtime_parameters)
+            if new_topology is not None:
+                runtime_parameters.topology = new_topology
+                # save this topology
+                topology_folder = os.path.join(runtime_parameters.output_path, "topology")
+                os.makedirs(topology_folder, exist_ok=True)
+                topology_file = open(os.path.join(topology_folder, f"{runtime_parameters.current_tick}.topology"), "wb")
+                pickle.dump(new_topology, topology_file)
+                topology_file.close()
                 logger.info(f"topology is updated at tick {runtime_parameters.current_tick}")
 
         # update label distribution?
