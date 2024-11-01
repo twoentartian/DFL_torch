@@ -7,7 +7,7 @@ import pandas as pd
 def load_mpi_result_files(working_path, file_name):
     folders = [f for f in os.listdir(working_path) if os.path.isdir(f) and f.startswith("rank_")]
     folders.sort()
-    merged_df = pd.DataFrame()
+    merged_df_dict = {}
     for folder in folders:
         file_path = os.path.join(folder, file_name)
         if not os.path.exists(file_path):
@@ -17,11 +17,13 @@ def load_mpi_result_files(working_path, file_name):
         df = pd.read_csv(file_path, header=0)
 
         for col in df.columns:
-            if col in merged_df.columns:
-                if not merged_df[col].equals(df[col]):
+            if col in merged_df_dict.keys():
+                pass
+                if not merged_df_dict[col].equals(df[col]):
                     raise ValueError(f"Column '{col}' in '{file_path}' has different content across files.")
             else:
-                merged_df = pd.concat([merged_df, df[col]], axis=1)
+                merged_df_dict[col] = df[col]
+    merged_df = pd.DataFrame(merged_df_dict)
     print(merged_df)
     info_columns = []
     for col in merged_df.columns:
