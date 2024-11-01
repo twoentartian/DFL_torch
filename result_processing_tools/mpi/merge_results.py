@@ -55,7 +55,8 @@ if __name__ == "__main__":
 
     path = args.mpi_folder
 
-    merge_file_list = ["loss.csv", "accuracy.csv", "training_loss.csv", "weight_difference_l1.csv", "weight_difference_l2.csv"]
+    # merge_file_list = ["loss.csv", "accuracy.csv", "training_loss.csv", "weight_difference_l1.csv", "weight_difference_l2.csv"]
+    merge_file_list = ["loss.csv", "accuracy.csv", "training_loss.csv"]
     for file_name in merge_file_list:
         merged_df = load_mpi_result_files(path, file_name)
         if merged_df is None:
