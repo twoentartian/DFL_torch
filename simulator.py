@@ -43,6 +43,10 @@ def main(config_file_path, output_folder_name):
 
     # check and create topology
     nodes_set = initial_checking.check_consistent_nodes(config_file.get_topology, config_file.max_tick)
+    topology = config_file.get_topology(runtime_parameters)
+    runtime_parameters.topology = topology
+    simulator_base_logger.info(f"topology is updated at tick {runtime_parameters.current_tick}")
+    simulator_common.save_topology_to_file(topology, runtime_parameters.current_tick, runtime_parameters.output_path, mpi_enabled=True)
 
     # init cuda
     if not config_file.force_use_cpu:

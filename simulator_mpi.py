@@ -64,6 +64,7 @@ def main(config_file_path, output_folder_name):
     if MPI_rank == 0:
         nodes_set = initial_checking.check_consistent_nodes(config_file.get_topology, config_file.max_tick)
         topology, communities, inter_community_edges = distribut_computing_workload(args.config, MPI_size)
+        simulator_common.save_topology_to_file(topology, runtime_parameters.current_tick, runtime_parameters.output_path, mpi_enabled=True)
         simulator_base_logger.info(f"split topology({topology.number_of_nodes()} nodes) to {len(communities)} communities: {[len(community) for community in communities]}, inter community edges counts: {len(inter_community_edges)}")
     else:
         nodes_set = None
@@ -72,6 +73,7 @@ def main(config_file_path, output_folder_name):
     nodes_set = MPI_comm.bcast(nodes_set, root=0)
     communities = MPI_comm.bcast(communities, root=0)
     topology = MPI_comm.bcast(topology, root=0)
+    simulator_base_logger.info(f"topology is updated at tick {runtime_parameters.current_tick}")
     runtime_parameters.topology = topology
     nodes_map = {}
     for temp_rank in range(MPI_size):

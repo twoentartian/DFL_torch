@@ -71,12 +71,10 @@ def simulation_phase_training(runtime_parameters: RuntimeParameters, logger, con
         node_target = runtime_parameters.node_container[node_name]
         node_target.next_training_tick = config_file.get_next_training_time(node_target, runtime_parameters)
 
-
 def simulation_phase_after_training(runtime_parameters: RuntimeParameters, logger):
     runtime_parameters.phase = SimulationPhase.AFTER_TRAINING
     for service_name, service_inst in runtime_parameters.service_container.items():
         service_inst.trigger(runtime_parameters)
-
 
 def simulation_phase_before_averaging(runtime_parameters: RuntimeParameters, logger):
     runtime_parameters.phase = SimulationPhase.BEFORE_AVERAGING
@@ -186,37 +184,39 @@ def simulation_phase_end_of_tick(runtime_parameters: RuntimeParameters, logger):
     for service_name, service_inst in runtime_parameters.service_container.items():
         service_inst.trigger(runtime_parameters)
 
+def save_topology_to_file(topology, current_tick, output_path, mpi_enabled=False):
+    if mpi_enabled:
+        if MPI_rank == 0:
+            topology_folder = os.path.join(output_path, "topology")
+            os.makedirs(topology_folder, exist_ok=True)
+            topology_file = open(os.path.join(topology_folder, f"{current_tick}.pickle"), "wb")
+            pickle.dump(topology, topology_file)
+            topology_file.close()
+    else:
+        topology_folder = os.path.join(output_path, "topology")
+        os.makedirs(topology_folder, exist_ok=True)
+        topology_file = open(os.path.join(topology_folder, f"{current_tick}.pickle"), "wb")
+        pickle.dump(topology, topology_file)
+        topology_file.close()
+
 def begin_simulation(runtime_parameters: RuntimeParameters, config_file, ml_config: ml_setup.MlSetup, current_cuda_env, logger, mpi_world: mpi_util.MpiWorld=None):
     # begin simulation
     timer = time.time()
 
     while runtime_parameters.current_tick <= config_file.max_tick:
+        runtime_parameters.phase = SimulationPhase.START_OF_TICK
+
         # update topology?
         if mpi_world is not None:
             MPI_comm = MPI.COMM_WORLD
             new_topology = config_file.get_topology(runtime_parameters)
             new_topology = MPI_comm.bcast(new_topology, root=0)
-            if new_topology is not None:
-                if MPI_rank == 0:
-                    # save this topology
-                    topology_folder = os.path.join(runtime_parameters.output_path, "topology")
-                    os.makedirs(topology_folder, exist_ok=True)
-                    topology_file = open(os.path.join(topology_folder, f"{runtime_parameters.current_tick}.topology"), "wb")
-                    pickle.dump(new_topology, topology_file)
-                    topology_file.close()
-                runtime_parameters.topology = new_topology
-                logger.info(f"topology is updated at tick {runtime_parameters.current_tick}")
         else:
             new_topology = config_file.get_topology(runtime_parameters)
-            if new_topology is not None:
-                runtime_parameters.topology = new_topology
-                # save this topology
-                topology_folder = os.path.join(runtime_parameters.output_path, "topology")
-                os.makedirs(topology_folder, exist_ok=True)
-                topology_file = open(os.path.join(topology_folder, f"{runtime_parameters.current_tick}.topology"), "wb")
-                pickle.dump(new_topology, topology_file)
-                topology_file.close()
-                logger.info(f"topology is updated at tick {runtime_parameters.current_tick}")
+        if new_topology is not None:
+            save_topology_to_file(new_topology, runtime_parameters.current_tick, runtime_parameters.output_path, mpi_enabled=mpi_world is not None)
+            runtime_parameters.topology = new_topology
+            logger.info(f"topology is updated at tick {runtime_parameters.current_tick}")
 
         # update label distribution?
         for _, single_node in runtime_parameters.node_container.items():
