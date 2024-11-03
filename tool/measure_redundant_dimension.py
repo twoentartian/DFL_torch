@@ -7,6 +7,7 @@ import logging
 import numpy as np
 from datetime import datetime
 import matplotlib.pyplot as plt
+import pandas
 
 from torch.optim import lr_scheduler
 from torch.utils.data import DataLoader
@@ -59,37 +60,55 @@ def train_model(model, optimizer, dataloader, criterion, training_round, model_n
     print(f"{model_name_info}finish training, round={round}, loss={total_loss/training_round:.4f}")
     return model
 
-def train_all_models(model_start, models_end, step_size, adoptive_step_size):
+def train_all_models(model_start, models_end, step_size, adoptive_step_size, existing_output=None):
     """train the starting model"""
     model_state_dict, model_name = util.load_model_state_file(model_start)
     print(f"starting model type: {model_name}")
     current_ml_setup = ml_setup.get_ml_setup_from_model_type(model_name)
     model = copy.deepcopy(current_ml_setup.model)
-    print(f"train the starting model")
+
 
     """load starting model"""
+    print(f"train the starting model")
     cpu_device = torch.device('cpu')
     dataloader, criterion, optimizer, lr_scheduler = get_precise_training_setup(model, model_name, current_ml_setup)
-    model.load_state_dict(model_state_dict)
-    train_model(model, optimizer, dataloader, criterion, training_round, model_name='start')
-    start_model_state = model.state_dict()
-    cuda.CudaEnv.model_state_dict_to(start_model_state, cpu_device)
-    util.save_model_state(os.path.join(output_folder_path, "start.model.pt"), start_model_state)
+
+    start_model_save_name = "start.model.pt"
+    existing_model_path = os.path.join(existing_output, start_model_save_name)
+    if existing_output is not None and os.path.exists(existing_model_path):
+        print(f"load existing model from {existing_model_path}")
+        start_model_state, _ = util.load_model_state_file(existing_model_path)
+    else:
+        model.load_state_dict(model_state_dict)
+        train_model(model, optimizer, dataloader, criterion, training_round, model_name='start')
+        start_model_state = model.state_dict()
+        cuda.CudaEnv.model_state_dict_to(start_model_state, cpu_device)
+        util.save_model_state(os.path.join(output_folder_path, start_model_save_name), start_model_state)
 
     """load destination models"""
     end_model_states = []
     for end_model_path in models_end:
+        end_file_name = os.path.basename(end_model_path)
+        end_file_name = end_file_name.split(".")[0]
+        end_file_save_name = f"end_{end_file_name}.model.pt"
+        if existing_output is not None:
+            check_existing_output_path = os.path.join(existing_output, end_file_save_name)
+            if os.path.exists(check_existing_output_path):
+                print(f"load existing model from {check_existing_output_path}")
+                end_model_state, _ = util.load_model_state_file(check_existing_output_path)
+                end_model_states.append(end_model_state)
+                continue
+
         end_model_state_dict, end_model_name = util.load_model_state_file(end_model_path)
         current_model_state = model_average.move_model_state_toward(start_model_state, end_model_state_dict, step_size, adoptive_step_size)
         assert end_model_name == model_name, f"model name mismatch {model_name} != {end_model_name}"
         dataloader, criterion, optimizer, lr_scheduler = get_precise_training_setup(model, model_name, current_ml_setup)
         model.load_state_dict(current_model_state)
-        end_file_name = os.path.basename(end_model_path)
-        end_file_name = end_file_name.split(".")[0]
+
         train_model(model, optimizer, dataloader, criterion, training_round, model_name=f"{end_file_name}")
         end_model_state = model.state_dict()
         cuda.CudaEnv.model_state_dict_to(end_model_state, cpu_device)
-        util.save_model_state(os.path.join(output_folder_path, f"end_{end_file_name}.model.pt"), end_model_state)
+        util.save_model_state(os.path.join(output_folder_path, end_file_save_name), end_model_state)
         end_model_states.append(end_model_state)
 
     return start_model_state, end_model_states
@@ -104,6 +123,8 @@ if __name__ == '__main__':
     parser.add_argument("-a", "--adoptive_step_size", type=float, default=0)
     parser.add_argument("-o", "--output_folder_name", default=None, help='specify the output folder name')
     parser.add_argument("-r", "--training_round", type=int, default=10, help='specify the round of training')
+
+    parser.add_argument("-e","--existing_output", type=str, default=None, help="specify an existing output path to continue processing")
 
     args = parser.parse_args()
 
@@ -124,10 +145,13 @@ if __name__ == '__main__':
     print(f"destination {len(models_end)} models: {models_end}")
     models_end = [os.path.join(args.end_folder, model) for model in models_end]
 
-    start_model_state, end_model_states = train_all_models(model_start, models_end, args.step_size, args.adoptive_step_size)
+    start_model_state, end_model_states = train_all_models(model_start, models_end, args.step_size, args.adoptive_step_size, args.existing_output)
 
     """calculate the dimension of high accuracy space"""
     total_layers = start_model_state.keys()
+    df_map = {}
+    thresholds = np.logspace(-6, 2, num=1000)
+    df_map["threshold"] = thresholds
     for layer_name in total_layers:
         layers_of_end_models = []
         for end_model in end_model_states:
@@ -137,14 +161,15 @@ if __name__ == '__main__':
         u, s, vh = torch.linalg.svd(layers_of_end_models)
         threshold_list = []
         effective_rank_list = []
-        for threshold in np.logspace(-6, 2, num=1000):
+        for threshold in thresholds:
             effective_rank = torch.sum(s > float(threshold)).item()
             threshold_list.append(threshold)
             effective_rank_list.append(effective_rank)
+        df_map[layer_name] = effective_rank_list
 
         print(f"plotting for {layer_name}")
         fig, ax = plt.subplots(figsize=(8, 5))
-        ax.plot(threshold_list, effective_rank_list, marker='o', linestyle='-', label='dimension')
+        ax.plot(threshold_list, effective_rank_list, linewidth=1.0, label='dimension')
         ax.set_xlabel('threshold')
         ax.set_ylabel('dimension')
         ax.set_xscale('log')
@@ -153,3 +178,6 @@ if __name__ == '__main__':
         ax.legend()
         fig.savefig(os.path.join(output_folder_path, f"{layer_name}.pdf"))
         plt.close(fig)
+
+    df = pandas.DataFrame(df_map)
+    df.to_csv(os.path.join(output_folder_path, "threshold_dimension.csv"))
