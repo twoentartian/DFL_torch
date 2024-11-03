@@ -137,7 +137,7 @@ if __name__ == '__main__':
         u, s, vh = torch.linalg.svd(layers_of_end_models)
         threshold_list = []
         effective_rank_list = []
-        for threshold in np.logspace(-6, 1, num=100):
+        for threshold in np.logspace(-6, 2, num=1000):
             effective_rank = torch.sum(s > float(threshold)).item()
             threshold_list.append(threshold)
             effective_rank_list.append(effective_rank)
