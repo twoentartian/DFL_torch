@@ -99,8 +99,35 @@ class LeNet5(nn.Module):
         size = x.size()[1:]
         return np.prod(size)
 
-def lenet5():
-    return LeNet5()
+
+class LeNet5LargeFc(nn.Module):
+    def __init__(self):
+        super(LeNet5LargeFc, self).__init__()
+        self.conv1 = nn.Conv2d(1, 6, 5, padding=2)
+        self.conv2 = nn.Conv2d(6, 16, 5)
+        self.fc1 = nn.Linear(16 * 5 * 5, 360)
+        self.fc2 = nn.Linear(360, 256)
+        self.fc3 = nn.Linear(256, 10)
+
+    def forward(self, x):
+        x = nnF.max_pool2d(nnF.relu(self.conv1(x)), (2, 2))
+        x = nnF.max_pool2d(nnF.relu(self.conv2(x)), (2, 2))
+        x = x.view(-1, self.num_flat_features(x))
+        x = nnF.relu(self.fc1(x))
+        x = nnF.relu(self.fc2(x))
+        x = self.fc3(x)
+        return x
+
+    def num_flat_features(self, x):
+        size = x.size()[1:]
+        return np.prod(size)
+
+
+def lenet5(large_fc=False):
+    if large_fc:
+        return LeNet5LargeFc()
+    else:
+        return LeNet5()
 
 
 """ MNIST + LeNet5 """
@@ -108,6 +135,19 @@ def lenet5_mnist():
     output_ml_setup = MlSetup()
     output_ml_setup.model = lenet5()
     output_ml_setup.model_name = "lenet5"
+    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label = dataset_mnist()
+    output_ml_setup.training_data_for_rebuilding_normalization = None
+    output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
+    output_ml_setup.training_batch_size = 64
+    output_ml_setup.learning_rate = 0.001
+    output_ml_setup.weights_init_func = weights_init_xavier
+    output_ml_setup.has_normalization_layer = False
+    return output_ml_setup
+
+def lenet5_large_fc_mnist():
+    output_ml_setup = MlSetup()
+    output_ml_setup.model = lenet5(large_fc=True)
+    output_ml_setup.model_name = "lenet5_large_fc"
     output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label = dataset_mnist()
     output_ml_setup.training_data_for_rebuilding_normalization = None
     output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
@@ -182,6 +222,7 @@ class ModelType(Enum):
     resnet18 = 1
     simplenet = 2
     cct7 = 3
+    lenet5_large_fc = 4
 
 class NormType(Enum):
     auto = 0
@@ -204,6 +245,8 @@ def get_ml_setup_from_config(model_type: str, norm_type: str = 'auto'):
         output_ml_setup = simplenet_cifar10()
     elif model_type == ModelType.cct7:
         output_ml_setup = cct7_cifar10()
+    elif model_type == ModelType.lenet5_large_fc:
+        output_ml_setup = lenet5_large_fc_mnist()
     else:
         raise ValueError(f'Invalid model type: {model_type}')
     return output_ml_setup
@@ -220,6 +263,8 @@ def get_ml_setup_from_model_type(model_name):
         output_ml_setup = simplenet_cifar10()
     elif model_name == 'cct7':
         output_ml_setup = cct7_cifar10()
+    elif model_name == 'lenet5_large_fc':
+        output_ml_setup = lenet5_large_fc_mnist()
     else:
         raise ValueError(f'Invalid model type: {model_name}')
     return output_ml_setup

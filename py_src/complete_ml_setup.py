@@ -8,7 +8,11 @@ class FastTrainingSetup(object):
     def get_optimizer_lr_scheduler_epoch(arg_ml_setup: ml_setup, model):
         if arg_ml_setup.model_name == 'lenet5':
             epochs = 20
-            optimizer = torch.optim.SGD(model.parameters(), lr=0.01)
+            optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
+            return optimizer, None, epochs
+        if arg_ml_setup.model_name == 'lenet5_large_fc':
+            epochs = 20
+            optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
             return optimizer, None, epochs
         elif arg_ml_setup.model_name == 'resnet18_bn':
             lr = 0.1
