@@ -23,7 +23,7 @@ def extract_models_in_folder(folder):
     return files_in_start_folder
 
 def get_precise_training_setup(model, model_name, current_ml_setup):
-    if model_name == 'lenet5':
+    if model_name == 'lenet5' or model_name == 'resnet18_large_fc':
         training_dataset = current_ml_setup.training_data
         dataloader = DataLoader(training_dataset, batch_size=1000, shuffle=True, num_workers=8)
         criterion = current_ml_setup.criterion
