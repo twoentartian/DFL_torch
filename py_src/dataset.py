@@ -23,7 +23,7 @@ class LabelProbabilitySampler(Sampler):
                 if random_number < accumulated_prob:
                     selected_label = single_label
                     break
-            sampled_indices.append(random.choice(self.indices_by_labels[selected_label]))
+            sampled_indices.append(random.choice(self.indices_by_labels[selected_label].tolist()))
         return iter(sampled_indices)
 
     def __len__(self):
