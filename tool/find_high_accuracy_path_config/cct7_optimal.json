@@ -1,0 +1,102 @@
+[
+  {
+    "tick": 5000,
+    "step_size": 0.001,
+    "adoptive_step_size": 0.001,
+    "lr": 0.001,
+    "training_round": 1,
+    "pretrain_optimizer": true,
+    "rebuild_norm_round": 100,
+    "rebuild_norm_with_dedicated_dataloader": false,
+    "rebuild_norm_with_training_optimizer": true,
+    "layer_skip_average_keyword": ["classifier.blocks."],
+    "use_amp": true
+  },
+  {
+    "tick": 5000,
+    "step_size": 0.001,
+    "adoptive_step_size": 0.001,
+    "lr": 0.001,
+    "training_round": 1,
+    "pretrain_optimizer": true,
+    "rebuild_norm_round": 100,
+    "rebuild_norm_with_dedicated_dataloader": false,
+    "rebuild_norm_with_training_optimizer": true,
+    "layer_skip_average_keyword": ["classifier.blocks.1", "classifier.blocks.2","classifier.blocks.3","classifier.blocks.4","classifier.blocks.5","classifier.blocks.6"],
+    "use_amp": true
+  },
+  {
+    "tick": 5000,
+    "step_size": 0.001,
+    "adoptive_step_size": 0.001,
+    "lr": 0.001,
+    "training_round": 1,
+    "pretrain_optimizer": true,
+    "rebuild_norm_round": 100,
+    "rebuild_norm_with_dedicated_dataloader": false,
+    "rebuild_norm_with_training_optimizer": true,
+    "layer_skip_average_keyword": ["classifier.blocks.2","classifier.blocks.3","classifier.blocks.4","classifier.blocks.5","classifier.blocks.6"],
+    "use_amp": true
+  },
+  {
+    "tick": 5000,
+    "step_size": 0.001,
+    "adoptive_step_size": 0.001,
+    "lr": 0.001,
+    "training_round": 1,
+    "pretrain_optimizer": true,
+    "rebuild_norm_round": 100,
+    "rebuild_norm_with_dedicated_dataloader": false,
+    "rebuild_norm_with_training_optimizer": true,
+    "layer_skip_average_keyword": ["classifier.blocks.3","classifier.blocks.4","classifier.blocks.5","classifier.blocks.6"],
+    "use_amp": true
+  },
+  {
+    "tick": 5000,
+    "step_size": 0.001,
+    "adoptive_step_size": 0.001,
+    "lr": 0.001,
+    "training_round": 1,
+    "pretrain_optimizer": true,
+    "rebuild_norm_round": 100,
+    "rebuild_norm_with_dedicated_dataloader": false,
+    "rebuild_norm_with_training_optimizer": true,
+    "layer_skip_average_keyword": ["classifier.blocks.4","classifier.blocks.5","classifier.blocks.6"],
+    "use_amp": true
+  },
+  {
+    "tick": 5000,
+    "step_size": 0.001,
+    "adoptive_step_size": 0.001,
+    "lr": 0.001,
+    "training_round": 1,
+    "pretrain_optimizer": true,
+    "rebuild_norm_round": 100,
+    "rebuild_norm_with_dedicated_dataloader": false,
+    "rebuild_norm_with_training_optimizer": true,
+    "layer_skip_average_keyword": ["classifier.blocks.5","classifier.blocks.6"],
+    "use_amp": true
+  },
+  {
+    "tick": 5000,
+    "step_size": 0.001,
+    "adoptive_step_size": 0.001,
+    "lr": 0.001,
+    "training_round": 1,
+    "pretrain_optimizer": true,
+    "rebuild_norm_round": 100,
+    "rebuild_norm_with_dedicated_dataloader": false,
+    "rebuild_norm_with_training_optimizer": true,
+    "layer_skip_average_keyword": ["classifier.blocks.6"],
+    "use_amp": true
+  },
+  {
+    "tick": 5000,
+    "step_size": 0.001,
+    "adoptive_step_size": 0.001,
+    "lr": 0.001,
+    "loss": 0.05,
+    "pretrain_optimizer": true,
+    "use_amp": true
+  }
+]
