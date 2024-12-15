@@ -4,7 +4,7 @@ from py_src.simulation_runtime_parameters import RuntimeParameters, SimulationPh
 
 
 class ServiceVarianceRecorder(Service):
-    def __init__(self, interval, phase=SimulationPhase.END_OF_TICK, record_node=None) -> None:
+    def __init__(self, interval, phase=[SimulationPhase.END_OF_TICK], record_node=None) -> None:
         super().__init__()
         self.save_path = None
         self.save_files = {}
@@ -35,7 +35,7 @@ class ServiceVarianceRecorder(Service):
         if parameters.current_tick % self.interval != 0:
             return      # skip is not time yet
 
-        if parameters.phase == self.record_phase:
+        if parameters.phase in self.record_phase:
             node_names = []
             model_stats = []
             for node_name in self.known_nodes_to_record:
@@ -43,7 +43,7 @@ class ServiceVarianceRecorder(Service):
                 model_stat = parameters.node_container[node_name].get_model_stat()
                 node_names.append(node_name)
                 model_stats.append(model_stat)
-            self.trigger_without_runtime_parameters(parameters.current_tick, node_names, model_stats)
+            self.trigger_without_runtime_parameters(parameters.current_tick, node_names, model_stats, phase_str=parameters.phase.name)
 
     def initialize_without_runtime_parameters(self, node_names, model_stats, output_path):
         assert len(node_names) == len(model_stats)
@@ -55,12 +55,12 @@ class ServiceVarianceRecorder(Service):
             self._write_header(model_stat, file)
             self.save_files[node_name] = file
 
-    def trigger_without_runtime_parameters(self, tick, node_names, model_stats):
+    def trigger_without_runtime_parameters(self, tick, node_names, model_stats, phase_str=None):
         assert len(node_names) == len(model_stats)
         for index, node_name in enumerate(node_names):
             model_stat = model_stats[index]
             file = self.save_files[node_name]
-            self._write_row(tick, model_stat, file)
+            self._write_row(tick, phase_str, model_stat, file, )
 
     def _is_current_node_recorded(self, node_name) -> bool:
         record_current_node = True
@@ -74,16 +74,16 @@ class ServiceVarianceRecorder(Service):
             for name, module in model_stat.items():
                 if 'weight' in name:
                     all_names.append(name)
-            header = ",".join(["tick", *all_names])
+            header = ",".join(["tick", "phase", *all_names])
             self.header_order = all_names
             file.write(header + "\n")
         else:
             file.write(self.header + "\n")
         file.flush()
 
-    def _write_row(self, tick, model_stat, file):
+    def _write_row(self, tick, phase_str, model_stat, file):
         import torch
-        row_value = [str(tick)]
+        row_value = [str(tick), str(phase_str)]
         for single_layer_name in self.header_order:
             weights = model_stat[single_layer_name]
             variance = torch.var(weights).item()
