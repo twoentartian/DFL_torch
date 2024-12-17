@@ -5,18 +5,19 @@ import shutil
 import torch
 
 from datetime import datetime
-from py_src import configuration_file, internal_names, initial_checking, cuda, node, dataset, dfl_logging, simulator_common
+from py_src import configuration_file, internal_names, initial_checking, cuda, node, dataset, dfl_logging, simulator_common, cpu
 from py_src.simulation_runtime_parameters import RuntimeParameters, SimulationPhase
 
 simulator_base_logger = logging.getLogger(internal_names.logger_simulator_base_name)
 
+def get_lr(optimizer):
+    for param_group in optimizer.param_groups:
+        return param_group['lr']
 
 def main(config_file_path, output_folder_name):
-    current_cuda_env = cuda.CudaEnv()
-
     # create output dir
     if output_folder_name is None:
-        output_folder_path = os.path.join(os.curdir, datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f"))
+        output_folder_path = os.path.join(os.curdir, f"lr_{datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")}")
     else:
         output_folder_path = os.path.join(os.curdir, output_folder_name)
     os.mkdir(output_folder_path)
@@ -48,47 +49,19 @@ def main(config_file_path, output_folder_name):
     simulator_base_logger.info(f"topology is updated at tick {runtime_parameters.current_tick}")
     simulator_common.save_topology_to_file(topology, runtime_parameters.current_tick, runtime_parameters.output_path, mpi_enabled=True)
 
-    # init cuda
-    if not config_file.force_use_cpu:
-        current_cuda_env.measure_memory_consumption_for_performing_ml(config_ml_setup)
-        current_cuda_env.measure_memory_consumption_for_performing_ml(config_ml_setup)
-        current_cuda_env.generate_execution_strategy(nodes_set,
-                                                     override_use_model_stat=config_file.override_use_model_stat,
-                                                     override_allocate_all_models=config_file.override_allocate_all_models)
-        current_cuda_env.prepare_gpu_memory(config_ml_setup.model, config_file, config_ml_setup, nodes_set)
-        current_cuda_env.print_ml_info()
-        current_cuda_env.print_gpu_info()
-
     # create dataset
     training_dataset = dataset.DatasetWithFastLabelSelection(config_ml_setup.training_data)
 
     # create nodes
     runtime_parameters.node_container = {}
     for single_node in nodes_set:
-        if config_file.force_use_cpu:
-            temp_node = node.Node(single_node, config_ml_setup, use_cpu=True)
-            # create optimizer for this node if using cpu
-            optimizer, lr_scheduler = config_file.get_optimizer(temp_node, temp_node.model, runtime_parameters, config_ml_setup)
-            temp_node.set_optimizer(optimizer)
-            if lr_scheduler is not None:
-                temp_node.set_lr_scheduler(lr_scheduler)
-        else:
-            # find allocated gpu
-            allocated_gpu = None
-            for gpu in current_cuda_env.cuda_device_list:
-                if single_node in gpu.nodes_allocated:
-                    allocated_gpu = gpu
-                    break
-            assert allocated_gpu is not None, f"node cannot find a suitable GPU, is there enough GPUs?"
-            if current_cuda_env.use_model_stat:
-                temp_node = node.Node(single_node, config_ml_setup, use_model_stat=True, allocated_gpu=allocated_gpu, optimizer=allocated_gpu.optimizer)
-            else:
-                temp_node = node.Node(single_node, config_ml_setup, use_model_stat=False, allocated_gpu=allocated_gpu)
-                # create optimizer for this node if using model stat
-                optimizer, lr_scheduler = config_file.get_optimizer(temp_node, temp_node.model, runtime_parameters, config_ml_setup)
-                temp_node.set_optimizer(optimizer)
-                if lr_scheduler is not None:
-                    temp_node.set_lr_scheduler(lr_scheduler)
+        temp_node = node.Node(single_node, config_ml_setup, use_cpu=True)
+        # create optimizer for this node if using cpu
+        optimizer, lr_scheduler = config_file.get_optimizer(temp_node, temp_node.model, runtime_parameters, config_ml_setup)
+        temp_node.set_optimizer(optimizer)
+        if lr_scheduler is not None:
+            temp_node.set_lr_scheduler(lr_scheduler)
+
         # setup ml config(dataset label distribution, etc)
         temp_node.set_ml_setup(config_ml_setup)
 
@@ -111,16 +84,33 @@ def main(config_file_path, output_folder_name):
     # init nodes
     config_file.node_behavior_control(runtime_parameters)
 
-    # init service
-    service_list = config_file.get_service_list()
-    for service_inst in service_list:
-        service_inst.initialize(runtime_parameters, output_folder_path, config_file=config_file, ml_setup=config_ml_setup, cuda_env=current_cuda_env)
-        runtime_parameters.service_container[service_inst.get_service_name()] = service_inst
-
     # begin simulation
     runtime_parameters.mpi_enabled = False
-    simulator_common.begin_simulation(runtime_parameters, config_file, config_ml_setup, current_cuda_env, simulator_base_logger)
 
+    while runtime_parameters.current_tick <= config_file.max_tick:
+        runtime_parameters.phase = SimulationPhase.START_OF_TICK
+        node_target: node.Node
+        node_name: str
+
+        training_node_names = []
+        for node_name, node_target in runtime_parameters.node_container.items():
+            if node_target.next_training_tick == runtime_parameters.current_tick:
+                node_target.is_training_this_tick = True
+                training_node_names.append(node_name)
+                optimizer = node_target.optimizer
+                lr_scheduler = node_target.lr_scheduler
+                optimizer.step()
+                if lr_scheduler is not None:
+                    lr_scheduler.step()
+                lr = get_lr(optimizer)
+                simulator_base_logger.info(f"tick: {runtime_parameters.current_tick}, training node: {node_target.name}, lr={lr}")
+
+        """update next training tick"""
+        for index, node_name in enumerate(training_node_names):
+            node_target = runtime_parameters.node_container[node_name]
+            node_target.next_training_tick = config_file.get_next_training_time(node_target, runtime_parameters)
+
+        runtime_parameters.current_tick += 1
     exit(0)
 
 

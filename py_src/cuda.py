@@ -31,6 +31,7 @@ class CudaDevice:
         # parameters for worker on gpu, nodes only have model_stat
         self.model = None
         self.optimizer = None
+        self.lr_scheduler = None
         self.nodes_allocated = None
 
 """torch.cuda.mem_get_info()"""
@@ -202,7 +203,9 @@ class CudaEnv:
                 gpu.model = gpu.model.to(device=gpu.device)
                 para = RuntimeParameters()
                 para.phase = SimulationPhase.INITIALIZING
-                gpu.optimizer = config_file.get_optimizer(None, gpu.model, para, config_ml_setup)
+                gpu.optimizer, lr_scheduler = config_file.get_optimizer(None, gpu.model, para, config_ml_setup)
+                if lr_scheduler is not None:
+                    gpu.lr_scheduler = lr_scheduler
                 gpu.nodes_allocated = node_set
             else:
                 assert self.model_capacity_per_gpu is not None
@@ -224,7 +227,9 @@ class CudaEnv:
             gpu.model = gpu.model.to(device=gpu.device)
             para = RuntimeParameters()
             para.phase = SimulationPhase.INITIALIZING
-            gpu.optimizer = config_file.get_optimizer(None, gpu.model, para, config_ml_setup)
+            optimizer, lr_scheduler = config_file.get_optimizer(None, gpu.model, para, config_ml_setup)
+            gpu.optimizer = optimizer
+            gpu.lr_scheduler = lr_scheduler
 
 
     @staticmethod
@@ -247,74 +252,40 @@ class CudaEnv:
         for k, v in stat_dict.items():
             stat_dict[k] = v.to(device, non_blocking=True)
 
-    def submit_training_jobs(self, training_nodes, criteria, training_data: list[torch.Tensor], training_label: list[torch.Tensor]):
-        assert len(training_nodes) == len(criteria) == len(training_data) == len(training_label)
-
-        output_loss = []
-        if GPU_SINGLE_THREAD_MODE:
-            for index, target_node in enumerate(training_nodes):
-                criterion = criteria[index]
-                single_batch_data = training_data[index]
-                single_batch_label = training_label[index]
-                if target_node.is_using_model_stat:
-                    """use model stat (share model on gpu)"""
-                    gpu = target_node.allocated_gpu
-                    shared_model_on_gpu = gpu.model
-                    shared_optimizer_on_gpu = gpu.optimizer
-                    shared_model_on_gpu.load_state_dict(target_node.model_status)
-                    shared_optimizer_on_gpu.load_state_dict(target_node.optimizer_status)
-
-                    shared_model_on_gpu.train()
-                    data, labels = single_batch_data.cuda(device=gpu.device), single_batch_label.cuda(device=gpu.device)
-                    shared_optimizer_on_gpu.zero_grad(set_to_none=True)
-                    output = shared_model_on_gpu(data)
-                    loss = criterion(output, labels)
-                    loss.backward()
-                    shared_optimizer_on_gpu.step()
-                    stat_dict = shared_model_on_gpu.state_dict()
-                    CudaEnv.model_state_dict_to(stat_dict, torch.device('cpu'))
-                    target_node.model_status = stat_dict
-                    CudaEnv.optimizer_to(shared_optimizer_on_gpu, torch.device('cpu')) # move optimizer data back to memory
-                    target_node.optimizer_status = shared_optimizer_on_gpu.state_dict()
-                    output_loss.append(loss.item())
-                else:
-                    """use dedicated model on gpu"""
-                    model = target_node.model
-                    gpu = target_node.allocated_gpu
-                    optimizer = target_node.optimizer
-                    data, labels = single_batch_data.cuda(device=gpu.device), single_batch_label.cuda(device=gpu.device)
-                    optimizer.zero_grad(set_to_none=True)
-                    output = model(data)
-                    loss = criterion(output, labels)
-                    loss.backward()
-                    optimizer.step()
-                    output_loss.append(loss.item())
-        else:
-            raise NotImplementedError("multiprocess is not implemented yet")
-
-        return output_loss
-
     def submit_training_job(self, training_node, criterion, training_data: torch.Tensor, training_label: torch.Tensor):
         if training_node.is_using_model_stat:
             """use model stat (share model on gpu)"""
             gpu = training_node.allocated_gpu
             shared_model_on_gpu = gpu.model
             shared_optimizer_on_gpu = gpu.optimizer
+
             shared_model_on_gpu.load_state_dict(training_node.model_status)
             shared_optimizer_on_gpu.load_state_dict(training_node.optimizer_status)
+            if training_node.lr_scheduler is not None:
+                shared_lr_scheduler_on_gpu = gpu.lr_scheduler
+                shared_lr_scheduler_on_gpu.load_state_dict(training_node.lr_scheduler_status)
+            else:
+                shared_lr_scheduler_on_gpu = None
 
             shared_model_on_gpu.train()
+
             data, labels = training_data.cuda(device=gpu.device), training_label.cuda(device=gpu.device)
             shared_optimizer_on_gpu.zero_grad(set_to_none=True)
             output = shared_model_on_gpu(data)
             loss = criterion(output, labels)
             loss.backward()
             shared_optimizer_on_gpu.step()
+            if shared_lr_scheduler_on_gpu is not None:
+                shared_lr_scheduler_on_gpu.step()
+
             stat_dict = shared_model_on_gpu.state_dict()
             CudaEnv.model_state_dict_to(stat_dict, torch.device('cpu'))
             training_node.set_model_stat(stat_dict)
+
             CudaEnv.optimizer_to(shared_optimizer_on_gpu, torch.device('cpu'))  # move optimizer data back to memory
             training_node.set_optimizer_stat(shared_optimizer_on_gpu.state_dict())
+
+            training_node.set_lr_scheduler_stat(shared_lr_scheduler_on_gpu.state_dict())
         else:
             """use dedicated model on gpu"""
             model = training_node.model

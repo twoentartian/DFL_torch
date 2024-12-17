@@ -146,8 +146,10 @@ def main(config_file_path, output_folder_name):
         if config_file.force_use_cpu:
             temp_node = node.Node(single_node, config_ml_setup, use_cpu=True)
             # create optimizer for this node if using cpu
-            optimizer = config_file.get_optimizer(temp_node, temp_node.model, runtime_parameters, config_ml_setup)
+            optimizer, lr_scheduler = config_file.get_optimizer(temp_node, temp_node.model, runtime_parameters, config_ml_setup)
             temp_node.set_optimizer(optimizer)
+            if lr_scheduler is not None:
+                temp_node.set_lr_scheduler(lr_scheduler)
         else:
             gpu = current_cuda_env.cuda_device_list[self_gpu.gpu_index]
             if current_cuda_env.use_model_stat:
@@ -155,8 +157,10 @@ def main(config_file_path, output_folder_name):
             else:
                 temp_node = node.Node(single_node, config_ml_setup, use_model_stat=False, allocated_gpu=gpu)
                 # create optimizer for this node if using model stat
-                optimizer = config_file.get_optimizer(temp_node, temp_node.model, runtime_parameters, config_ml_setup)
+                optimizer, lr_scheduler = config_file.get_optimizer(temp_node, temp_node.model, runtime_parameters, config_ml_setup)
                 temp_node.set_optimizer(optimizer)
+                if lr_scheduler is not None:
+                    temp_node.set_lr_scheduler(lr_scheduler)
         # setup ml config(dataset label distribution, etc)
         temp_node.set_ml_setup(config_ml_setup)
 
