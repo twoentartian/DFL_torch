@@ -252,7 +252,7 @@ class CudaEnv:
         for k, v in stat_dict.items():
             stat_dict[k] = v.to(device, non_blocking=True)
 
-    def submit_training_job(self, training_node, criterion, training_data: torch.Tensor, training_label: torch.Tensor):
+    def submit_training_job(self, training_node, criterion, training_data: torch.Tensor, training_label: torch.Tensor, use_amp=True):
         if training_node.is_using_model_stat:
             """use model stat (share model on gpu)"""
             gpu = training_node.allocated_gpu
@@ -271,10 +271,21 @@ class CudaEnv:
 
             data, labels = training_data.cuda(device=gpu.device), training_label.cuda(device=gpu.device)
             shared_optimizer_on_gpu.zero_grad(set_to_none=True)
-            output = shared_model_on_gpu(data)
-            loss = criterion(output, labels)
-            loss.backward()
-            shared_optimizer_on_gpu.step()
+
+            if use_amp:
+                scaler = torch.cuda.amp.GradScaler()
+                with torch.cuda.amp.autocast():
+                    outputs = shared_model_on_gpu(data)
+                    loss = criterion(outputs, labels)
+                    scaler.scale(loss).backward()
+                    scaler.step(shared_optimizer_on_gpu)
+                    scaler.update()
+            else:
+                outputs = shared_model_on_gpu(data)
+                loss = criterion(outputs, labels)
+                loss.backward()
+                shared_optimizer_on_gpu.step()
+
             if shared_lr_scheduler_on_gpu is not None:
                 shared_lr_scheduler_on_gpu.step()
 
