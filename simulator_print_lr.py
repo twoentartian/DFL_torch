@@ -87,6 +87,7 @@ def main(config_file_path, output_folder_name):
     # begin simulation
     runtime_parameters.mpi_enabled = False
 
+    data_trained = 0
     while runtime_parameters.current_tick <= config_file.max_tick:
         runtime_parameters.phase = SimulationPhase.START_OF_TICK
         node_target: node.Node
@@ -99,11 +100,12 @@ def main(config_file_path, output_folder_name):
                 training_node_names.append(node_name)
                 optimizer = node_target.optimizer
                 lr_scheduler = node_target.lr_scheduler
+                data_trained += node_target.ml_setup.training_batch_size
                 optimizer.step()
                 if lr_scheduler is not None:
                     lr_scheduler.step()
                 lr = get_lr(optimizer)
-                simulator_base_logger.info(f"tick: {runtime_parameters.current_tick}, training node: {node_target.name}, lr={lr}")
+                simulator_base_logger.info(f"tick: {runtime_parameters.current_tick}, epoch: {data_trained/len(node_target.train_loader.dataset)}, training node: {node_target.name}, lr={lr}")
 
         """update next training tick"""
         for index, node_name in enumerate(training_node_names):
