@@ -51,16 +51,6 @@ class FastTrainingSetup(object):
             cooldown_steps = cooldown_epochs * steps_per_epoch
             total_steps = warmup_steps + cosine_steps + cooldown_steps
             optimizer = torch.optim.AdamW(model.parameters(), lr=initial_lr, weight_decay=weight_decay)
-            # lr_scheduler = CosineLRScheduler(
-            #     optimizer,
-            #     t_initial,
-            #     lr_min=min_lr,
-            #     warmup_lr_init=warmup_lr,
-            #     warmup_t=warmup_epochs,
-            #     initialize=True,
-            #     cycle_limit=1,
-            #     t_in_epochs=False
-            # )
 
             def lr_lambda(current_step):
                 if current_step < warmup_steps:
@@ -76,6 +66,16 @@ class FastTrainingSetup(object):
                     lr = min_lr
                 return lr / initial_lr
             lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
+            return optimizer, lr_scheduler, epochs
+        elif arg_ml_setup.model_name == "mobilenet_v3_small":
+            epochs = 150
+            optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+            lr_scheduler = None
+            return optimizer, lr_scheduler, epochs
+        elif arg_ml_setup.model_name == "mobilenet_v3_large":
+            epochs = 150
+            optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
+            lr_scheduler = None
             return optimizer, lr_scheduler, epochs
         else:
             raise NotImplementedError

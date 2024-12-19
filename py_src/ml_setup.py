@@ -32,7 +32,6 @@ class MlSetup:
         self.model = None
         self.model_name = None
         self.training_data = None
-        self.training_data_for_rebuilding_normalization = None
         self.testing_data = None
         self.criterion = None
         self.training_batch_size = None
@@ -48,14 +47,22 @@ class MlSetup:
 
 
 """ CIFAR10 """
-def dataset_cifar10(random_crop_flip=True):
+def dataset_cifar10(transforms_training=None, transforms_testing=None):
     dataset_path = './data/cifar10'
     stats = ((0.49139968, 0.48215841, 0.44653091), (0.24703223, 0.24348513, 0.26158784))
-    if random_crop_flip:
-        transforms_cifar_train = transforms.Compose([transforms.ToTensor(), transforms.RandomCrop(32, padding=4, padding_mode='reflect'), transforms.RandomHorizontalFlip(p=0.5), transforms.Normalize(*stats)])
+
+    if transforms_training is not None:
+        transforms_cifar_train = transforms_training
     else:
-        transforms_cifar_train = transforms.Compose([transforms.ToTensor(), transforms.Normalize(*stats)])
-    transforms_cifar_test = transforms.Compose([transforms.ToTensor(), transforms.Normalize(*stats)])
+        transforms_cifar_train = transforms.Compose(
+            [transforms.ToTensor(),
+             transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
+             transforms.RandomHorizontalFlip(p=0.5),
+             transforms.Normalize(*stats)])
+    if transforms_testing is not None:
+        transforms_cifar_test = transforms_testing
+    else:
+        transforms_cifar_test = transforms.Compose([transforms.ToTensor(), transforms.Normalize(*stats)])
     cifar10_train = datasets.CIFAR10(root=dataset_path, train=True, download=True, transform=transforms_cifar_train)
     cifar10_test = datasets.CIFAR10(root=dataset_path, train=False, download=True, transform=transforms_cifar_test)
     cifar10_labels = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
@@ -75,6 +82,34 @@ def dataset_mnist():
     mnist_labels = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
     return train_data, test_data, mnist_labels
 
+
+""" ImageNet """
+def dataset_imagenet(transforms_training=None, transforms_testing=None):
+    dataset_path = './data/imagenet'
+    stats = ((0.49139968, 0.48215841, 0.44653091), (0.24703223, 0.24348513, 0.26158784))
+
+    standard_transform = transforms.Compose([
+        transforms.Resize(256),  # Resize images to 256 pixels on the shorter side
+        transforms.CenterCrop(224),  # Crop to 224x224 (standard for ImageNet)
+        transforms.ToTensor(),  # Convert to PyTorch tensor
+        transforms.Normalize(  # Normalize with ImageNet's mean and std
+            mean=[0.485, 0.456, 0.406],
+            std=[0.229, 0.224, 0.225]
+        ),
+    ])
+    if transforms_training is not None:
+        transforms_cifar_train = transforms_training
+    else:
+        transforms_cifar_train = standard_transform
+    if transforms_testing is not None:
+        transforms_cifar_test = transforms_testing
+    else:
+        transforms_cifar_test = standard_transform
+
+    imagenet_train = datasets.ImageNet(root=dataset_path, split='train', transform=transforms_cifar_train)
+    imagenet_test = datasets.ImageNet(root=dataset_path, split='val', transform=transforms_cifar_test)
+    image_labels = tuple(range(0, 1000))
+    return imagenet_train, imagenet_test, image_labels
 
 """ LeNet5 """
 class LeNet5(nn.Module):
@@ -136,7 +171,6 @@ def lenet5_mnist():
     output_ml_setup.model = lenet5()
     output_ml_setup.model_name = "lenet5"
     output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label = dataset_mnist()
-    output_ml_setup.training_data_for_rebuilding_normalization = None
     output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 64
     output_ml_setup.learning_rate = 0.001
@@ -149,7 +183,6 @@ def lenet5_large_fc_mnist():
     output_ml_setup.model = lenet5(large_fc=True)
     output_ml_setup.model_name = "lenet5_large_fc"
     output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label = dataset_mnist()
-    output_ml_setup.training_data_for_rebuilding_normalization = None
     output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 64
     output_ml_setup.learning_rate = 0.001
@@ -163,8 +196,7 @@ def cct7_cifar10():
     output_ml_setup = MlSetup()
     output_ml_setup.model = cct.cct_7_3x1_32()
     output_ml_setup.model_name = "cct7"
-    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label = dataset_cifar10(random_crop_flip=True)
-    output_ml_setup.training_data_for_rebuilding_normalization, _, _ = dataset_cifar10(random_crop_flip=False)
+    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label = dataset_cifar10()
     output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 128
     output_ml_setup.learning_rate = 0.0006
@@ -193,8 +225,7 @@ def resnet18_cifar10(enable_replace_bn_with_group_norm=False):
     from torchvision.models.resnet import BasicBlock
     output_ml_setup.model.conv1 = nn.Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)  # change for cifar10 dataset
     output_ml_setup.model.maxpool = nn.Identity()
-    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label = dataset_cifar10(random_crop_flip=True)
-    output_ml_setup.training_data_for_rebuilding_normalization, _, _ = dataset_cifar10(random_crop_flip=False)
+    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label = dataset_cifar10()
     output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 256
     output_ml_setup.learning_rate = 0.001
@@ -202,13 +233,48 @@ def resnet18_cifar10(enable_replace_bn_with_group_norm=False):
     return output_ml_setup
 
 
+""" CIFAR10 + MobileNet V3 small """
+def mobilenet_v3_small_cifar10():
+    output_ml_setup = MlSetup()
+    output_ml_setup.model = models.mobilenet_v3_small(progress=False, num_classes=10)
+    output_ml_setup.model.classifier[-1] = torch.nn.Linear(in_features=1024, out_features=10)
+    output_ml_setup.model_name = "mobilenet_v3_small"
+    train_transforms = transforms.Compose([
+        transforms.Resize((70, 70)),
+        transforms.RandomCrop((64, 64)),
+        transforms.ToTensor(),
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+    test_transforms = transforms.Compose([
+        transforms.Resize((70, 70)),
+        transforms.CenterCrop((64, 64)),
+        transforms.ToTensor(),
+        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label = dataset_cifar10(transforms_training=train_transforms, transforms_testing=test_transforms)
+    output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
+    output_ml_setup.training_batch_size = 128
+    output_ml_setup.learning_rate = 0.01
+    output_ml_setup.has_normalization_layer = True
+    return output_ml_setup
+
+""" ImageNet + MobileNet V3 large """
+def mobilenet_v3_large_imagenet():
+    output_ml_setup = MlSetup()
+    output_ml_setup.model = models.mobilenet_v3_large(pretrained=False)
+    output_ml_setup.model.classifier[-1] = nn.Linear(output_ml_setup.model.classifier[-1].in_features, 1000)
+    output_ml_setup.model_name = "mobilenet_v3_large"
+    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label = dataset_imagenet()
+    output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
+    output_ml_setup.training_batch_size = 128
+    output_ml_setup.learning_rate = 0.001
+    output_ml_setup.has_normalization_layer = True
+    return output_ml_setup
+
 """ CIFAR10 + SimpleNet """
 def simplenet_cifar10():
     output_ml_setup = MlSetup()
     output_ml_setup.model = simple_net.__dict__["simplenet_cifar_5m"](num_classes=10)
     output_ml_setup.model_name = "simplenet"
-    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label = dataset_cifar10(random_crop_flip=True)
-    output_ml_setup.training_data_for_rebuilding_normalization, _, _ = dataset_cifar10(random_crop_flip=False)
+    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label = dataset_cifar10()
     output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 64
     output_ml_setup.learning_rate = 0.1
@@ -223,6 +289,8 @@ class ModelType(Enum):
     simplenet = 2
     cct7 = 3
     lenet5_large_fc = 4
+    mobilenet_v3_small = 5
+    mobilenet_v3_large = 6
 
 class NormType(Enum):
     auto = 0
@@ -247,6 +315,10 @@ def get_ml_setup_from_config(model_type: str, norm_type: str = 'auto'):
         output_ml_setup = cct7_cifar10()
     elif model_type == ModelType.lenet5_large_fc:
         output_ml_setup = lenet5_large_fc_mnist()
+    elif model_type == ModelType.mobilenet_v3_small:
+        output_ml_setup = mobilenet_v3_small_cifar10()
+    elif model_type == ModelType.mobilenet_v3_large:
+        output_ml_setup = mobilenet_v3_large_imagenet()
     else:
         raise ValueError(f'Invalid model type: {model_type}')
     return output_ml_setup
@@ -265,6 +337,10 @@ def get_ml_setup_from_model_type(model_name):
         output_ml_setup = cct7_cifar10()
     elif model_name == 'lenet5_large_fc':
         output_ml_setup = lenet5_large_fc_mnist()
+    elif model_name == 'mobilenet_v3_small':
+        output_ml_setup = mobilenet_v3_small_cifar10()
+    elif model_name == 'mobilenet_v3_large':
+        output_ml_setup = mobilenet_v3_large_imagenet()
     else:
         raise ValueError(f'Invalid model type: {model_name}')
     return output_ml_setup
