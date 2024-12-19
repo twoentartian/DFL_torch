@@ -149,7 +149,6 @@ def simulation_phase_averaging(runtime_parameters: RuntimeParameters, logger, mp
         assert len(mpi_data_pack_and_dst.keys()) == (MPI_size - 1)
         send_reqs = []
         for dst_mpi_rank, mpi_data_pack in mpi_data_pack_and_dst.items():
-            all_sent_models = mpi_data_pack.get_mpi_data()
             req = large_comm.isend(mpi_data_pack, dst_mpi_rank, tag=mpi_data_payload.MpiMessageTag.ModelStateData.value)
             send_reqs.append(req)
 
@@ -159,6 +158,9 @@ def simulation_phase_averaging(runtime_parameters: RuntimeParameters, logger, mp
                 continue
             robj = large_comm.recv(None, sender_rank, tag=mpi_data_payload.MpiMessageTag.ModelStateData.value)
             received_data[sender_rank] = robj
+
+        for req in send_reqs:
+            req.wait()
 
         # add models from MPI to average buffer
         for sender_mpi_rank, mpi_data_pack in received_data.items():
