@@ -17,7 +17,8 @@ def send_model_stat_to_receiver(runtime_parameters, dst_node, model_stat) -> boo
     if neighbor_node.model_buffer_size <= neighbor_node.model_averager.get_model_count():
         # performing average!
         self_model = neighbor_node.get_model_stat()
-        self_model = self_model.to(neighbor_node.allocated_gpu)
+        for k,v in self_model.items():
+            self_model[k] = v.cpu()
         averaged_model = neighbor_node.model_averager.get_model(self_model=self_model)
         neighbor_node.set_model_stat(averaged_model)
         neighbor_node.is_averaging_this_tick = True
