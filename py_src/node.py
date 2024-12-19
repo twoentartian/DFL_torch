@@ -96,7 +96,7 @@ class Node:
         else:
             return False
 
-    def reset_statu_flags(self):
+    def reset_status_flags(self):
         self.is_training_this_tick = False
         self.is_averaging_this_tick = False
 

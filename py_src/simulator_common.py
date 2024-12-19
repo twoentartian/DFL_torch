@@ -3,8 +3,6 @@ import time
 import pickle
 from datetime import datetime
 from typing import Final
-from mpi4py import MPI
-from mpi4py.util import pkl5
 
 from py_src import node, cpu, mpi_data_payload, mpi_util, ml_setup
 from py_src.simulation_runtime_parameters import SimulationPhase, RuntimeParameters
@@ -33,7 +31,9 @@ def simulation_phase_start_of_tick(runtime_parameters: RuntimeParameters, logger
 
     # reset all status flags
     for node_name, node_target in runtime_parameters.node_container.items():
-        node_target.reset_statu_flags()
+        node_target.reset_status_flags()
+
+    logger.info(f"current tick: {runtime_parameters.current_tick}/{runtime_parameters.max_tick}")
 
 def simulation_phase_before_training(runtime_parameters: RuntimeParameters, logger):
     runtime_parameters.phase = SimulationPhase.BEFORE_TRAINING
@@ -46,7 +46,6 @@ def simulation_phase_training(runtime_parameters: RuntimeParameters, logger, con
     for service_name, service_inst in runtime_parameters.service_container.items():
         service_inst.trigger(runtime_parameters)
 
-    logger.info(f"current tick: {runtime_parameters.current_tick}/{runtime_parameters.max_tick}")
     node_target: node.Node
     node_name: str
 
@@ -89,6 +88,8 @@ def simulation_phase_averaging(runtime_parameters: RuntimeParameters, logger, mp
     use_mpi = mpi_world is not None
 
     if use_mpi:
+        from mpi4py import MPI
+        from mpi4py.util import pkl5
         MPI_comm = MPI.COMM_WORLD
         MPI_rank = MPI_comm.Get_rank()
         MPI_size = MPI_comm.Get_size()
@@ -210,6 +211,8 @@ def begin_simulation(runtime_parameters: RuntimeParameters, config_file, ml_conf
 
         # update topology?
         if mpi_world is not None:
+            from mpi4py import MPI
+            from mpi4py.util import pkl5
             MPI_comm = MPI.COMM_WORLD
             new_topology = config_file.get_topology(runtime_parameters)
             new_topology = MPI_comm.bcast(new_topology, root=0)
@@ -234,7 +237,7 @@ def begin_simulation(runtime_parameters: RuntimeParameters, config_file, ml_conf
             remaining = (config_file.max_tick - runtime_parameters.current_tick) // REPORT_FINISH_TIME_PER_TICK
             time_to_finish = remaining * time_elapsed
             finish_time = timer + time_to_finish
-            logger.info(f"time taken for {REPORT_FINISH_TIME_PER_TICK} ticks: {time_elapsed:.2f}s ,expected to finish at {datetime.fromtimestamp(finish_time)}")
+            logger.info(f"time taken for {REPORT_FINISH_TIME_PER_TICK} ticks: {time_elapsed:.2f}s, expected to finish at {datetime.fromtimestamp(finish_time)}")
 
         """"""""" start of tick """""""""
         simulation_phase_start_of_tick(runtime_parameters, logger)
