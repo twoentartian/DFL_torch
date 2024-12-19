@@ -83,6 +83,8 @@ if __name__ == '__main__':
         if herd_effect_delay is not None:
             axs[plot_index].axvline(x=herd_effect_delay, color='r', label=f'herd effect delay={herd_effect_delay}')
         for col in accuracy_df.columns:
+            if not col.isdigit():
+                continue
             if draw_only_first_node:
                 if col == "0":
                     axs[plot_index].plot(accuracy_x, accuracy_df[col], label=col, alpha=0.75)
@@ -106,6 +108,8 @@ if __name__ == '__main__':
         loss_x = loss_df.index
         loss_df_len = len(loss_df)
         for col in loss_df.columns:
+            if not col.isdigit():
+                continue
             axs[plot_index].plot(loss_x, loss_df[col], label=col, alpha=0.75)
         axs[plot_index].grid()
         axs[plot_index].legend(ncol=5)
@@ -126,6 +130,8 @@ if __name__ == '__main__':
         if herd_effect_delay is not None:
             axs[plot_index].axvline(x=herd_effect_delay, color='r', label=f'herd effect delay={herd_effect_delay}')
         for col in weight_diff_df.columns:
+            if not col.isdigit():
+                continue
             if numpy.sum(weight_diff_df[col]) == 0:
                 continue
             if is_ignored_layer(col):
@@ -152,6 +158,8 @@ if __name__ == '__main__':
         if herd_effect_delay is not None:
             axs[plot_index].axvline(x=herd_effect_delay, color='r', label=f'herd effect delay={herd_effect_delay}')
         for col in col_to_plot:
+            if not col.isdigit():
+                continue
             axs[plot_index].plot(df_x, df[col], label=col)
 
         axs[plot_index].grid()
