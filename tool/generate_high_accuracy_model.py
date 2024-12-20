@@ -51,6 +51,8 @@ def re_initialize_model(model, arg_ml_setup):
         for layer in model.children():
             if hasattr(layer, 'reset_parameters'):
                 layer.reset_parameters()
+            else:
+                raise NotImplementedError(f"layer has no reset_parameters() method")
     else:
         model.apply(arg_ml_setup.weights_init_func)
 
