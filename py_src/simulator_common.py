@@ -14,14 +14,17 @@ def send_model_stat_to_receiver(runtime_parameters, dst_node, model_stat) -> boo
     """return whether the node is averaged"""
     neighbor_node: node.Node = runtime_parameters.node_container[dst_node]
     neighbor_node.model_averager.add_model(model_stat)
-    if neighbor_node.model_buffer_size <= neighbor_node.model_averager.get_model_count():
+
+def check_model_buffer_full(runtime_parameters, dst_node) -> bool:
+    target_node: node.Node = runtime_parameters.node_container[dst_node]
+    if target_node.model_buffer_size <= target_node.model_averager.get_model_count():
         # performing average!
-        self_model = neighbor_node.get_model_stat()
+        self_model = target_node.get_model_stat()
         for k,v in self_model.items():
             self_model[k] = v.cpu()
-        averaged_model = neighbor_node.model_averager.get_model(self_model=self_model)
-        neighbor_node.set_model_stat(averaged_model)
-        neighbor_node.is_averaging_this_tick = True
+        averaged_model = target_node.model_averager.get_model(self_model=self_model)
+        target_node.set_model_stat(averaged_model)
+        target_node.is_averaging_this_tick = True
         return True
     return False
 
@@ -131,9 +134,7 @@ def simulation_phase_averaging(runtime_parameters: RuntimeParameters, logger, mp
                 if use_mpi:
                     if neighbor in self_nodes:
                         # the target node is in my MPI process
-                        averaged = send_model_stat_to_receiver(runtime_parameters, neighbor, model_stat)
-                        if averaged:
-                            nodes_averaged.add(neighbor)
+                        send_model_stat_to_receiver(runtime_parameters, neighbor, model_stat)
                     else:
                         # the target node is in other MPI processes
                         dst_mpi_rank = nodes_map_to_rank[neighbor]
@@ -141,9 +142,7 @@ def simulation_phase_averaging(runtime_parameters: RuntimeParameters, logger, mp
                             model_stat_serialized = mpi_data_payload.serialize_model_stat(model_stat)
                         mpi_data_pack_and_dst[dst_mpi_rank].add_mpi_data(node_name, model_stat_serialized, neighbor)
                 else:
-                    averaged = send_model_stat_to_receiver(runtime_parameters, neighbor, model_stat)
-                    if averaged:
-                        nodes_averaged.add(neighbor)
+                    send_model_stat_to_receiver(runtime_parameters, neighbor, model_stat)
 
     # share in MPI world
     if use_mpi:
@@ -170,11 +169,15 @@ def simulation_phase_averaging(runtime_parameters: RuntimeParameters, logger, mp
         for sender_mpi_rank, mpi_data_pack in received_data.items():
             model_stat_list = mpi_data_pack.get_mpi_data()
             for (src_node, model_stat, dst_node) in model_stat_list:
-                averaged = send_model_stat_to_receiver(runtime_parameters, dst_node, model_stat)
-                if averaged:
-                    nodes_averaged.add(dst_node)
+                send_model_stat_to_receiver(runtime_parameters, dst_node, model_stat)
 
         MPI_comm.barrier()
+
+    # check whether model buffer is full or not?
+    for node_name, _ in runtime_parameters.node_container.items():
+        averaged = check_model_buffer_full(runtime_parameters, node_name)
+        if averaged:
+            nodes_averaged.add(node_name)
 
     # logger
     if len(nodes_averaged) > 0:
