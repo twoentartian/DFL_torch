@@ -5,9 +5,6 @@ import torch.nn.functional as nnF
 import numpy as np
 from torchvision import transforms, models, datasets
 from py_src.models import simple_net
-
-import sys
-import os
 import py_src.third_party.compact_transformers.src.cct as cct
 
 def replace_bn_with_ln(model):
