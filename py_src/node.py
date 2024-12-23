@@ -49,10 +49,10 @@ class Node:
         self.use_cpu = use_cpu
 
         re_initialize_model(model, ml_setup)
+        self.lr_scheduler = None
         if use_cpu:
             self.model = copy.deepcopy(model)
             self.optimizer = None
-            self.lr_scheduler = None
         else:
             assert allocated_gpu is not None
             self.allocated_gpu = allocated_gpu
@@ -60,12 +60,10 @@ class Node:
                 assert optimizer is not None
                 self.model_status = copy.deepcopy(model.state_dict())
                 self.optimizer_status = copy.deepcopy(optimizer.state_dict())
-                self.lr_scheduler_status = None
             else:
                 self.model = copy.deepcopy(model)
                 self.model = self.model.to(self.allocated_gpu.device)
                 self.optimizer = None
-                self.lr_scheduler = None
 
         self.next_training_tick = 0
         self.normalized_dataset_label_distribution = None
@@ -157,13 +155,7 @@ class Node:
                 self.optimizer.load_state_dict(optimizer_stat)
 
     def set_lr_scheduler_stat(self, lr_scheduler_stat):
-        if self.use_cpu:
-            self.lr_scheduler.load_state_dict(lr_scheduler_stat)
-        else:
-            if self.is_using_model_stat:
-                self.lr_scheduler_status = copy.deepcopy(lr_scheduler_stat)
-            else:
-                self.lr_scheduler.load_state_dict(lr_scheduler_stat)
+        self.lr_scheduler.load_state_dict(lr_scheduler_stat)
 
     def get_dataset_label_distribution(self):
         return self.normalized_dataset_label_distribution
