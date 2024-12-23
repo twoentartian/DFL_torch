@@ -296,7 +296,8 @@ class CudaEnv:
             CudaEnv.optimizer_to(shared_optimizer_on_gpu, torch.device('cpu'))  # move optimizer data back to memory
             training_node.set_optimizer_stat(shared_optimizer_on_gpu.state_dict())
 
-            training_node.set_lr_scheduler_stat(shared_lr_scheduler_on_gpu.state_dict())
+            if shared_lr_scheduler_on_gpu is not None:
+                training_node.set_lr_scheduler_stat(shared_lr_scheduler_on_gpu.state_dict())
         else:
             """use dedicated model on gpu"""
             model = training_node.model
