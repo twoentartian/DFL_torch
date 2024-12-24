@@ -61,7 +61,7 @@ class MpiHost(object):
         for gpu_index, gpu in self.gpus.items():
             logger.info(f"GPU '{gpu_index}': {gpu.name} total mem: {gpu.total_mem} free mem: {gpu.free_mem}")
         for mpi_process_rank, mpi_process in self.mpi_process.items():
-            logger.info(f"MPI Process {mpi_process.rank} on '{mpi_process.allocated_gpu.name}': {mpi_process.nodes}")
+            logger.info(f"MPI Process {mpi_process.rank} on GPU [{mpi_process.allocated_gpu.gpu_index}]: '{mpi_process.allocated_gpu.name}': {mpi_process.nodes}")
 
 class MpiWorld(object):
     def __init__(self):
