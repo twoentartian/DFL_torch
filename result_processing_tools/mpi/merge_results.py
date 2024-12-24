@@ -4,6 +4,15 @@ import shutil
 
 import pandas as pd
 
+
+def reorder_columns(df):
+    # Split columns into non-integer and integer based on their names
+    non_integer_cols = [col for col in df.columns if not col.isdigit()]
+    integer_cols = sorted([col for col in df.columns if col.isdigit()], key=int)
+
+    reordered_cols = non_integer_cols + integer_cols
+    return df[reordered_cols]
+
 def load_mpi_result_files(working_path, file_name):
     folders = [f for f in os.listdir(working_path) if os.path.isdir(f) and f.startswith("rank_")]
     folders.sort()
@@ -24,6 +33,7 @@ def load_mpi_result_files(working_path, file_name):
             else:
                 merged_df_dict[col] = df[col]
     merged_df = pd.DataFrame(merged_df_dict)
+    merged_df = reorder_columns(merged_df)
     print(merged_df)
     info_columns = []
     for col in merged_df.columns:
