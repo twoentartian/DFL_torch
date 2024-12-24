@@ -7,9 +7,11 @@ import torch
 from datetime import datetime
 from py_src import configuration_file, internal_names, initial_checking, cuda, node, dataset, dfl_logging, simulator_common
 from py_src.simulation_runtime_parameters import RuntimeParameters, SimulationPhase
+from py_src.service.print_memory_consumption import PrintMemoryConsumption
 
 simulator_base_logger = logging.getLogger(internal_names.logger_simulator_base_name)
 
+ENABLE_MEMORY_RECORD = True
 
 def main(config_file_path, output_folder_name):
     current_cuda_env = cuda.CudaEnv()
@@ -22,6 +24,10 @@ def main(config_file_path, output_folder_name):
     os.mkdir(output_folder_path)
     backup_path = os.path.join(output_folder_path, internal_names.default_backup_folder_name)
     os.mkdir(backup_path)
+
+    if ENABLE_MEMORY_RECORD:
+        memory_service = PrintMemoryConsumption(100, save_file_name="base_memory_profiler.txt")
+        memory_service.initialize_without_runtime_parameters(output_folder_path)
 
     # init logging
     dfl_logging.set_logging(os.path.join(output_folder_path, internal_names.log_file_name), simulator_base_logger)
@@ -63,6 +69,9 @@ def main(config_file_path, output_folder_name):
     training_dataset = dataset.DatasetWithFastLabelSelection(config_ml_setup.training_data)
 
     # create nodes
+    if ENABLE_MEMORY_RECORD:
+        memory_service.trigger_without_runtime_parameters(0, "BEFORE_CREATE_NODES")
+
     runtime_parameters.node_container = {}
     for single_node in nodes_set:
         if config_file.force_use_cpu:
@@ -108,6 +117,12 @@ def main(config_file_path, output_folder_name):
         # add node to container
         runtime_parameters.node_container[single_node] = temp_node
 
+        if ENABLE_MEMORY_RECORD:
+            memory_service.trigger_without_runtime_parameters(0, f"AFTER_CREATE_NODE_{temp_node.name}")
+
+    if ENABLE_MEMORY_RECORD:
+        memory_service.trigger_without_runtime_parameters(0, "AFTER_CREATE_NODES")
+
     # init nodes
     config_file.node_behavior_control(runtime_parameters)
 
@@ -119,6 +134,8 @@ def main(config_file_path, output_folder_name):
 
     # begin simulation
     runtime_parameters.mpi_enabled = False
+    if ENABLE_MEMORY_RECORD:
+        memory_service.trigger_without_runtime_parameters(0, "BEFORE_SIMULATION")
     simulator_common.begin_simulation(runtime_parameters, config_file, config_ml_setup, current_cuda_env, simulator_base_logger)
 
     exit(0)

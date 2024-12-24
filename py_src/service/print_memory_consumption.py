@@ -18,16 +18,22 @@ class PrintMemoryConsumption(Service):
 
     def initialize(self, parameters: RuntimeParameters, output_path, *args, **kwargs):
         assert parameters.phase == SimulationPhase.INITIALIZING
+        self.initialize_without_runtime_parameters(output_path)
+
+    def initialize_without_runtime_parameters(self, output_path):
         self.save_file = open(os.path.join(output_path, f"{self.save_file_name}"), "w+")
+
+    def trigger_without_runtime_parameters(self, tick, phase_str=None):
+        memory_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
+        gpu_memory_usage = torch.cuda.memory_allocated() / 1024 ** 2
+        self.save_file.write(f"tick: {tick}, phase:{phase_str}, memory usage: {memory_usage}, gpu memory usage: {gpu_memory_usage}\n")
+        self.save_file.flush()
 
     def trigger(self, parameters: RuntimeParameters, *args, **kwargs):
         if parameters.current_tick % self.interval != 0:
             return
         if parameters.phase in self.phase_to_record:
-            memory_usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1024
-            gpu_memory_usage = torch.cuda.memory_allocated() / 1024 ** 2
-            self.save_file.write(f"memory usage: {memory_usage}, gpu memory usage: {gpu_memory_usage}\n")
-            self.save_file.flush()
+            self.trigger_without_runtime_parameters(parameters.current_tick, parameters.phase)
 
     def __del__(self):
         if self.save_file is not None:
