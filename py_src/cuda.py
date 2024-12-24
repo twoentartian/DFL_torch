@@ -305,9 +305,18 @@ class CudaEnv:
             optimizer = training_node.optimizer
             data, labels = training_data.cuda(device=gpu.device), training_label.cuda(device=gpu.device)
             optimizer.zero_grad(set_to_none=True)
-            output = model(data)
-            loss = criterion(output, labels)
-            loss.backward()
-            optimizer.step()
+            if use_amp:
+                scaler = torch.cuda.amp.GradScaler()
+                with torch.cuda.amp.autocast():
+                    output = model(data)
+                    loss = criterion(output, labels)
+                    scaler.scale(loss).backward()
+                    scaler.step(optimizer)
+                    scaler.update()
+            else:
+                output = model(data)
+                loss = criterion(output, labels)
+                loss.backward()
+                optimizer.step()
         loss_val = float(loss.item())
         return loss_val

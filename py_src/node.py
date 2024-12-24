@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 
 from py_src import dataset, internal_names, util, model_average
 from py_src.ml_setup import MlSetup
-from py_src.cuda import CudaDevice
+from py_src.cuda import CudaDevice, CudaEnv
 
 logger = logging.getLogger(f"{internal_names.logger_simulator_base_name}.{util.basename_without_extension(__file__)}")
 
@@ -105,6 +105,7 @@ class Node:
         self.model_buffer_size = average_buffer_size
 
     def set_optimizer(self, optimizer: torch.optim.Optimizer):
+        optimizer = CudaEnv.optimizer_to(optimizer, self.allocated_gpu)
         self.optimizer = optimizer
 
     def set_lr_scheduler(self, lr_scheduler: torch.optim.lr_scheduler):
