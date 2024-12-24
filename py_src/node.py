@@ -105,7 +105,7 @@ class Node:
         self.model_buffer_size = average_buffer_size
 
     def set_optimizer(self, optimizer: torch.optim.Optimizer):
-        optimizer = CudaEnv.optimizer_to(optimizer, self.allocated_gpu)
+        CudaEnv.optimizer_to(optimizer, self.allocated_gpu)
         self.optimizer = optimizer
 
     def set_lr_scheduler(self, lr_scheduler: torch.optim.lr_scheduler):
