@@ -159,7 +159,7 @@ class ConservativeModelAverager(ModelAverager):
             # variance correction
             if self.variance_corrector is not None:
                 target_variance = self.variance_corrector.get_variance(self_model, self.conservative)
-                for layer_name, single_layer_variance in target_variance:
+                for layer_name, single_layer_variance in target_variance.items():
                     if special_torch_layers.is_ignored_layer_variance_correction(layer_name):
                         continue
                     output[layer_name] = VarianceCorrector.scale_tensor_to_variance(output[layer_name], single_layer_variance)
