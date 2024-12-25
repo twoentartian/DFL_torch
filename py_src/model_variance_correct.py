@@ -69,13 +69,14 @@ class VarianceCorrector:
 
     @staticmethod
     def scale_tensor_to_variance(layer_tensor, target_variance):
+        epsilon = 0.0001
         if layer_tensor.numel() == 1:
             assert target_variance == 0.0, f"var {target_variance} != 0.0"
             rescaled_tensor = layer_tensor
         else:
             current_mean = torch.mean(layer_tensor)
             current_variance = torch.var(layer_tensor)
-            scaling_factor = torch.sqrt(target_variance / current_variance)
+            scaling_factor = torch.sqrt( (target_variance + epsilon) / (current_variance + epsilon) )
             rescaled_tensor = (layer_tensor - current_mean) * scaling_factor + current_mean
         return rescaled_tensor
 
