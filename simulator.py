@@ -11,7 +11,7 @@ from py_src.service.print_memory_consumption import PrintMemoryConsumption
 
 simulator_base_logger = logging.getLogger(internal_names.logger_simulator_base_name)
 
-ENABLE_MEMORY_RECORD = True
+ENABLE_MEMORY_RECORD = False
 
 def main(config_file_path, output_folder_name):
     current_cuda_env = cuda.CudaEnv()
@@ -73,6 +73,7 @@ def main(config_file_path, output_folder_name):
         memory_service.trigger_without_runtime_parameters(0, "BEFORE_CREATE_NODES")
 
     runtime_parameters.node_container = {}
+    current_allocated_gpu = None
     for single_node in nodes_set:
         if config_file.force_use_cpu:
             temp_node = node.Node(single_node, config_ml_setup, use_cpu=True)
@@ -87,6 +88,7 @@ def main(config_file_path, output_folder_name):
             for gpu in current_cuda_env.cuda_device_list:
                 if single_node in gpu.nodes_allocated:
                     allocated_gpu = gpu
+                    current_allocated_gpu = allocated_gpu
                     break
             assert allocated_gpu is not None, f"node cannot find a suitable GPU, is there enough GPUs?"
             if current_cuda_env.use_model_stat:
@@ -129,7 +131,7 @@ def main(config_file_path, output_folder_name):
     # init service
     service_list = config_file.get_service_list()
     for service_inst in service_list:
-        service_inst.initialize(runtime_parameters, output_folder_path, config_file=config_file, ml_setup=config_ml_setup, cuda_env=current_cuda_env)
+        service_inst.initialize(runtime_parameters, output_folder_path, config_file=config_file, ml_setup=config_ml_setup, cuda_env=current_cuda_env, gpu=current_allocated_gpu)
         runtime_parameters.service_container[service_inst.get_service_name()] = service_inst
 
     # begin simulation

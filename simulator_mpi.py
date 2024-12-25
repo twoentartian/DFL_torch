@@ -18,7 +18,7 @@ MPI_comm = MPI.COMM_WORLD
 MPI_rank = MPI_comm.Get_rank()
 MPI_size = MPI_comm.Get_size()
 
-ENABLE_MEMORY_RECORD = True
+ENABLE_MEMORY_RECORD = False
 
 def main(config_file_path, output_folder_name):
     # create output dir
@@ -150,6 +150,7 @@ def main(config_file_path, output_folder_name):
         memory_service.trigger_without_runtime_parameters(0, "BEFORE_CREATE_NODES")
 
     runtime_parameters.node_container = {}
+    current_allocated_gpu = None
     for single_node in self_nodes:
         if config_file.force_use_cpu:
             temp_node = node.Node(single_node, config_ml_setup, use_cpu=True)
@@ -160,6 +161,7 @@ def main(config_file_path, output_folder_name):
                 temp_node.set_lr_scheduler(lr_scheduler)
         else:
             gpu = current_cuda_env.cuda_device_list[self_gpu.gpu_index]
+            current_allocated_gpu = gpu
             if current_cuda_env.use_model_stat:
                 temp_node = node.Node(single_node, config_ml_setup, use_model_stat=True, allocated_gpu=gpu, optimizer=gpu.optimizer)
             else:
@@ -200,7 +202,7 @@ def main(config_file_path, output_folder_name):
     # init service
     service_list = config_file.get_service_list()
     for service_inst in service_list:
-        service_inst.initialize(runtime_parameters, output_folder_path, config_file=config_file, ml_setup=config_ml_setup, cuda_env=current_cuda_env)
+        service_inst.initialize(runtime_parameters, output_folder_path, config_file=config_file, ml_setup=config_ml_setup, cuda_env=current_cuda_env, gpu=current_allocated_gpu)
         runtime_parameters.service_container[service_inst.get_service_name()] = service_inst
 
     # begin simulation

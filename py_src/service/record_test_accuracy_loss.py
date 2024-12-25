@@ -3,6 +3,8 @@ import copy
 import torch
 import numpy as np
 from torch.utils.data import DataLoader, Subset
+
+from py_src.cuda import CudaDevice
 from py_src.service_base import Service
 from py_src.simulation_runtime_parameters import RuntimeParameters, SimulationPhase
 
@@ -28,7 +30,7 @@ class ServiceTestAccuracyLossRecorder(Service):
     def get_service_name() -> str:
         return "test_accuracy_loss_recorder"
 
-    def initialize(self, parameters: RuntimeParameters, output_path, config_file=None, ml_setup=None, cuda_env=None, *args, **kwargs):
+    def initialize(self, parameters: RuntimeParameters, output_path, ml_setup=None, gpu: CudaDevice=None, *args, **kwargs):
         assert parameters.phase == SimulationPhase.INITIALIZING
         assert ml_setup is not None
 
@@ -36,10 +38,9 @@ class ServiceTestAccuracyLossRecorder(Service):
         for node_name, target_node in parameters.node_container.items():
             node_names.append(node_name)
 
-        self.initialize_without_runtime_parameters(output_path, node_names, ml_setup.model, ml_setup.criterion, ml_setup.testing_data,
-                                                   config_file=config_file, cuda_env=cuda_env)
+        self.initialize_without_runtime_parameters(output_path, node_names, ml_setup.model, ml_setup.criterion, ml_setup.testing_data, gpu=gpu)
 
-    def initialize_without_runtime_parameters(self, output_path, node_names, model, criterion, test_dataset, use_cuda=None, config_file=None, cuda_env=None):
+    def initialize_without_runtime_parameters(self, output_path, node_names, model, criterion, test_dataset, gpu: CudaDevice=None):
         self.accuracy_file = open(os.path.join(output_path, f"{self.accuracy_file_name}"), "w+")
         self.loss_file = open(os.path.join(output_path, f"{self.loss_file_name}"), "w+")
         self.node_order = node_names
@@ -70,16 +71,9 @@ class ServiceTestAccuracyLossRecorder(Service):
         else:
             self.test_dataset = DataLoader(test_dataset, batch_size=self.test_batch_size, shuffle=True)
         # move to cuda?
-        if (config_file is not None) and (cuda_env is not None):
-            assert use_cuda is None
-            self.is_using_cuda = (not config_file.force_use_cpu) and cuda_env.cuda_available
-        elif use_cuda is not None:
-            assert (config_file is None) and (cuda_env is None)
-            self.is_using_cuda = use_cuda if torch.cuda.is_available() else False
-        else:
-            raise ValueError(f"provide cuda_env & config_file or just provide use_cuda")
+        self.is_using_cuda = gpu is not None
         if self.is_using_cuda:
-            self.test_model = self.test_model.cuda()  # use default CUDA device
+            self.test_model = self.test_model.to(gpu.device)
 
     def trigger(self, parameters: RuntimeParameters, *args, **kwargs):
         if parameters.current_tick % self.interval != 0:
