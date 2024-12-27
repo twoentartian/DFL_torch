@@ -1,3 +1,5 @@
+import sys
+
 import networkx as nx
 import matplotlib.pyplot as plt
 import matplotlib
@@ -11,9 +13,8 @@ import pandas
 
 import argparse
 
-config_file_path = 'simulator_config.json'
+topology_folder = 'topology'
 accuracy_file_path = 'accuracy.csv'
-peer_change_file_path = 'peer_change_record.txt'
 draw_interval = 1
 fps = 2
 dpi = 200
@@ -24,49 +25,25 @@ HSV_H_end = 256
 video_cache_path = "./video_cache"
 
 
-def data_process_lib__load_graph_from_simulation_config(config_file_path: str, verbose=False):
-    import time
-    import networkx
-    import json
-    t = 0
-    if verbose:
-        t = time.time()
-        print(f"loading simulation config")
-    config_file = open(config_file_path)
-    config_file_content = config_file.read()
-    config_file_json = json.loads(config_file_content)
-    topology = config_file_json['node_topology']
-    peer_control_enabled = config_file_json['services']['time_based_hierarchy_service']['enable']
-    nodes = config_file_json['nodes']
+def load_graph(topology_folder_path: str, verbose=False):
+    import pickle
 
-    # DiGraph or Graph?
-    G = networkx.Graph()
-    for singleItem in topology:
-        dirLink = singleItem.split('->')
-        if len(dirLink) != 1:
-            G = networkx.DiGraph()
-            break
+    graphs = {}
+    for file_name in os.listdir(topology_folder_path):
+        if file_name.endswith(".pickle") and file_name[:-7].isdigit():
+            key = int(file_name[:-7])  # Extract the integer from the file name
+            if verbose:
+                print(f"loading graph at tick {key}.")
+            file_path = os.path.join(topology_folder_path, file_name)
+            with open(file_path, 'rb') as file:
+                graphs[key] = pickle.load(file)
+    graphs = dict(sorted(graphs.items()))
+    union_graph = nx.Graph()
+    for tick, G in graphs.items():
+        union_graph.add_nodes_from(list(G.nodes))
+        union_graph.add_edges_from(list(G.edges))
 
-    nodes_to_add = []
-    for single_node in nodes:
-        nodes_to_add.append(single_node['name'])
-    G.add_nodes_from(nodes_to_add)
-
-    if not peer_control_enabled:
-        edges_to_add = []
-        for singleItem in topology:
-            unDirLink = singleItem.split('--')
-            if len(unDirLink) != 1:
-                edges_to_add.append((unDirLink[0], unDirLink[1]))
-                edges_to_add.append((unDirLink[1], unDirLink[0]))
-
-            dirLink = singleItem.split('->')
-            if len(dirLink) != 1:
-                edges_to_add.append((unDirLink[0], unDirLink[1]))
-        G.add_edges_from(edges_to_add)
-    if verbose:
-        print(f"finish loading simulation config, elapsed {time.time()-t}")
-    return G
+    return graphs, union_graph
 
 
 def save_fig(G: nx.Graph, tick, save_name, node_accuracies, layout, node_labels, node_size, with_labels, override_existing=False, secondary_accuracies=None, secondary_node_labels=None):
@@ -141,43 +118,20 @@ def save_raw_fig(G: nx.Graph, save_name, node_color, layout, node_labels, node_s
 
 if __name__ == "__main__":
     # parser args
-    parser = argparse.ArgumentParser(description="generate a video for accuracy trends, put this script with \"simulator_config.json\"", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument("--override_cache", help="override images cache?", type=bool)
+    parser = argparse.ArgumentParser(description="generate a video for accuracy trends, put this script in the folder of 'accuracy.csv' and 'topology' folder.", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument("-o", "--override_cache", action='store_true', help="override images cache?")
     args = parser.parse_args()
     config = vars(args)
     override_cache = False
     if config["override_cache"]:
         override_cache = True
 
-    G = load_graph_from_simulation_config(config_file_path)
+    graphs, union_graph = load_graph(os.path.join(os.path.curdir, topology_folder), True)
 
     accuracy_df = pandas.read_csv(accuracy_file_path, index_col=0, header=0)
 
+    ## user can load second_accuracy_df here (optional)
     second_accuracy_df = None
-    if os.path.exists("fusion_accuracy.csv"):
-        second_accuracy_df = pandas.read_csv("fusion_accuracy.csv", index_col=0, header=0)
-
-    peer_change_file_exists = os.path.exists(peer_change_file_path)
-    peer_change_list = []
-    if peer_change_file_exists:
-        peer_change_file = open(peer_change_file_path, "r+")
-        peer_change_content = peer_change_file.readlines()
-        for line in peer_change_content:
-            operation = 0
-            result = re.findall('tick:\d+', line)
-            tick = int(result[0][5:])
-            result = re.findall('\s\w*\(accuracy', line)
-            lhs_node = result[0][1:-9]
-            result = re.findall('\s\w*\(buffer', line)
-            rhs_node = result[0][1:-7]
-            add_ = re.findall('\sadd\s', line)
-            delete_ = re.findall('\sdelete\s', line)
-            if add_ and not delete_:
-                operation = 1
-            if not add_ and delete_:
-                operation = 2
-            peer_change_list.append({'tick': tick, 'lhs_node': lhs_node, 'rhs_node': rhs_node, 'operation': operation})
-        peer_change_file.close()
 
     total_tick = len(accuracy_df.index)
     draw_counter = 0
@@ -196,16 +150,16 @@ if __name__ == "__main__":
     # layout = nx.kamada_kawai_layout(G)
     # layout = nx.shell_layout(G)
     # layout = nx.random_layout(G)
-    layout = nx.nx_agraph.graphviz_layout(G)
+    layout = nx.nx_agraph.graphviz_layout(union_graph)
 
-    node_name = G.nodes
+    node_name = union_graph.nodes
     peer_change_list_index = 0
     if not os.path.isdir(video_cache_path):
         os.mkdir(video_cache_path)
 
     pool = multiprocessing.Pool(processes=os.cpu_count())
 
-    N = len(G.nodes)
+    N = len(union_graph.nodes)
     print(f"N={N}")
     node_size = int(50000/N)
     node_size = max(10, node_size)
@@ -215,6 +169,8 @@ if __name__ == "__main__":
         with_labels = False
     print(f"draw_with_labels={with_labels}")
 
+    next_graph_change_tick, G = next(iter(graphs.items()))
+    graph_change_ticks = sorted(graphs.keys())
     for tick in tick_to_draw:
         print("processing tick: " + str(tick))
         if os.path.exists(os.path.join(video_cache_path, str(tick) + ".png")) and not override_existing_cache:
@@ -222,20 +178,20 @@ if __name__ == "__main__":
 
         node_labels = {}
 
-        # node edge
-        while peer_change_list_index < len(peer_change_list) and tick > peer_change_list[peer_change_list_index]['tick']:
-            current_peer_change = peer_change_list[peer_change_list_index]
-            if current_peer_change['operation'] == 1:  # add edge
-                G.add_edge(current_peer_change['lhs_node'], current_peer_change['rhs_node'])
-            if current_peer_change['operation'] == 2:  # delete edge
-                G.remove_edge(current_peer_change['lhs_node'], current_peer_change['rhs_node'])
-            peer_change_list_index = peer_change_list_index + 1
+        # update G
+        if tick >= next_graph_change_tick:
+            G = graphs[next_graph_change_tick]
+            next_key_index = graph_change_ticks.index(next_graph_change_tick) + 1
+            if len(graph_change_ticks) > next_key_index:
+                next_graph_change_tick = graph_change_ticks[next_key_index]
+            else:
+                next_graph_change_tick = sys.maxsize
 
         # node color
         node_accuracies = []
 
         for node in G.nodes:
-            accuracy = accuracy_df.loc[tick, node]
+            accuracy = accuracy_df.loc[tick, str(node)]
             node_accuracies.append(accuracy)
             node_labels[node] = str(accuracy)
 
