@@ -37,14 +37,11 @@ class FastTrainingSetup(object):
             milestones = [steps_per_epoch * i for i in milestones_epoch]
             lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones, gamma=0.1)
             return optimizer, lr_scheduler, epochs
-        elif arg_ml_setup.model_name == 'vgg11_no_bn':
-            lr = 0.1
-            epochs = 200
-            optimizer = torch.optim.SGD(model.parameters(), lr=lr, weight_decay=0.0005)
-            steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
-            milestones_epoch = [100, 180]
-            milestones = [steps_per_epoch * i for i in milestones_epoch]
-            lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones, gamma=0.1)
+        elif arg_ml_setup.model_name == 'vgg11_mnist_no_bn':
+            lr = 0.01
+            epochs = 5
+            optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=0.0005)
+            lr_scheduler = None
             return optimizer, lr_scheduler, epochs
         elif arg_ml_setup.model_name == 'cct7':
             steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
