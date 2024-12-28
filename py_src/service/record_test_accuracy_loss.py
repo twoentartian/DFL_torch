@@ -43,7 +43,8 @@ class ServiceTestAccuracyLossRecorder(Service):
             # if the node is using model stat, then we re-use the model to save gpu memory.
             if pre_allocated_model is None:
                 if target_node.is_using_model_stat:
-                    pre_allocated_model = target_node.model
+                    gpu = target_node.allocated_gpu
+                    pre_allocated_model = gpu.model
 
         self.initialize_without_runtime_parameters(output_path, node_names, ml_setup.model, ml_setup.criterion, ml_setup.testing_data, gpu=gpu, existing_model_for_testing=pre_allocated_model)
 
