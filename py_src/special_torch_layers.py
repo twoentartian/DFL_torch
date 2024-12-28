@@ -1,15 +1,3 @@
-__ignore_layer_list_averaging = ["num_batches_tracked", "running_mean", "running_var"]
-
-def is_ignored_layer_averaging(layer_name):
-    return is_keyword_in_layer_name(layer_name, __ignore_layer_list_averaging)
-
-
-__ignore_layer_list_variance_correction = ["num_batches_tracked", "running_mean", "running_var"]
-
-def is_ignored_layer_variance_correction(layer_name):
-    return is_keyword_in_layer_name(layer_name, __ignore_layer_list_variance_correction)
-
-
 def is_keyword_in_layer_name(layer_name, keywords):
     output = False
     for i in keywords:
@@ -17,6 +5,16 @@ def is_keyword_in_layer_name(layer_name, keywords):
             output = True
             break
     return output
+
+""" ignore averaging """
+__ignore_layer_list_averaging = ["num_batches_tracked", "running_mean", "running_var"]
+def is_ignored_layer_averaging(layer_name):
+    return is_keyword_in_layer_name(layer_name, __ignore_layer_list_averaging)
+
+""" ignore variance correction """
+__ignore_layer_list_variance_correction = ["num_batches_tracked", "running_mean", "running_var"]
+def is_ignored_layer_variance_correction(layer_name):
+    return is_keyword_in_layer_name(layer_name, __ignore_layer_list_variance_correction)
 
 
 __ignore_layer_list_normalization = ["num_batches_tracked", "running_mean", "running_var"]
