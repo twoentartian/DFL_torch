@@ -4,8 +4,6 @@ import pickle
 from datetime import datetime
 from typing import Final
 
-from requests.packages import target
-
 from py_src import node, cpu, mpi_data_payload, mpi_util, ml_setup
 from py_src.simulation_runtime_parameters import SimulationPhase, RuntimeParameters
 from simulator_mpi import MPI_rank
