@@ -202,7 +202,8 @@ def main(config_file_path, output_folder_name):
     # init service
     service_list = config_file.get_service_list()
     for service_inst in service_list:
-        service_inst.initialize(runtime_parameters, output_folder_path, config_file=config_file, ml_setup=config_ml_setup, cuda_env=current_cuda_env, gpu=current_allocated_gpu)
+        service_inst.initialize(runtime_parameters, output_folder_path, config_file=config_file, ml_setup=config_ml_setup,
+                                cuda_env=current_cuda_env, gpu=current_allocated_gpu)
         runtime_parameters.service_container[service_inst.get_service_name()] = service_inst
 
     # begin simulation

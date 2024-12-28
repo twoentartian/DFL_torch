@@ -7,6 +7,7 @@ from torch.utils.data import DataLoader, Subset
 from py_src.cuda import CudaDevice
 from py_src.service_base import Service
 from py_src.simulation_runtime_parameters import RuntimeParameters, SimulationPhase
+from py_src.node import Node
 
 class ServiceTestAccuracyLossRecorder(Service):
     def __init__(self, interval, test_batch_size, phase_to_record=(SimulationPhase.END_OF_TICK,), use_fixed_testing_dataset=True, accuracy_file_name="accuracy.csv", loss_file_name="loss.csv"):
@@ -35,12 +36,18 @@ class ServiceTestAccuracyLossRecorder(Service):
         assert ml_setup is not None
 
         node_names = []
+        pre_allocated_model = None
         for node_name, target_node in parameters.node_container.items():
+            target_node: Node
             node_names.append(node_name)
+            # if the node is using model stat, then we re-use the model to save gpu memory.
+            if pre_allocated_model is None:
+                if target_node.is_using_model_stat:
+                    pre_allocated_model = target_node.model
 
-        self.initialize_without_runtime_parameters(output_path, node_names, ml_setup.model, ml_setup.criterion, ml_setup.testing_data, gpu=gpu)
+        self.initialize_without_runtime_parameters(output_path, node_names, ml_setup.model, ml_setup.criterion, ml_setup.testing_data, gpu=gpu, existing_model_for_testing=pre_allocated_model)
 
-    def initialize_without_runtime_parameters(self, output_path, node_names, model, criterion, test_dataset, gpu: CudaDevice=None):
+    def initialize_without_runtime_parameters(self, output_path, node_names, model, criterion, test_dataset, gpu: CudaDevice=None, existing_model_for_testing=None):
         self.accuracy_file = open(os.path.join(output_path, f"{self.accuracy_file_name}"), "w+")
         self.loss_file = open(os.path.join(output_path, f"{self.loss_file_name}"), "w+")
         self.node_order = node_names
@@ -48,8 +55,6 @@ class ServiceTestAccuracyLossRecorder(Service):
         header = ",".join(["tick", "phase", *node_order_str])
         self.accuracy_file.write(header + "\n")
         self.loss_file.write(header + "\n")
-        # set model
-        self.test_model = copy.deepcopy(model)
         self.criterion = criterion
 
         # set testing dataset
@@ -70,10 +75,16 @@ class ServiceTestAccuracyLossRecorder(Service):
             self.test_dataset = balanced_loader
         else:
             self.test_dataset = DataLoader(test_dataset, batch_size=self.test_batch_size, shuffle=True)
-        # move to cuda?
-        self.is_using_cuda = gpu is not None
-        if self.is_using_cuda:
-            self.test_model = self.test_model.to(gpu.device)
+
+        # set model
+        if existing_model_for_testing is None:
+            self.test_model = copy.deepcopy(model)
+            # move to cuda?
+            self.is_using_cuda = gpu is not None
+            if self.is_using_cuda:
+                self.test_model = self.test_model.to(gpu.device)
+        else:
+            self.test_model = existing_model_for_testing
 
     def trigger(self, parameters: RuntimeParameters, *args, **kwargs):
         if parameters.current_tick % self.interval != 0:
