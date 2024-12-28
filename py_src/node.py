@@ -13,20 +13,6 @@ from py_src.cuda import CudaDevice, CudaEnv
 
 logger = logging.getLogger(f"{internal_names.logger_simulator_base_name}.{util.basename_without_extension(__file__)}")
 
-
-def re_initialize_model(model, ml_setup):
-    random_data = os.urandom(4)
-    seed = int.from_bytes(random_data, byteorder="big")
-    torch.manual_seed(seed)
-    random.seed(seed)
-    np.random.seed(seed)
-    if ml_setup.weights_init_func is None:
-        for layer in model.children():
-            if hasattr(layer, 'reset_parameters'):
-                layer.reset_parameters()
-    else:
-        model.apply(ml_setup.weights_init_func)
-
 class Node:
     name: int
     is_using_model_stat: bool
@@ -48,7 +34,7 @@ class Node:
         self.is_using_model_stat = use_model_stat
         self.use_cpu = use_cpu
 
-        re_initialize_model(model, ml_setup)
+        ml_setup.re_initialize_model(model)
         self.lr_scheduler = None
         if use_cpu:
             self.model = copy.deepcopy(model)

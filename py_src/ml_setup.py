@@ -1,4 +1,7 @@
 import torch
+import os
+import random
+import numpy as np
 from enum import Enum
 import torch.nn as nn
 from torchvision import transforms, models, datasets
@@ -32,6 +35,24 @@ class MlSetup:
 
     def self_validate(self):
         pass  # do nothing for now
+
+    def re_initialize_model(self, model):
+        # Set random seeds
+        random_data = os.urandom(4)
+        seed = int.from_bytes(random_data, byteorder="big")
+        torch.manual_seed(seed)
+        random.seed(seed)
+        np.random.seed(seed)
+        def reset_parameters_recursively(module):
+            for submodule in module.children():
+                if hasattr(submodule, 'reset_parameters'):
+                    submodule.reset_parameters()
+                else:
+                    reset_parameters_recursively(submodule)
+        if self.weights_init_func is None:
+            reset_parameters_recursively(model)
+        else:
+            model.apply(self.weights_init_func)
 
 
 """ MNIST """

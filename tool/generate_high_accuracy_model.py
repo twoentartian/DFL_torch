@@ -42,25 +42,7 @@ def set_logging(target_logger, task_name, log_file_path=None):
     del console, formatter
 
 
-def re_initialize_model(model, arg_ml_setup):
-    # Set random seeds
-    random_data = os.urandom(4)
-    seed = int.from_bytes(random_data, byteorder="big")
-    torch.manual_seed(seed)
-    random.seed(seed)
-    np.random.seed(seed)
 
-    def reset_parameters_recursively(module):
-        for submodule in module.children():
-            if hasattr(submodule, 'reset_parameters'):
-                submodule.reset_parameters()
-            else:
-                reset_parameters_recursively(submodule)
-
-    if arg_ml_setup.weights_init_func is None:
-        reset_parameters_recursively(model)
-    else:
-        model.apply(arg_ml_setup.weights_init_func)
 
 
 def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_setup, arg_use_cpu: bool, arg_worker_count, arg_total_cpu_count, arg_save_format, arg_amp):
@@ -91,7 +73,7 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
         record_model_service = None
 
     # reset random weights
-    re_initialize_model(model, arg_ml_setup)
+    arg_ml_setup.re_initialize_model(model)
 
     log_file = open(os.path.join(output_folder, f"{str(index).zfill(digit_number_of_models)}.log"), "w")
     log_file.write("epoch,loss,lrs" + "\n")
