@@ -25,7 +25,7 @@ class ServiceTestAccuracyLossRecorder(Service):
         self.use_fixed_testing_dataset = use_fixed_testing_dataset
         self.test_batch_size = test_batch_size
         self.test_dataset = None
-        self.is_using_cuda = None
+        self.allocated_gpu = None
 
     @staticmethod
     def get_service_name() -> str:
@@ -81,10 +81,13 @@ class ServiceTestAccuracyLossRecorder(Service):
         if existing_model_for_testing is None:
             self.test_model = copy.deepcopy(model)
             # move to cuda?
-            self.is_using_cuda = gpu is not None
-            if self.is_using_cuda:
+            if gpu is not None:
+                self.allocated_gpu = gpu
+            if self.allocated_gpu is not None:
                 self.test_model = self.test_model.to(gpu.device)
         else:
+            assert gpu.model == existing_model_for_testing, "testing model is not on the specified GPU"
+            self.allocated_gpu = gpu
             self.test_model = existing_model_for_testing
 
     def trigger(self, parameters: RuntimeParameters, *args, **kwargs):
@@ -108,10 +111,12 @@ class ServiceTestAccuracyLossRecorder(Service):
                 test_data = d
                 test_labels = l
                 break
-            if self.is_using_cuda:
-                test_data, test_labels = test_data.cuda(), test_labels.cuda()
+            if self.allocated_gpu is not None:
+                test_data, test_labels = test_data.to(self.allocated_gpu.device), test_labels.to(self.allocated_gpu.device)
             model_stat = node_names_and_model_stats[node_name]
             self.test_model.load_state_dict(model_stat)
+            if self.allocated_gpu is not None:
+                self.test_model.to(self.allocated_gpu.device)
             self.test_model.eval()
             outputs = self.test_model(test_data)
             loss = self.criterion(outputs, test_labels)
