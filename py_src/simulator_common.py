@@ -4,6 +4,8 @@ import pickle
 from datetime import datetime
 from typing import Final
 
+from requests.packages import target
+
 from py_src import node, cpu, mpi_data_payload, mpi_util, ml_setup
 from py_src.simulation_runtime_parameters import SimulationPhase, RuntimeParameters
 from simulator_mpi import MPI_rank
@@ -17,7 +19,11 @@ def send_model_stat_to_receiver(runtime_parameters, dst_node, model_stat) -> boo
 
 def check_model_buffer_full(runtime_parameters, dst_node) -> bool:
     target_node: node.Node = runtime_parameters.node_container[dst_node]
-    if target_node.model_buffer_size <= target_node.model_averager.get_model_count():
+    buffer_size = target_node.model_buffer_size
+    received_model_count = target_node.model_averager.get_model_count()
+    if received_model_count == 0:
+        return False
+    if buffer_size <= received_model_count:
         # performing average!
         self_model = target_node.get_model_stat()
         for k,v in self_model.items():
