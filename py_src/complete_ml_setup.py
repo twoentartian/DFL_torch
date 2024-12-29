@@ -43,6 +43,12 @@ class FastTrainingSetup(object):
             optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=0.0005)
             lr_scheduler = None
             return optimizer, lr_scheduler, epochs
+        elif arg_ml_setup.model_name == 'vgg11_cifar10_no_bn':
+            lr = 0.01
+            epochs = 30
+            optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=0.0005)
+            lr_scheduler = None
+            return optimizer, lr_scheduler, epochs
         elif arg_ml_setup.model_name == 'cct7':
             steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
             initial_lr = 55e-5

@@ -293,6 +293,18 @@ def vgg11_mnist():
     output_ml_setup.has_normalization_layer = False
     return output_ml_setup
 
+""" CIFAR10 + vgg11 """
+def vgg11_cifar10():
+    output_ml_setup = MlSetup()
+    vgg11 = vgg.VGG11_no_bn(in_channels=3, num_classes=10)
+    output_ml_setup.model_name = "vgg11_cifar10_no_bn"
+    output_ml_setup.model = vgg11
+    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label = dataset_cifar10_224()
+    output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
+    output_ml_setup.training_batch_size = 32
+    output_ml_setup.has_normalization_layer = False
+    return output_ml_setup
+
 """ Helper function """
 class ModelType(Enum):
     lenet5 = 0
@@ -304,6 +316,7 @@ class ModelType(Enum):
     mobilenet_v3_large = 6
     lenet4 = 7
     vgg11_mnist = 8
+    vgg11_cifar10 = 9
 
 class NormType(Enum):
     auto = 0
@@ -336,6 +349,8 @@ def get_ml_setup_from_config(model_type: str, norm_type: str = 'auto'):
         output_ml_setup = mobilenet_v3_large_imagenet()
     elif model_type == ModelType.vgg11_mnist:
         output_ml_setup = vgg11_mnist()
+    elif model_type == ModelType.vgg11_cifar10:
+        output_ml_setup = vgg11_cifar10()
     else:
         raise ValueError(f'Invalid model type: {model_type}')
     return output_ml_setup
@@ -362,6 +377,8 @@ def get_ml_setup_from_model_type(model_name):
         output_ml_setup = mobilenet_v3_large_imagenet()
     elif model_name == 'vgg11_mnist':
         output_ml_setup = vgg11_mnist()
+    elif model_name == 'vgg11_cifar10':
+        output_ml_setup = vgg11_cifar10()
     else:
         raise ValueError(f'Invalid model type: {model_name}')
     return output_ml_setup
