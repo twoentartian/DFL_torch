@@ -7,7 +7,7 @@ import numpy as np
 
 from torch.utils.data import DataLoader
 
-from py_src import dataset, internal_names, util, model_average
+from py_src import dataset, internal_names, util, model_average, cpu
 from py_src.ml_setup import MlSetup
 from py_src.cuda import CudaDevice, CudaEnv
 
@@ -23,6 +23,11 @@ class Node:
     model_buffer_size: int
     use_cpu: bool
     send_model_after_P_training: int
+
+    enable_training: bool
+    enable_sending: bool
+    enable_receiving: bool
+    enable_averaging: bool
 
     def __init__(self, name: int, ml_setup: MlSetup, use_model_stat: bool|None=None, allocated_gpu: CudaDevice=None, optimizer: None | torch.optim.Optimizer=None, use_cpu: bool=False):
         """
@@ -71,6 +76,12 @@ class Node:
         self.send_model_after_P_training = 1
         self._send_model_counter = 0
         self.most_recent_loss = 0
+
+        """enable all functions"""
+        self.enable_receiving = True
+        self.enable_training = True
+        self.enable_sending = True
+        self.enable_averaging = True
 
     def is_sending_model(self) -> bool:
         self._send_model_counter += 1
@@ -156,3 +167,36 @@ class Node:
         else:
             return self.model.state_dict()
 
+    def submit_training(self, criterion, data, label, cuda_env=None):
+        if self.enable_training:
+            if cuda_env is None:
+                # submit to cpu
+                loss = cpu.submit_training_job_cpu(self, criterion, data, label)
+            else:
+                # submit to cuda
+                loss = cuda_env.submit_training_job_cpu(self, criterion, data, label)
+            self.most_recent_loss = loss
+        if self.enable_sending:
+            self.is_training_this_tick = True # this flag will trigger sending model to others
+
+    def add_model_to_buffer(self, model_stat):
+        if self.enable_receiving:
+            self.model_averager.add_model(model_stat)
+
+    def check_averaging(self):
+        if self.enable_averaging:
+            buffer_size = self.model_buffer_size
+            received_model_count = self.model_averager.get_model_count()
+            if received_model_count == 0:
+                return False
+            if buffer_size <= received_model_count:
+                # performing average!
+                self_model = self.get_model_stat()
+                for k, v in self_model.items():
+                    self_model[k] = v.cpu()
+                averaged_model = self.model_averager.get_model(self_model=self_model)
+                self.set_model_stat(averaged_model)
+                self.is_averaging_this_tick = True
+                return True
+            return False
+        return False

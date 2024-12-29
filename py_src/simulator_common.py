@@ -10,29 +10,14 @@ from simulator_mpi import MPI_rank
 
 REPORT_FINISH_TIME_PER_TICK: Final[int] = 100
 
-def send_model_stat_to_receiver(runtime_parameters, dst_node, model_stat) -> bool:
+def send_model_stat_to_receiver(runtime_parameters, dst_node, model_stat):
     """return whether the node is averaged"""
     neighbor_node: node.Node = runtime_parameters.node_container[dst_node]
-    neighbor_node.model_averager.add_model(model_stat)
+    neighbor_node.add_model_to_buffer(model_stat)
 
 def check_model_buffer_full(runtime_parameters, dst_node) -> bool:
     target_node: node.Node = runtime_parameters.node_container[dst_node]
-    buffer_size = target_node.model_buffer_size
-    received_model_count = target_node.model_averager.get_model_count()
-    if received_model_count == 0:
-        return False
-    if buffer_size <= received_model_count:
-        # performing average!
-        self_model = target_node.get_model_stat()
-        for k,v in self_model.items():
-            self_model[k] = v.cpu()
-        averaged_model = target_node.model_averager.get_model(self_model=self_model)
-        target_node.set_model_stat(averaged_model)
-        target_node.is_averaging_this_tick = True
-        return True
-    return False
-
-
+    return target_node.check_averaging()
 
 def simulation_phase_start_of_tick(runtime_parameters: RuntimeParameters, logger):
     runtime_parameters.phase = SimulationPhase.START_OF_TICK
@@ -62,16 +47,13 @@ def simulation_phase_training(runtime_parameters: RuntimeParameters, logger, con
     training_node_names = []
     for node_name, node_target in runtime_parameters.node_container.items():
         if node_target.next_training_tick == runtime_parameters.current_tick:
-            node_target.is_training_this_tick = True
             training_node_names.append(node_name)
             for data, label in node_target.train_loader:
                 if config_file.force_use_cpu:
-                    loss = cpu.submit_training_job_cpu(node_target, ml_config.criterion, data, label)
-                    node_target.most_recent_loss = loss
+                    node_target.submit_training(ml_config.criterion, data, label)
                     logger.info(f"tick: {runtime_parameters.current_tick}, training node: {node_target.name}, loss={node_target.most_recent_loss:.2f}")
                 else:
-                    loss = current_cuda_env.submit_training_job(node_target, ml_config.criterion, data, label)
-                    node_target.most_recent_loss = loss
+                    node_target.submit_training(ml_config.criterion, data, label, cuda_env=current_cuda_env)
                     logger.info(f"tick: {runtime_parameters.current_tick}, training node: {node_target.name}, loss={node_target.most_recent_loss:.2f}")
                 break
 
