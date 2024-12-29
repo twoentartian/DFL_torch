@@ -233,27 +233,35 @@ def begin_simulation(runtime_parameters: RuntimeParameters, config_file, ml_conf
 
         """"""""" start of tick """""""""
         simulation_phase_start_of_tick(runtime_parameters, logger)
+        config_file.node_behavior_control(runtime_parameters)
 
         """"""""" before training """""""""
         simulation_phase_before_training(runtime_parameters, logger)
+        config_file.node_behavior_control(runtime_parameters)
 
         """"""""" training """""""""
         simulation_phase_training(runtime_parameters, logger, config_file, ml_config, current_cuda_env)
+        config_file.node_behavior_control(runtime_parameters)
 
         """"""""" after training """""""""
         simulation_phase_after_training(runtime_parameters, logger)
+        config_file.node_behavior_control(runtime_parameters)
 
         """"""""" before averaging """""""""
         simulation_phase_before_averaging(runtime_parameters, logger)
+        config_file.node_behavior_control(runtime_parameters)
 
         """"""""" averaging """""""""
         simulation_phase_averaging(runtime_parameters, logger, mpi_world)
+        config_file.node_behavior_control(runtime_parameters)
 
         """"""""" after averaging """""""""
         simulation_phase_after_averaging(runtime_parameters, logger)
+        config_file.node_behavior_control(runtime_parameters)
 
         """"""""" end of tick """""""""
         simulation_phase_end_of_tick(runtime_parameters, logger)
+        config_file.node_behavior_control(runtime_parameters)
 
         runtime_parameters.current_tick += 1
 
