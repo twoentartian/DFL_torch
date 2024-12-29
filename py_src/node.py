@@ -174,7 +174,7 @@ class Node:
                 loss = cpu.submit_training_job_cpu(self, criterion, data, label)
             else:
                 # submit to cuda
-                loss = cuda_env.submit_training_job_cpu(self, criterion, data, label)
+                loss = cuda_env.submit_training_job(self, criterion, data, label)
             self.most_recent_loss = loss
         if self.enable_sending:
             self.is_training_this_tick = True # this flag will trigger sending model to others
