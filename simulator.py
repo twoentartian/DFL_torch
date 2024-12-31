@@ -149,6 +149,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='DFL simulator (torch version)')
     parser.add_argument('--config', type=str, default="./simulator_config.py", help='path to config file, default: "./simulator_config.py')
     parser.add_argument("-o", "--output_folder_name", default=None, help='specify the output folder name')
+    parser.add_argument("-T", "--thread", default=1, type=int, help='specify the number of thread for pytorch')
     args = parser.parse_args()
 
+    torch.set_num_threads(args.thread)
     main(args.config, args.output_folder_name)
