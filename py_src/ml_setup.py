@@ -375,9 +375,9 @@ def get_ml_setup_from_model_type(model_name):
         output_ml_setup = mobilenet_v3_small_cifar10()
     elif model_name == 'mobilenet_v3_large':
         output_ml_setup = mobilenet_v3_large_imagenet()
-    elif model_name == 'vgg11_mnist':
+    elif model_name == 'vgg11_mnist_no_bn':
         output_ml_setup = vgg11_mnist()
-    elif model_name == 'vgg11_cifar10':
+    elif model_name == 'vgg11_cifar10_no_bn':
         output_ml_setup = vgg11_cifar10()
     else:
         raise ValueError(f'Invalid model type: {model_name}')
