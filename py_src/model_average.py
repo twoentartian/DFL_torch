@@ -2,6 +2,8 @@ import copy
 import torch
 from py_src import special_torch_layers
 from py_src.model_variance_correct import VarianceCorrectionType, VarianceCorrector
+from test.mpi_pytorch_test import model
+
 
 def move_tensor_toward(layer_name, src_tensor, dest_tensor, step, adoptive_step, random_scale=None):
     diff_tensor = dest_tensor - src_tensor
@@ -170,3 +172,25 @@ class ConservativeModelAverager(ModelAverager):
     def get_model_count(self):
         return self.model_counter
 
+
+
+
+import unittest
+class TestConservativeModelAverager(unittest.TestCase):
+    def test_averaging(self):
+        import ml_setup
+        current_ml_setup = ml_setup.lenet5_mnist()
+        model0 = current_ml_setup.model.state_dict()
+        model1 = copy.deepcopy(model0)
+        model2 = copy.deepcopy(model0)
+        for layer_name, param in model0.items():
+            param.data.fill_(1)
+        for layer_name, param in model1.items():
+            param.data.fill_(3)
+        for layer_name, param in model1.items():
+            param.data.fill_(5)
+        model_averager = ConservativeModelAverager(conservative=0.5)
+        model_averager.add_model(model1)
+        model_averager.add_model(model2)
+        output_model = model_averager.get_model(model0)
+        print(output_model)
