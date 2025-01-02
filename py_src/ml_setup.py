@@ -36,7 +36,14 @@ class MlSetup:
     def self_validate(self):
         pass  # do nothing for now
 
+    def assign_names_to_layers(self):
+        for name, module in self.model.named_modules():
+            if not hasattr(module, '_module_name'):
+                module._module_name = name
+
     def re_initialize_model(self, model):
+        self.assign_names_to_layers()
+
         # Set random seeds
         random_data = os.urandom(4)
         seed = int.from_bytes(random_data, byteorder="big")
@@ -291,6 +298,7 @@ def vgg11_mnist():
     output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 32
     output_ml_setup.has_normalization_layer = False
+    output_ml_setup.weights_init_func = vgg.weights_init_trained
     return output_ml_setup
 
 """ CIFAR10 + vgg11 """
