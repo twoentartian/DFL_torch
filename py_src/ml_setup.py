@@ -143,7 +143,6 @@ def dataset_cifar10_224(transforms_training=None, transforms_testing=None):
 """ ImageNet """
 def dataset_imagenet(transforms_training=None, transforms_testing=None):
     dataset_path = './data/imagenet'
-    stats = ((0.49139968, 0.48215841, 0.44653091), (0.24703223, 0.24348513, 0.26158784))
 
     standard_transform = transforms.Compose([
         transforms.Resize(256),  # Resize images to 256 pixels on the shorter side
@@ -298,7 +297,6 @@ def vgg11_mnist():
     output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 32
     output_ml_setup.has_normalization_layer = False
-    output_ml_setup.weights_init_func = vgg.weights_init_trained
     return output_ml_setup
 
 """ CIFAR10 + vgg11 """

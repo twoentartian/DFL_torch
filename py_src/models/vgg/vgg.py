@@ -5,29 +5,29 @@ import math
 """ a vgg11 model without bn layers """
 __layer_variance_mean = {}
 # (variance, mean)
-__layer_variance_mean['conv_layers.0.weight'] = (0.014527, 0.000820)
-__layer_variance_mean['conv_layers.3.weight'] = (0.000235, 0.000254)
-__layer_variance_mean['conv_layers.6.weight'] = (0.000117, -0.000014)
-__layer_variance_mean['conv_layers.8.weight'] = (0.000059, 0.000017)
-__layer_variance_mean['conv_layers.11.weight'] = (0.000060, -0.000055)
-__layer_variance_mean['conv_layers.13.weight'] = (0.000031, -0.000224)
-__layer_variance_mean['conv_layers.16.weight'] = (0.000033, -0.000260)
-__layer_variance_mean['conv_layers.18.weight'] = (0.000038, -0.000767)
-__layer_variance_mean['linear_layers.0.weight'] = (0.000006, -0.000063)
-__layer_variance_mean['linear_layers.3.weight'] = (0.000035, -0.000042)
-__layer_variance_mean['linear_layers.6.weight'] = (0.000480, -0.000004)
+__layer_variance_mean['conv_layers.0.weight'] = (3.72E-02, 0)
+__layer_variance_mean['conv_layers.3.weight'] = (5.78E-04, 0)
+__layer_variance_mean['conv_layers.6.weight'] = (2.89E-04, 0)
+__layer_variance_mean['conv_layers.8.weight'] = (1.45E-04, 0)
+__layer_variance_mean['conv_layers.11.weight'] = (1.45E-04, 0)
+__layer_variance_mean['conv_layers.13.weight'] = (7.24E-05, 0)
+__layer_variance_mean['conv_layers.16.weight'] = (7.23E-05, 0)
+__layer_variance_mean['conv_layers.18.weight'] = (7.23E-05, 0)
+__layer_variance_mean['linear_layers.0.weight'] = (1.33E-05, 0)
+__layer_variance_mean['linear_layers.3.weight'] = (8.14E-05, 0)
+__layer_variance_mean['linear_layers.6.weight'] = (8.08E-05, 0)
 
-__layer_variance_mean['conv_layers.0.bias'] = (0.014471, -0.007999)
-__layer_variance_mean['conv_layers.3.bias'] = (0.000314, 0.004178)
-__layer_variance_mean['conv_layers.6.bias'] = (0.000195, 0.004282)
-__layer_variance_mean['conv_layers.8.bias'] = (0.000129, 0.005683)
-__layer_variance_mean['conv_layers.11.bias'] = (0.000148, 0.006729)
-__layer_variance_mean['conv_layers.13.bias'] = (0.000136, 0.007548)
-__layer_variance_mean['conv_layers.16.bias'] = (0.000270, 0.008515)
-__layer_variance_mean['conv_layers.18.bias'] = (0.000148, 0.001585)
-__layer_variance_mean['linear_layers.0.bias'] = (0.000033, 0.000631)
-__layer_variance_mean['linear_layers.3.bias'] = (0.000063, 0.001991)
-__layer_variance_mean['linear_layers.6.bias'] = (0.006112, 0.000515)
+__layer_variance_mean['conv_layers.0.bias'] = (0, 0)
+__layer_variance_mean['conv_layers.3.bias'] = (0, 0)
+__layer_variance_mean['conv_layers.6.bias'] = (0, 0)
+__layer_variance_mean['conv_layers.8.bias'] = (0, 0)
+__layer_variance_mean['conv_layers.11.bias'] = (0, 0)
+__layer_variance_mean['conv_layers.13.bias'] = (0, 0)
+__layer_variance_mean['conv_layers.16.bias'] = (0, 0)
+__layer_variance_mean['conv_layers.18.bias'] = (0, 0)
+__layer_variance_mean['linear_layers.0.bias'] = (0, 0)
+__layer_variance_mean['linear_layers.3.bias'] = (0, 0)
+__layer_variance_mean['linear_layers.6.bias'] = (0, 0)
 
 
 def weights_init_trained(module):
@@ -42,6 +42,7 @@ def weights_init_trained(module):
                 mean, var = __layer_variance_mean[f'{layer_name}.bias']
                 std = math.sqrt(var) if var > 0 else 0.0
                 param.data.normal_(mean=mean, std=std)
+    raise NotImplementedError("this weights init method does not work")
 
 
 class VGG11_no_bn(nn.Module):
