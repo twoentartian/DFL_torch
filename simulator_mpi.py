@@ -21,15 +21,30 @@ MPI_size = MPI_comm.Get_size()
 ENABLE_MEMORY_RECORD = False
 
 def main(config_file_path, output_folder_name):
+    # read config
+    config_file = configuration_file.load_configuration(config_file_path)
+    output_folder_path = None
+    if hasattr(config_file, 'save_name'):
+        output_folder_path = config_file.save_name
+
     # create output dir
     if MPI_rank == 0:
-        if output_folder_name is None:
-            output_folder_path = os.path.join(os.curdir, datetime.now().strftime("MPI_%Y-%m-%d_%H-%M-%S_%f"))
+        if output_folder_path is None:
+            if output_folder_name is None:
+                output_folder_path = os.path.join(os.curdir, datetime.now().strftime("MPI_%Y-%m-%d_%H-%M-%S_%f"))
+            else:
+                output_folder_path = os.path.join(os.curdir, output_folder_name)
+        if not os.path.exists(output_folder_path):
+            os.mkdir(output_folder_path)
         else:
-            output_folder_path = os.path.join(os.curdir, output_folder_name)
-        os.mkdir(output_folder_path)
+            print(f"{output_folder_path} exists.")
+            MPI.COMM_WORLD.Abort()
         backup_path = os.path.join(output_folder_path, internal_names.default_backup_folder_name)
-        os.mkdir(backup_path)
+        if not os.path.exists(backup_path):
+            os.mkdir(backup_path)
+        else:
+            print(f"{backup_path} exists.")
+            MPI.COMM_WORLD.Abort()
     else:
         output_folder_path = None
         backup_path = None
@@ -46,8 +61,7 @@ def main(config_file_path, output_folder_name):
     # init logging
     dfl_logging.set_logging(os.path.join(output_folder_path, internal_names.log_file_name), simulator_base_logger)
 
-    # read config
-    config_file = configuration_file.load_configuration(config_file_path)
+    # process config
     simulator_base_logger.info(f"config file path: ({config_file_path}), name: ({config_file.config_name}).")
     if MPI_rank == 0:
         shutil.copy2(config_file_path, backup_path)  # backup config file

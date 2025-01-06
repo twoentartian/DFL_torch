@@ -16,14 +16,29 @@ ENABLE_MEMORY_RECORD = False
 def main(config_file_path, output_folder_name):
     current_cuda_env = cuda.CudaEnv()
 
+    # read config
+    config_file = configuration_file.load_configuration(config_file_path)
+    output_folder_path = None
+    if hasattr(config_file, 'save_name'):
+        output_folder_path = config_file.save_name
+
     # create output dir
-    if output_folder_name is None:
-        output_folder_path = os.path.join(os.curdir, datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f"))
+    if output_folder_path is None:
+        if output_folder_name is None:
+            output_folder_path = os.path.join(os.curdir, datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f"))
+        else:
+            output_folder_path = os.path.join(os.curdir, output_folder_name)
+    if not os.path.exists(output_folder_path):
+        os.mkdir(output_folder_path)
     else:
-        output_folder_path = os.path.join(os.curdir, output_folder_name)
-    os.mkdir(output_folder_path)
+        print(f"{output_folder_path} exists.")
+        exit(-1)
     backup_path = os.path.join(output_folder_path, internal_names.default_backup_folder_name)
-    os.mkdir(backup_path)
+    if not os.path.exists(backup_path):
+        os.mkdir(backup_path)
+    else:
+        print(f"{backup_path} exists.")
+        exit(-1)
 
     if ENABLE_MEMORY_RECORD:
         memory_service = PrintMemoryConsumption(100, save_file_name="base_memory_profiler.txt")
@@ -32,8 +47,7 @@ def main(config_file_path, output_folder_name):
     # init logging
     dfl_logging.set_logging(os.path.join(output_folder_path, internal_names.log_file_name), simulator_base_logger)
 
-    # init config file
-    config_file = configuration_file.load_configuration(config_file_path)
+    # process config
     shutil.copy2(config_file_path, backup_path)  # backup config file
     simulator_base_logger.info(f"config file path: ({config_file_path}), name: ({config_file.config_name}).")
     config_ml_setup = config_file.get_ml_setup()
