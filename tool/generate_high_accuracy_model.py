@@ -138,6 +138,8 @@ if __name__ == "__main__":
     parser.add_argument("-t", "--thread", type=int, default=1, help='specify how many models to train in parallel')
     parser.add_argument("-m", "--model_type", type=str, default='lenet5',
                         choices=['lenet5', 'resnet18', 'simplenet', 'cct7', 'lenet5_large_fc', 'vgg11_mnist', 'vgg11_cifar10', 'mobilenet_v3_small', 'mobilenet_v3_large'])
+    parser.add_argument("-d", "--dataset_type", type=str, default='default',
+                        choices=['default', 'mnist', 'cifar10', 'cifar100'])
     parser.add_argument("--norm_method", type=str, default='auto', choices=['auto', 'bn', 'ln', 'gn'])
     parser.add_argument("--cpu", action='store_true', help='force using CPU for training')
     parser.add_argument("-o", "--output_folder_name", default=None, help='specify the output folder name')
@@ -151,6 +153,7 @@ if __name__ == "__main__":
     worker_count = args.thread
     total_cpu_cores = args.core
     model_type = args.model_type
+    dataset_type = args.dataset_type
     use_cpu = args.cpu
     output_folder_name = args.output_folder_name
     save_format = args.save_format
@@ -162,7 +165,7 @@ if __name__ == "__main__":
     logger.info("logging setup complete")
 
     # prepare model and dataset
-    current_ml_setup = ml_setup.get_ml_setup_from_config(model_type, norm_method)
+    current_ml_setup = ml_setup.get_ml_setup_from_config(model_type, norm_method, dataset_type=dataset_type)
     output_model_name = current_ml_setup.model_name
     logger.info(f"model name: {output_model_name}")
 

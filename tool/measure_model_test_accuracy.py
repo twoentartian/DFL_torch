@@ -53,6 +53,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Measure model test accuracy and loss.')
     parser.add_argument("model_file", type=str)
     parser.add_argument("-m", "--model_type", type=str, choices=["auto", "lenet5", "resnet18_bn", "resnet18_gn", "simplenet", "cct7"], default="auto")
+    parser.add_argument("-d", "--dataset_type", type=str, choices=["default", "mnist", "cifar10", "cifar100"], default="default")
 
     args = parser.parse_args()
 
@@ -67,7 +68,8 @@ if __name__ == "__main__":
     assert model_type is not None, "model_type is None"
     model_state = model_info["state_dict"]
 
-    current_ml_setup = ml_setup.get_ml_setup_from_model_type(model_type)
+    dataset_type = ml_setup.DatasetType[args.dataset_type]
+    current_ml_setup = ml_setup.get_ml_setup_from_model_type(model_type, dataset_type=dataset_type)
 
     if not os.path.exists(model_file_path):
         print(f"file not found. {model_file_path}")

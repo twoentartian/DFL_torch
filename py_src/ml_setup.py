@@ -140,6 +140,27 @@ def dataset_cifar10_224(transforms_training=None, transforms_testing=None):
     cifar10_labels = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
     return cifar10_train, cifar10_test, cifar10_labels
 
+def dataset_cifar100_32(transforms_training=None, transforms_testing=None):
+    dataset_path = './data/cifar100'
+    stats = ((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
+
+    if transforms_training is not None:
+        transforms_cifar_train = transforms_training
+    else:
+        transforms_cifar_train = transforms.Compose(
+            [transforms.ToTensor(),
+             transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
+             transforms.RandomHorizontalFlip(p=0.5),
+             transforms.Normalize(*stats)])
+    if transforms_testing is not None:
+        transforms_cifar_test = transforms_testing
+    else:
+        transforms_cifar_test = transforms.Compose([transforms.ToTensor(), transforms.Normalize(*stats)])
+    cifar100_train = datasets.CIFAR100(root=dataset_path, train=True, download=True, transform=transforms_cifar_train)
+    cifar100_test = datasets.CIFAR100(root=dataset_path, train=False, download=True, transform=transforms_cifar_test)
+    cifar100_labels = set(range(0, 100, 1))
+    return cifar100_train, cifar100_test, cifar100_labels
+
 """ ImageNet """
 def dataset_imagenet(transforms_training=None, transforms_testing=None):
     dataset_path = './data/imagenet'
@@ -233,9 +254,26 @@ def resnet18_cifar10(enable_replace_bn_with_group_norm=False):
         output_ml_setup.model = models.resnet18(progress=False, num_classes=10, zero_init_residual=False, groups=1, width_per_group=64, replace_stride_with_dilation=None)
         output_ml_setup.model_name = "resnet18_bn"
     from torchvision.models.resnet import BasicBlock
-    output_ml_setup.model.conv1 = nn.Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)  # change for cifar10 dataset
+    output_ml_setup.model.conv1 = nn.Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)  # change for cifar10 resolution
     output_ml_setup.model.maxpool = nn.Identity()
     output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label = dataset_cifar10_32()
+    output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
+    output_ml_setup.training_batch_size = 256
+    output_ml_setup.has_normalization_layer = True
+    return output_ml_setup
+
+def resnet18_cifar100(enable_replace_bn_with_group_norm=False):
+    output_ml_setup = MlSetup()
+    if enable_replace_bn_with_group_norm:
+        output_ml_setup.model = models.resnet18(progress=False, num_classes=100, zero_init_residual=False, groups=1, width_per_group=64, replace_stride_with_dilation=None, norm_layer=GroupNorm)
+        output_ml_setup.model_name = "resnet18_gn"
+    else:
+        output_ml_setup.model = models.resnet18(progress=False, num_classes=100, zero_init_residual=False, groups=1, width_per_group=64, replace_stride_with_dilation=None)
+        output_ml_setup.model_name = "resnet18_bn"
+    from torchvision.models.resnet import BasicBlock
+    output_ml_setup.model.conv1 = nn.Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)  # change for cifar10 resolution
+    output_ml_setup.model.maxpool = nn.Identity()
+    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label = dataset_cifar100_32()
     output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 256
     output_ml_setup.has_normalization_layer = True
@@ -321,28 +359,42 @@ class ModelType(Enum):
     mobilenet_v3_small = 5
     mobilenet_v3_large = 6
     lenet4 = 7
-    vgg11_mnist = 8
-    vgg11_cifar10 = 9
+    vgg11 = 8
+
+class DatasetType(Enum):
+    default = 0
+    mnist = 1
+    cifar10 = 2
+    cifar100 = 3
 
 class NormType(Enum):
     auto = 0
     bn = 1
     gn = 2
 
-def get_ml_setup_from_config(model_type: str, norm_type: str = 'auto'):
+def get_ml_setup_from_config(model_type: str, norm_type: str = 'auto', dataset_type: str = 'default'):
     model_type = ModelType[model_type]
     norm_type = NormType[norm_type]
+    dataset_type = DatasetType[dataset_type]
     if model_type == ModelType.lenet5:
         output_ml_setup = lenet5_mnist()
     elif model_type == ModelType.lenet4:
         output_ml_setup = lenet4_mnist()
     elif model_type == ModelType.resnet18:
-        if norm_type == NormType.auto:
-            output_ml_setup = resnet18_cifar10()
-        elif norm_type == NormType.gn:
-            output_ml_setup = resnet18_cifar10(enable_replace_bn_with_group_norm=True)
-        else:
-            raise NotImplementedError(f'{norm_type} is not implemented for {model_type} yet')
+        if dataset_type in [DatasetType.default, DatasetType.cifar10]:
+            if norm_type == NormType.auto:
+                output_ml_setup = resnet18_cifar10()
+            elif norm_type == NormType.gn:
+                output_ml_setup = resnet18_cifar10(enable_replace_bn_with_group_norm=True)
+            else:
+                raise NotImplementedError(f'{norm_type} is not implemented for {model_type} yet')
+        if dataset_type in [DatasetType.cifar100]:
+            if norm_type == NormType.auto:
+                output_ml_setup = resnet18_cifar100()
+            elif norm_type == NormType.gn:
+                output_ml_setup = resnet18_cifar100(enable_replace_bn_with_group_norm=True)
+            else:
+                raise NotImplementedError(f'{norm_type} is not implemented for {model_type} yet')
     elif model_type == ModelType.simplenet:
         output_ml_setup = simplenet_cifar10()
     elif model_type == ModelType.cct7:
@@ -353,37 +405,55 @@ def get_ml_setup_from_config(model_type: str, norm_type: str = 'auto'):
         output_ml_setup = mobilenet_v3_small_cifar10()
     elif model_type == ModelType.mobilenet_v3_large:
         output_ml_setup = mobilenet_v3_large_imagenet()
-    elif model_type == ModelType.vgg11_mnist:
-        output_ml_setup = vgg11_mnist()
-    elif model_type == ModelType.vgg11_cifar10:
-        output_ml_setup = vgg11_cifar10()
+    elif model_type == ModelType.vgg11:
+        if dataset_type in [DatasetType.default, DatasetType.mnist]:
+            output_ml_setup = vgg11_mnist()
+        if dataset_type in [DatasetType.default, DatasetType.cifar10]:
+            output_ml_setup = vgg11_cifar10()
     else:
         raise ValueError(f'Invalid model type: {model_type}')
     return output_ml_setup
 
 
-def get_ml_setup_from_model_type(model_name):
+def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default):
     if model_name == 'lenet5':
+        assert dataset_type in [dataset_type.default, dataset_type.mnist]
         output_ml_setup = lenet5_mnist()
     elif model_name == 'lenet4':
+        assert dataset_type in [dataset_type.default, dataset_type.mnist]
         output_ml_setup = lenet4_mnist()
     elif model_name == 'resnet18_bn':
-        output_ml_setup = resnet18_cifar10()
+        assert dataset_type in [dataset_type.default, dataset_type.cifar10, dataset_type.cifar100]
+        if dataset_type in [dataset_type.default, dataset_type.cifar10]:
+            output_ml_setup = resnet18_cifar10()
+        if dataset_type in [dataset_type.cifar100]:
+            output_ml_setup = resnet18_cifar100()
     elif model_name == 'resnet18_gn':
-        output_ml_setup = resnet18_cifar10(enable_replace_bn_with_group_norm=True)
+        assert dataset_type in [dataset_type.default, dataset_type.cifar10, dataset_type.cifar100]
+        if dataset_type in [dataset_type.default, dataset_type.cifar10]:
+            output_ml_setup = resnet18_cifar10(enable_replace_bn_with_group_norm=True)
+        if dataset_type in [dataset_type.cifar100]:
+            output_ml_setup = resnet18_cifar100(enable_replace_bn_with_group_norm=True)
     elif model_name == 'simplenet':
+        assert dataset_type in [dataset_type.default, dataset_type.cifar10]
         output_ml_setup = simplenet_cifar10()
     elif model_name == 'cct7':
+        assert dataset_type in [dataset_type.default, dataset_type.cifar10]
         output_ml_setup = cct7_cifar10()
     elif model_name == 'lenet5_large_fc':
+        assert dataset_type in [dataset_type.default, dataset_type.mnist]
         output_ml_setup = lenet5_large_fc_mnist()
     elif model_name == 'mobilenet_v3_small':
+        assert dataset_type in [dataset_type.default, dataset_type.cifar10]
         output_ml_setup = mobilenet_v3_small_cifar10()
     elif model_name == 'mobilenet_v3_large':
+        assert dataset_type in [dataset_type.default, dataset_type.cifar10]
         output_ml_setup = mobilenet_v3_large_imagenet()
     elif model_name == 'vgg11_mnist_no_bn':
+        assert dataset_type in [dataset_type.default, dataset_type.mnist]
         output_ml_setup = vgg11_mnist()
     elif model_name == 'vgg11_cifar10_no_bn':
+        assert dataset_type in [dataset_type.default, dataset_type.cifar10]
         output_ml_setup = vgg11_cifar10()
     else:
         raise ValueError(f'Invalid model type: {model_name}')
