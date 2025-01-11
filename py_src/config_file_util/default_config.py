@@ -16,8 +16,8 @@ from py_src.model_variance_correct import VarianceCorrector, VarianceCorrectionT
 
 config_name = "default_config"
 
-max_tick = 10000  # total simulation ticks
-save_name = "LeNet4__FL_N50"
+max_tick = 100000  # total simulation ticks
+save_name = "Resnet18_SGD__single"
 force_use_cpu = False
 
 """do you want to put all models in GPU or only keep model stat in memory and share a model in gpu?"""
@@ -26,9 +26,11 @@ override_use_model_stat = None
 override_allocate_all_models = None
 
 """"""""""" Preset """""""""""
-preset_network = 'FL'  # GL, FL, single
+preset_network = 'single'  # 'GL', 'FL', 'single'
+preset_variance_correction = None  # None, 'VC'
 preset_network_size = 50
 preset_network_degree = 8  # only valid for GL
+preset_P = 100
 
 """"""""" Global Machine learning related parameters """""""""""
 """ predefined: """
@@ -38,7 +40,8 @@ def get_ml_setup():
     get_ml_setup.__ml_setup = None
     if get_ml_setup.__ml_setup is None:
         # get_ml_setup.__ml_setup = ml_setup.resnet18_cifar10()
-        get_ml_setup.__ml_setup = ml_setup.lenet4_mnist()
+        get_ml_setup.__ml_setup = ml_setup.resnet18_cifar100()
+        # get_ml_setup.__ml_setup = ml_setup.lenet4_mnist()
         # get_ml_setup.__ml_setup = ml_setup.lenet5_mnist()
         # get_ml_setup.__ml_setup = ml_setup.cct7_cifar10()
         # get_ml_setup.__ml_setup = ml_setup.mobilenet_v3_small_cifar10()
@@ -62,7 +65,7 @@ def get_optimizer(target_node: node.Node, model: torch.nn.Module, parameters: Ru
     assert model is not None
     if parameters.phase == SimulationPhase.INITIALIZING:  # init
         # optimizer = torch.optim.Adam(model.parameters(), lr=0.01, weight_decay=0.0001)
-        optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9, weight_decay=0.0005)
+        optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9, weight_decay=0.0001)
         lr_scheduler = None
         return optimizer, lr_scheduler
     return None, None
@@ -82,9 +85,11 @@ def get_average_algorithm(target_node: node.Node, parameters: RuntimeParameters)
     # else:
     #     return model_average.StandardModelAverager()
     # return model_average.ConservativeModelAverager(0.9, variance_corrector=variance_correction)
+    if preset_variance_correction == 'VC':
+        variance_correction = VarianceCorrector(VarianceCorrectionType.FollowOthers)
+        return model_average.ConservativeModelAverager(0.5, variance_corrector=variance_correction)
 
-    variance_correction = VarianceCorrector(VarianceCorrectionType.FollowOthers)
-    return model_average.ConservativeModelAverager(0.5, variance_corrector=variance_correction)
+    return model_average.ConservativeModelAverager(0.5)
 
 
 def get_average_buffer_size(target_node: node.Node, parameters: RuntimeParameters):
@@ -130,19 +135,27 @@ def node_behavior_control(parameters: RuntimeParameters):
         if preset_network == 'FL':
             if parameters.current_tick == 0:
                 for node_name, node_target in parameters.node_container.items():
-                    node_target.send_model_after_P_training = 1
                     if node_name == 0:
                         node_target.enable_training = False
-
+                        node_target.send_model_after_P_training = 1
+                    else:
+                        node_target.send_model_after_P_training = preset_P
         if preset_network == 'GL':
             if parameters.current_tick == 0:
                 for node_name, node_target in parameters.node_container.items():
-                    node_target.send_model_after_P_training = 1
+                    node_target.send_model_after_P_training = preset_P
 
         if preset_network == 'single':
             if parameters.current_tick == 0:
                 for node_name, node_target in parameters.node_container.items():
-                    node_target.send_model_after_P_training = 1
+                    node_target.send_model_after_P_training = preset_P
+
+    if parameters.phase == SimulationPhase.START_OF_TICK:
+        if preset_network == 'FL':
+            if parameters.current_tick == 10:
+                for node_name, node_target in parameters.node_container.items():
+                    if node_name == 0:
+                        node_target.send_model_after_P_training = preset_P
 
 
 """"""""""" Training time related parameters """""""""""
@@ -186,9 +199,9 @@ def get_label_distribution(target_node: node.Node, parameters: RuntimeParameters
 def get_service_list():
     service_list = []
 
-    service_list.append(ServiceVarianceRecorder(20, phase=[SimulationPhase.AFTER_AVERAGING]))
-    service_list.append(ServiceTrainingLossRecorder(20))
-    service_list.append(ServiceTestAccuracyLossRecorder(20, 100))
-    service_list.append(ServiceWeightsDifferenceRecorder(20))
+    service_list.append(ServiceVarianceRecorder(100, phase=[SimulationPhase.AFTER_AVERAGING]))
+    service_list.append(ServiceTrainingLossRecorder(100))
+    service_list.append(ServiceTestAccuracyLossRecorder(100, 100))
+    service_list.append(ServiceWeightsDifferenceRecorder(100))
 
     return service_list
