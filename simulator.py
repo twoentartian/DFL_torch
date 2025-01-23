@@ -13,7 +13,7 @@ simulator_base_logger = logging.getLogger(internal_names.logger_simulator_base_n
 
 ENABLE_MEMORY_RECORD = False
 
-def main(config_file_path, output_folder_name):
+def main(config_file_path, output_folder_name=None):
     current_cuda_env = cuda.CudaEnv()
 
     # read config

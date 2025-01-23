@@ -20,7 +20,7 @@ MPI_size = MPI_comm.Get_size()
 
 ENABLE_MEMORY_RECORD = False
 
-def main(config_file_path, output_folder_name):
+def main(config_file_path, output_folder_name=None):
     # read config
     config_file = configuration_file.load_configuration(config_file_path)
     output_folder_path = None
