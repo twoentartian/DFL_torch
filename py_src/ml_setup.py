@@ -286,17 +286,18 @@ def mobilenet_v3_small_cifar10():
     output_ml_setup.model = models.mobilenet_v3_small(progress=False, num_classes=10)
     output_ml_setup.model.classifier[-1] = torch.nn.Linear(in_features=1024, out_features=10)
     output_ml_setup.model_name = "mobilenet_v3_small"
-    train_transforms = transforms.Compose([
-        transforms.Resize((70, 70)),
-        transforms.RandomCrop((64, 64)),
-        transforms.ToTensor(),
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
-    test_transforms = transforms.Compose([
-        transforms.Resize((70, 70)),
-        transforms.CenterCrop((64, 64)),
-        transforms.ToTensor(),
-        transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
-    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label = dataset_cifar10_32(transforms_training=train_transforms, transforms_testing=test_transforms)
+    # train_transforms = transforms.Compose([
+    #     transforms.Resize((70, 70)),
+    #     transforms.RandomCrop((64, 64)),
+    #     transforms.ToTensor(),
+    #     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+    # test_transforms = transforms.Compose([
+    #     transforms.Resize((70, 70)),
+    #     transforms.CenterCrop((64, 64)),
+    #     transforms.ToTensor(),
+    #     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
+    # output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label = dataset_cifar10_32(transforms_training=train_transforms, transforms_testing=test_transforms)
+    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label = dataset_cifar10_32()
     output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 128
     output_ml_setup.has_normalization_layer = True
