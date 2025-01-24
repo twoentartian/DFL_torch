@@ -60,6 +60,7 @@ def main(config_file_path, output_folder_name=None):
     runtime_parameters.dataset_label = config_ml_setup.dataset_label
     runtime_parameters.phase = SimulationPhase.INITIALIZING
     runtime_parameters.output_path = output_folder_path
+    runtime_parameters.mpi_enabled = False
 
     # check and create topology
     nodes_set = initial_checking.check_consistent_nodes(config_file.get_topology, config_file.max_tick)
@@ -149,7 +150,6 @@ def main(config_file_path, output_folder_name=None):
         runtime_parameters.service_container[service_inst.get_service_name()] = service_inst
 
     # begin simulation
-    runtime_parameters.mpi_enabled = False
     if ENABLE_MEMORY_RECORD:
         memory_service.trigger_without_runtime_parameters(0, "BEFORE_SIMULATION")
     simulator_common.begin_simulation(runtime_parameters, config_file, config_ml_setup, current_cuda_env, simulator_base_logger)
