@@ -6,6 +6,7 @@ import re
 
 from py_src import ml_setup, node, model_average, nx_lib
 from py_src.ml_setup import MlSetup
+from py_src.node_behavior_control_lib import global_broadcast
 from py_src.service.record_weights_difference import ServiceWeightsDifferenceRecorder
 from py_src.simulation_runtime_parameters import SimulationPhase, RuntimeParameters
 from py_src.config_file_util import label_distribution
@@ -16,8 +17,8 @@ from py_src.model_variance_correct import VarianceCorrector, VarianceCorrectionT
 
 config_name = "default_config"
 
-max_tick = 100000  # total simulation ticks
-save_name = "Resnet18_SGD__single"
+max_tick = 1000  # total simulation ticks
+save_name = "TEMP_TEST"
 force_use_cpu = False
 
 """do you want to put all models in GPU or only keep model stat in memory and share a model in gpu?"""
@@ -26,7 +27,7 @@ override_use_model_stat = None
 override_allocate_all_models = None
 
 """"""""""" Preset """""""""""
-preset_network = 'single'  # 'GL', 'FL', 'single'
+preset_network = 'GL'  # 'GL', 'FL', 'single'
 preset_variance_correction = None  # None, 'VC'
 preset_network_size = 50
 preset_network_degree = 8  # only valid for GL
@@ -40,9 +41,9 @@ def get_ml_setup():
     get_ml_setup.__ml_setup = None
     if get_ml_setup.__ml_setup is None:
         # get_ml_setup.__ml_setup = ml_setup.resnet18_cifar10()
-        get_ml_setup.__ml_setup = ml_setup.resnet18_cifar100()
+        # get_ml_setup.__ml_setup = ml_setup.resnet18_cifar100()
         # get_ml_setup.__ml_setup = ml_setup.lenet4_mnist()
-        # get_ml_setup.__ml_setup = ml_setup.lenet5_mnist()
+        get_ml_setup.__ml_setup = ml_setup.lenet5_mnist()
         # get_ml_setup.__ml_setup = ml_setup.cct7_cifar10()
         # get_ml_setup.__ml_setup = ml_setup.mobilenet_v3_small_cifar10()
         # get_ml_setup.__ml_setup = ml_setup.vgg11_mnist()
@@ -156,6 +157,11 @@ def node_behavior_control(parameters: RuntimeParameters):
                 for node_name, node_target in parameters.node_container.items():
                     if node_name == 0:
                         node_target.send_model_after_P_training = preset_P
+
+    # global_broadcast
+    if parameters.phase == SimulationPhase.INITIALIZING:
+        # global_broadcast(parameters, 0)
+        pass
 
 
 """"""""""" Training time related parameters """""""""""
