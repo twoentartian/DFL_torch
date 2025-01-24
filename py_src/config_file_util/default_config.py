@@ -21,6 +21,9 @@ max_tick = 1000  # total simulation ticks
 save_name = "TEMP_TEST"
 force_use_cpu = False
 
+"""enable flags"""
+enable_global_broadcast_at_beginning = False
+
 """do you want to put all models in GPU or only keep model stat in memory and share a model in gpu?"""
 """None | False: let simulator decide"""
 override_use_model_stat = None
@@ -33,9 +36,10 @@ preset_network_size = 50
 preset_network_degree = 8  # only valid for GL
 preset_P = 100
 
-
 """"""""" Global Machine learning related parameters """""""""""
 """ predefined: """
+
+
 def get_ml_setup():
     get_ml_setup.__ml_setup = None
     if get_ml_setup.__ml_setup is None:
@@ -58,6 +62,8 @@ def get_ml_setup():
 
 
 """"""""""" Dataset related parameters """""""""""
+
+
 def get_optimizer(target_node: node.Node, model: torch.nn.Module, parameters: RuntimeParameters, ml_setup: MlSetup):
     """warning: you are not allowed to change optimizer during simulation when use_model_stat == True"""
     assert model is not None
@@ -70,6 +76,8 @@ def get_optimizer(target_node: node.Node, model: torch.nn.Module, parameters: Ru
 
 
 """"""""""" model averaging parameters """""""""""
+
+
 def get_average_algorithm(target_node: node.Node, parameters: RuntimeParameters):
     if preset_network == 'FL':
         return model_average.StandardModelAverager()
@@ -96,6 +104,8 @@ def get_average_buffer_size(target_node: node.Node, parameters: RuntimeParameter
 
 """"""""""" Global Topology related parameters """""""""""
 """topology will be updated every tick if not None"""
+
+
 def get_topology(parameters: RuntimeParameters) -> nx.Graph:
     if parameters.phase == SimulationPhase.INITIALIZING:  # init
         if preset_network == 'FL':
@@ -115,8 +125,6 @@ def get_topology(parameters: RuntimeParameters) -> nx.Graph:
         # # # G.add_edge(0,1)
         # G.add_node(0)
         # get_topology.current = G
-
-        assert get_topology.current is not None, f"preset unknown"
         return get_topology.current
 
     return None
@@ -124,7 +132,9 @@ def get_topology(parameters: RuntimeParameters) -> nx.Graph:
 
 """"""""""" Node related parameters """""""""""
 """parameters here will only be initialized once at beginning"""
-def node_behavior_control(parameters: RuntimeParameters):
+
+
+def node_behavior_control(parameters: RuntimeParameters, mpi_world=None):
     if parameters.phase == SimulationPhase.INITIALIZING:
         if preset_network == 'FL':
             if parameters.current_tick == 0:
@@ -153,12 +163,15 @@ def node_behavior_control(parameters: RuntimeParameters):
 
     # global_broadcast
     if parameters.phase == SimulationPhase.INITIALIZING:
-        # global_broadcast(parameters, 0)
-        pass
+        if enable_global_broadcast_at_beginning:
+            global_broadcast(parameters, 0, mpi_world=mpi_world)
+
 
 
 """"""""""" Training time related parameters """""""""""
 """this function will be called after training to get the next training tick"""
+
+
 def get_next_training_time(target_node: node.Node, parameters: RuntimeParameters) -> int:
     if preset_network == 'FL':
         if parameters.phase == SimulationPhase.INITIALIZING:  # init
@@ -176,11 +189,11 @@ def get_next_training_time(target_node: node.Node, parameters: RuntimeParameters
             return 0
         return target_node.next_training_tick + 10
 
-    raise NotImplementedError(f"preset unknown")
-
 
 """"""""""" Dataset related parameters """""""""""
 """label distribution will be updated every tick if not None"""
+
+
 def get_label_distribution(target_node: node.Node, parameters: RuntimeParameters):
     if parameters.phase == SimulationPhase.INITIALIZING:  # init
         # return label_distribution.label_distribution_non_iid_dirichlet(target_node, parameters, 0.5)
@@ -191,6 +204,8 @@ def get_label_distribution(target_node: node.Node, parameters: RuntimeParameters
 
 
 """"""""""" Service related parameters """""""""""
+
+
 def get_service_list():
     service_list = []
 
