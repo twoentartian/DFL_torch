@@ -23,6 +23,7 @@ class MlSetup:
     def __init__(self):
         self.model = None
         self.model_name = None
+        self.dataset_name = None
         self.training_data = None
         self.testing_data = None
         self.criterion = None
@@ -65,6 +66,7 @@ class MlSetup:
 """ MNIST """
 def dataset_mnist():
     dataset_path = './data/mnist'
+    dataset_name = "mnist"
     mnist_train = datasets.MNIST(root=dataset_path, train=True, download=True)
     mean = mnist_train.data.float().mean() / 255
     std = mnist_train.data.float().std() / 255
@@ -73,10 +75,11 @@ def dataset_mnist():
     train_data = datasets.MNIST(root=dataset_path, train=True, download=False, transform=transforms_mnist_train)
     test_data = datasets.MNIST(root=dataset_path, train=False, download=False, transform=transforms_mnist_test)
     mnist_labels = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-    return train_data, test_data, mnist_labels
+    return train_data, test_data, mnist_labels, dataset_name
 
 def dataset_mnist_224():
     dataset_path = './data/mnist'
+    dataset_name = "mnist_224"
     mnist_train = datasets.MNIST(root=dataset_path, train=True, download=True)
     mean = mnist_train.data.float().mean() / 255
     std = mnist_train.data.float().std() / 255
@@ -92,11 +95,12 @@ def dataset_mnist_224():
     train_data = datasets.MNIST(root=dataset_path, train=True, download=False, transform=transforms_mnist_train)
     test_data = datasets.MNIST(root=dataset_path, train=False, download=False, transform=transforms_mnist_test)
     mnist_labels = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-    return train_data, test_data, mnist_labels
+    return train_data, test_data, mnist_labels, dataset_name
 
 """ CIFAR10 """
 def dataset_cifar10_32(transforms_training=None, transforms_testing=None):
     dataset_path = './data/cifar10'
+    dataset_name = "cifar10_32"
     stats = ((0.49139968, 0.48215841, 0.44653091), (0.24703223, 0.24348513, 0.26158784))
 
     if transforms_training is not None:
@@ -114,10 +118,11 @@ def dataset_cifar10_32(transforms_training=None, transforms_testing=None):
     cifar10_train = datasets.CIFAR10(root=dataset_path, train=True, download=True, transform=transforms_cifar_train)
     cifar10_test = datasets.CIFAR10(root=dataset_path, train=False, download=True, transform=transforms_cifar_test)
     cifar10_labels = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-    return cifar10_train, cifar10_test, cifar10_labels
+    return cifar10_train, cifar10_test, cifar10_labels, dataset_name
 
 def dataset_cifar10_224(transforms_training=None, transforms_testing=None):
     dataset_path = './data/cifar10'
+    dataset_name = "cifar10_224"
     stats = ((0.49139968, 0.48215841, 0.44653091), (0.24703223, 0.24348513, 0.26158784))
 
     if transforms_training is not None:
@@ -138,10 +143,11 @@ def dataset_cifar10_224(transforms_training=None, transforms_testing=None):
     cifar10_train = datasets.CIFAR10(root=dataset_path, train=True, download=True, transform=transforms_cifar_train)
     cifar10_test = datasets.CIFAR10(root=dataset_path, train=False, download=True, transform=transforms_cifar_test)
     cifar10_labels = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
-    return cifar10_train, cifar10_test, cifar10_labels
+    return cifar10_train, cifar10_test, cifar10_labels, dataset_name
 
 def dataset_cifar100_32(transforms_training=None, transforms_testing=None):
     dataset_path = './data/cifar100'
+    dataset_name = "cifar100_32"
     stats = ((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
 
     if transforms_training is not None:
@@ -159,12 +165,12 @@ def dataset_cifar100_32(transforms_training=None, transforms_testing=None):
     cifar100_train = datasets.CIFAR100(root=dataset_path, train=True, download=True, transform=transforms_cifar_train)
     cifar100_test = datasets.CIFAR100(root=dataset_path, train=False, download=True, transform=transforms_cifar_test)
     cifar100_labels = set(range(0, 100, 1))
-    return cifar100_train, cifar100_test, cifar100_labels
+    return cifar100_train, cifar100_test, cifar100_labels, dataset_name
 
 """ ImageNet """
 def dataset_imagenet(transforms_training=None, transforms_testing=None):
     dataset_path = './data/imagenet'
-
+    dataset_name = "imagenet10k_224"
     standard_transform = transforms.Compose([
         transforms.Resize(256),  # Resize images to 256 pixels on the shorter side
         transforms.CenterCrop(224),  # Crop to 224x224 (standard for ImageNet)
@@ -186,7 +192,7 @@ def dataset_imagenet(transforms_training=None, transforms_testing=None):
     imagenet_train = datasets.ImageNet(root=dataset_path, split='train', transform=transforms_cifar_train)
     imagenet_test = datasets.ImageNet(root=dataset_path, split='val', transform=transforms_cifar_test)
     image_labels = tuple(range(0, 1000))
-    return imagenet_train, imagenet_test, image_labels
+    return imagenet_train, imagenet_test, image_labels, dataset_name
 
 
 """ MNIST + LeNet """
@@ -194,7 +200,7 @@ def lenet4_mnist():
     output_ml_setup = MlSetup()
     output_ml_setup.model = lenet.lenet4()
     output_ml_setup.model_name = "lenet4"
-    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label = dataset_mnist()
+    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label, output_ml_setup.dataset_name = dataset_mnist()
     output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 64
     output_ml_setup.weights_init_func = lenet.weights_init_xavier
@@ -205,7 +211,7 @@ def lenet5_mnist():
     output_ml_setup = MlSetup()
     output_ml_setup.model = lenet.lenet5()
     output_ml_setup.model_name = "lenet5"
-    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label = dataset_mnist()
+    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label, output_ml_setup.dataset_name = dataset_mnist()
     output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 64
     output_ml_setup.weights_init_func = lenet.weights_init_xavier
@@ -216,7 +222,7 @@ def lenet5_large_fc_mnist():
     output_ml_setup = MlSetup()
     output_ml_setup.model = lenet.lenet5(large_fc=True)
     output_ml_setup.model_name = "lenet5_large_fc"
-    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label = dataset_mnist()
+    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label, output_ml_setup.dataset_name = dataset_mnist()
     output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 64
     output_ml_setup.weights_init_func = lenet.weights_init_xavier
@@ -228,7 +234,7 @@ def cct7_cifar10():
     output_ml_setup = MlSetup()
     output_ml_setup.model = cct.cct_7_3x1_32()
     output_ml_setup.model_name = "cct7"
-    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label = dataset_cifar10_32()
+    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label, output_ml_setup.dataset_name = dataset_cifar10_32()
     output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 128
     output_ml_setup.has_normalization_layer = True
@@ -256,7 +262,7 @@ def resnet18_cifar10(enable_replace_bn_with_group_norm=False):
     from torchvision.models.resnet import BasicBlock
     output_ml_setup.model.conv1 = nn.Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)  # change for cifar10 resolution
     output_ml_setup.model.maxpool = nn.Identity()
-    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label = dataset_cifar10_32()
+    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label, output_ml_setup.dataset_name = dataset_cifar10_32()
     output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 256
     output_ml_setup.has_normalization_layer = True
@@ -273,7 +279,7 @@ def resnet18_cifar100(enable_replace_bn_with_group_norm=False):
     from torchvision.models.resnet import BasicBlock
     output_ml_setup.model.conv1 = nn.Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)  # change for cifar10 resolution
     output_ml_setup.model.maxpool = nn.Identity()
-    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label = dataset_cifar100_32()
+    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label, output_ml_setup.dataset_name = dataset_cifar100_32()
     output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 256
     output_ml_setup.has_normalization_layer = True
@@ -297,7 +303,7 @@ def mobilenet_v3_small_cifar10():
     #     transforms.ToTensor(),
     #     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))])
     # output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label = dataset_cifar10_32(transforms_training=train_transforms, transforms_testing=test_transforms)
-    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label = dataset_cifar10_32()
+    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label, output_ml_setup.dataset_name = dataset_cifar10_32()
     output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 128
     output_ml_setup.has_normalization_layer = True
@@ -309,7 +315,7 @@ def mobilenet_v3_large_imagenet():
     output_ml_setup.model = models.mobilenet_v3_large(pretrained=False)
     output_ml_setup.model.classifier[-1] = nn.Linear(output_ml_setup.model.classifier[-1].in_features, 1000)
     output_ml_setup.model_name = "mobilenet_v3_large"
-    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label = dataset_imagenet()
+    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label, output_ml_setup.dataset_name = dataset_imagenet()
     output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 128
     output_ml_setup.has_normalization_layer = True
@@ -320,7 +326,17 @@ def simplenet_cifar10():
     output_ml_setup = MlSetup()
     output_ml_setup.model = simple_net.__dict__["simplenet_cifar_5m"](num_classes=10)
     output_ml_setup.model_name = "simplenet"
-    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label = dataset_cifar10_32()
+    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label, output_ml_setup.dataset_name = dataset_cifar10_32()
+    output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
+    output_ml_setup.training_batch_size = 64
+    output_ml_setup.has_normalization_layer = True
+    return output_ml_setup
+
+def simplenet_cifar100():
+    output_ml_setup = MlSetup()
+    output_ml_setup.model = simple_net.__dict__["simplenet_cifar_5m"](num_classes=100)
+    output_ml_setup.model_name = "simplenet"
+    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label, output_ml_setup.dataset_name = dataset_cifar100_32()
     output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 64
     output_ml_setup.has_normalization_layer = True
@@ -332,7 +348,7 @@ def vgg11_mnist():
     vgg11 = vgg.VGG11_no_bn(in_channels=1, num_classes=10)
     output_ml_setup.model_name = "vgg11_mnist_no_bn"
     output_ml_setup.model = vgg11
-    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label = dataset_mnist_224()
+    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label, output_ml_setup.dataset_name = dataset_mnist_224()
     output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 32
     output_ml_setup.has_normalization_layer = False
@@ -344,11 +360,12 @@ def vgg11_cifar10():
     vgg11 = vgg.VGG11_no_bn(in_channels=3, num_classes=10)
     output_ml_setup.model_name = "vgg11_cifar10_no_bn"
     output_ml_setup.model = vgg11
-    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label = dataset_cifar10_224()
+    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label, output_ml_setup.dataset_name = dataset_cifar10_224()
     output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 32
     output_ml_setup.has_normalization_layer = False
     return output_ml_setup
+
 
 """ Helper function """
 class ModelType(Enum):
@@ -389,15 +406,22 @@ def get_ml_setup_from_config(model_type: str, norm_type: str = 'auto', dataset_t
                 output_ml_setup = resnet18_cifar10(enable_replace_bn_with_group_norm=True)
             else:
                 raise NotImplementedError(f'{norm_type} is not implemented for {model_type} yet')
-        if dataset_type in [DatasetType.cifar100]:
+        elif dataset_type in [DatasetType.cifar100]:
             if norm_type == NormType.auto:
                 output_ml_setup = resnet18_cifar100()
             elif norm_type == NormType.gn:
                 output_ml_setup = resnet18_cifar100(enable_replace_bn_with_group_norm=True)
             else:
                 raise NotImplementedError(f'{norm_type} is not implemented for {model_type} yet')
+        else:
+            raise NotImplementedError(f'{dataset_type} is not implemented for {model_type} yet')
     elif model_type == ModelType.simplenet:
-        output_ml_setup = simplenet_cifar10()
+        if dataset_type in [DatasetType.default, DatasetType.cifar10]:
+            output_ml_setup = simplenet_cifar10()
+        elif dataset_type in [DatasetType.cifar100]:
+            output_ml_setup = simplenet_cifar100()
+        else:
+            raise NotImplementedError(f'{dataset_type} is not implemented for {model_type} yet')
     elif model_type == ModelType.cct7:
         output_ml_setup = cct7_cifar10()
     elif model_type == ModelType.lenet5_large_fc:
