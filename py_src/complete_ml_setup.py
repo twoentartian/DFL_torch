@@ -90,10 +90,10 @@ class FastTrainingSetup(object):
             lr_scheduler = None
             return optimizer, lr_scheduler, epochs
         elif arg_ml_setup.model_name == "mobilenet_v2_cifar10":
-            epochs = 300
+            epochs = 200
             optimizer = torch.optim.SGD(model.parameters(), lr=1e-1, weight_decay=4e-5, momentum=0.9)
             steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
-            milestones_epoch = [150, 225]
+            milestones_epoch = [100]
             milestones = [steps_per_epoch * i for i in milestones_epoch]
             lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones, gamma=0.1)
             return optimizer, lr_scheduler, epochs
