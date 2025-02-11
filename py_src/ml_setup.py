@@ -5,7 +5,7 @@ import numpy as np
 from enum import Enum
 import torch.nn as nn
 from torchvision import transforms, models, datasets
-from py_src.models import simple_net, lenet, vgg
+from py_src.models import simplenet, lenet, vgg, mobilenet
 import py_src.third_party.compact_transformers.src.cct as cct
 
 def replace_bn_with_ln(model):
@@ -309,6 +309,18 @@ def mobilenet_v3_small_cifar10():
     output_ml_setup.has_normalization_layer = True
     return output_ml_setup
 
+
+""" CIFAR10 + MobileNet V2 (for CIFAR10 dataset) """
+def mobilenet_v2_cifar10():
+    output_ml_setup = MlSetup()
+    output_ml_setup.model = mobilenet.MobileNetV2(10)
+    output_ml_setup.model_name = "mobilenet_v2_cifar10"
+    output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label, output_ml_setup.dataset_name = dataset_cifar10_32()
+    output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
+    output_ml_setup.training_batch_size = 128
+    output_ml_setup.has_normalization_layer = True
+    return output_ml_setup
+
 """ ImageNet + MobileNet V3 large """
 def mobilenet_v3_large_imagenet():
     output_ml_setup = MlSetup()
@@ -324,7 +336,7 @@ def mobilenet_v3_large_imagenet():
 """ CIFAR10 + SimpleNet """
 def simplenet_cifar10():
     output_ml_setup = MlSetup()
-    output_ml_setup.model = simple_net.__dict__["simplenet_cifar_5m"](num_classes=10)
+    output_ml_setup.model = simplenet.__dict__["simplenet_cifar_5m"](num_classes=10)
     output_ml_setup.model_name = "simplenet"
     output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label, output_ml_setup.dataset_name = dataset_cifar10_32()
     output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
@@ -334,7 +346,7 @@ def simplenet_cifar10():
 
 def simplenet_cifar100():
     output_ml_setup = MlSetup()
-    output_ml_setup.model = simple_net.__dict__["simplenet_cifar_5m"](num_classes=100)
+    output_ml_setup.model = simplenet.__dict__["simplenet_cifar_5m"](num_classes=100)
     output_ml_setup.model_name = "simplenet"
     output_ml_setup.training_data, output_ml_setup.testing_data, output_ml_setup.dataset_label, output_ml_setup.dataset_name = dataset_cifar100_32()
     output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
@@ -376,8 +388,9 @@ class ModelType(Enum):
     lenet5_large_fc = 4
     mobilenet_v3_small = 5
     mobilenet_v3_large = 6
-    lenet4 = 7
-    vgg11 = 8
+    mobilenet_v2 = 7
+    lenet4 = 8
+    vgg11 = 9
 
 class DatasetType(Enum):
     default = 0
@@ -391,22 +404,20 @@ class NormType(Enum):
     gn = 2
 
 def get_ml_setup_from_config(model_type: str, norm_type: str = 'auto', dataset_type: str = 'default'):
+    model_type_str = model_type
     model_type = ModelType[model_type]
     norm_type = NormType[norm_type]
-    dataset_type = DatasetType[dataset_type]
-    if model_type == ModelType.lenet5:
-        output_ml_setup = lenet5_mnist()
-    elif model_type == ModelType.lenet4:
-        output_ml_setup = lenet4_mnist()
-    elif model_type == ModelType.resnet18:
-        if dataset_type in [DatasetType.default, DatasetType.cifar10]:
+    dataset_type_enum = DatasetType[dataset_type]
+
+    if model_type == ModelType.resnet18:
+        if dataset_type_enum in [DatasetType.default, DatasetType.cifar10]:
             if norm_type == NormType.auto:
                 output_ml_setup = resnet18_cifar10()
             elif norm_type == NormType.gn:
                 output_ml_setup = resnet18_cifar10(enable_replace_bn_with_group_norm=True)
             else:
                 raise NotImplementedError(f'{norm_type} is not implemented for {model_type} yet')
-        elif dataset_type in [DatasetType.cifar100]:
+        elif dataset_type_enum in [DatasetType.cifar100]:
             if norm_type == NormType.auto:
                 output_ml_setup = resnet18_cifar100()
             elif norm_type == NormType.gn:
@@ -414,29 +425,9 @@ def get_ml_setup_from_config(model_type: str, norm_type: str = 'auto', dataset_t
             else:
                 raise NotImplementedError(f'{norm_type} is not implemented for {model_type} yet')
         else:
-            raise NotImplementedError(f'{dataset_type} is not implemented for {model_type} yet')
-    elif model_type == ModelType.simplenet:
-        if dataset_type in [DatasetType.default, DatasetType.cifar10]:
-            output_ml_setup = simplenet_cifar10()
-        elif dataset_type in [DatasetType.cifar100]:
-            output_ml_setup = simplenet_cifar100()
-        else:
-            raise NotImplementedError(f'{dataset_type} is not implemented for {model_type} yet')
-    elif model_type == ModelType.cct7:
-        output_ml_setup = cct7_cifar10()
-    elif model_type == ModelType.lenet5_large_fc:
-        output_ml_setup = lenet5_large_fc_mnist()
-    elif model_type == ModelType.mobilenet_v3_small:
-        output_ml_setup = mobilenet_v3_small_cifar10()
-    elif model_type == ModelType.mobilenet_v3_large:
-        output_ml_setup = mobilenet_v3_large_imagenet()
-    elif model_type == ModelType.vgg11:
-        if dataset_type in [DatasetType.default, DatasetType.mnist]:
-            output_ml_setup = vgg11_mnist()
-        if dataset_type in [DatasetType.default, DatasetType.cifar10]:
-            output_ml_setup = vgg11_cifar10()
+            raise NotImplementedError(f'{dataset_type_enum} is not implemented for {model_type} yet')
     else:
-        raise ValueError(f'Invalid model type: {model_type}')
+        output_ml_setup = get_ml_setup_from_model_type(model_type_str, dataset_type=dataset_type_enum)
     return output_ml_setup
 
 
@@ -474,6 +465,11 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default):
     elif model_name == 'mobilenet_v3_large':
         assert dataset_type in [dataset_type.default, dataset_type.cifar10]
         output_ml_setup = mobilenet_v3_large_imagenet()
+    elif model_name == 'mobilenet_v2':
+        if dataset_type in [DatasetType.default, DatasetType.cifar10]:
+            output_ml_setup = mobilenet_v2_cifar10()
+        else:
+            raise NotImplementedError
     elif model_name == 'vgg11_mnist_no_bn':
         assert dataset_type in [dataset_type.default, dataset_type.mnist]
         output_ml_setup = vgg11_mnist()

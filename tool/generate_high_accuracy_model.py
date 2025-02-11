@@ -137,7 +137,7 @@ if __name__ == "__main__":
     parser.add_argument("-c", '--core', type=int, default=os.cpu_count(), help='specify the number of CPU cores to use')
     parser.add_argument("-t", "--thread", type=int, default=1, help='specify how many models to train in parallel')
     parser.add_argument("-m", "--model_type", type=str, default='lenet5',
-                        choices=['lenet5', 'resnet18', 'simplenet', 'cct7', 'lenet5_large_fc', 'vgg11_mnist', 'vgg11_cifar10', 'mobilenet_v3_small', 'mobilenet_v3_large'])
+                        choices=['lenet5', 'resnet18', 'simplenet', 'cct7', 'lenet5_large_fc', 'vgg11_mnist', 'vgg11_cifar10', 'mobilenet_v3_small', 'mobilenet_v3_large', 'mobilenet_v2'])
     parser.add_argument("-d", "--dataset_type", type=str, default='default',
                         choices=['default', 'mnist', 'cifar10', 'cifar100'])
     parser.add_argument("--norm_method", type=str, default='auto', choices=['auto', 'bn', 'ln', 'gn'])
