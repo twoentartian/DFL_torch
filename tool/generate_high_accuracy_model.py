@@ -137,15 +137,14 @@ if __name__ == "__main__":
     parser.add_argument("-c", '--core', type=int, default=os.cpu_count(), help='specify the number of CPU cores to use')
     parser.add_argument("-t", "--thread", type=int, default=1, help='specify how many models to train in parallel')
     parser.add_argument("-m", "--model_type", type=str, default='lenet5',
-                        choices=['lenet4', 'lenet5', 'resnet18', 'simplenet', 'cct7', 'lenet5_large_fc', 'vgg11_mnist', 'vgg11_cifar10', 'mobilenet_v3_small', 'mobilenet_v3_large', 'mobilenet_v2'])
+                        choices=['lenet4', 'lenet5', 'resnet18_bn', 'resnet18_gn', 'simplenet', 'cct7', 'vit', 'lenet5_large_fc',
+                                 'vgg11_mnist', 'vgg11_cifar10', 'mobilenet_v3_small', 'mobilenet_v3_large', 'mobilenet_v2'])
     parser.add_argument("-d", "--dataset_type", type=str, default='default',
-                        choices=['default', 'mnist', 'cifar10', 'cifar100'])
-    parser.add_argument("--norm_method", type=str, default='auto', choices=['auto', 'bn', 'ln', 'gn'])
+                        choices=['default', 'mnist', 'cifar10', 'cifar100', 'imagenet1k', 'imagenet100'])
     parser.add_argument("--cpu", action='store_true', help='force using CPU for training')
     parser.add_argument("-o", "--output_folder_name", default=None, help='specify the output folder name')
     parser.add_argument("--save_format", type=str, default='none', choices=['none', 'file', 'lmdb'], help='which format to save the training states')
     parser.add_argument("--amp", action='store_true', help='enable auto mixed precision')
-
 
     args = parser.parse_args()
 
@@ -157,7 +156,6 @@ if __name__ == "__main__":
     use_cpu = args.cpu
     output_folder_name = args.output_folder_name
     save_format = args.save_format
-    norm_method = args.norm_method
     amp = args.amp
 
     # logger
@@ -165,7 +163,7 @@ if __name__ == "__main__":
     logger.info("logging setup complete")
 
     # prepare model and dataset
-    current_ml_setup = ml_setup.get_ml_setup_from_config(model_type, norm_method, dataset_type=dataset_type)
+    current_ml_setup = ml_setup.get_ml_setup_from_config(model_type, dataset_type=dataset_type)
     output_model_name = current_ml_setup.model_name
     logger.info(f"model name: {output_model_name}")
 
@@ -182,8 +180,6 @@ if __name__ == "__main__":
     info_content['model_type'] = current_ml_setup.model_name
     info_content['model_count'] = number_of_models
     info_content['generated_by_cpu'] = use_cpu
-    if current_ml_setup.has_normalization_layer:
-        info_content['norm_method'] = norm_method
     json_data = json.dumps(info_content)
     with open(os.path.join(output_folder_path, 'info.json'), 'w') as f:
         f.write(json_data)

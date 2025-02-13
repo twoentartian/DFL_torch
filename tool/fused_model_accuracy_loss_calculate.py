@@ -125,7 +125,7 @@ if __name__ == "__main__":
     model_state_b, model_b_name = util.load_model_state_file(model_b_path)
     util.assert_if_both_not_none(model_a_name, model_b_name)
 
-    current_ml_setup = ml_setup.get_ml_setup_from_model_type(model_a_name)
+    current_ml_setup = ml_setup.get_ml_setup_from_config(model_a_name)
 
     todo_list = []
     for p0 in np.linspace(0, scale, num=precision, endpoint=True):

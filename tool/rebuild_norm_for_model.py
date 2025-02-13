@@ -93,7 +93,7 @@ if __name__ == '__main__':
     starting_model_stat, model_type = util.load_model_state_file(model_path)
     initial_model_stat, _ = util.load_model_state_file(initial_model_path)
 
-    current_ml_setup = ml_setup.get_ml_setup_from_model_type(model_type)
+    current_ml_setup = ml_setup.get_ml_setup_from_config(model_type)
 
     print(f'Current ML setup: {current_ml_setup.model_name}')
 

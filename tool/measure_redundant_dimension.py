@@ -64,7 +64,7 @@ def train_all_models(model_start, models_end, step_size, adoptive_step_size, exi
     """train the starting model"""
     model_state_dict, model_name = util.load_model_state_file(model_start)
     print(f"starting model type: {model_name}")
-    current_ml_setup = ml_setup.get_ml_setup_from_model_type(model_name)
+    current_ml_setup = ml_setup.get_ml_setup_from_config(model_name)
     model = copy.deepcopy(current_ml_setup.model)
 
 

@@ -1,3 +1,6 @@
 [submodule "py_src/third_party/compact_transformers"]
 	path = py_src/third_party/compact_transformers
 	url = https://github.com/SHI-Labs/Compact-Transformers.git
+[submodule "py_src/third_party/vit_pytorch"]
+	path = py_src/third_party/vit_pytorch
+	url = https://github.com/lucidrains/vit-pytorch.git

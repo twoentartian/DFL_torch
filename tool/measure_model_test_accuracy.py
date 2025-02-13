@@ -69,7 +69,7 @@ if __name__ == "__main__":
     model_state = model_info["state_dict"]
 
     dataset_type = ml_setup.DatasetType[args.dataset_type]
-    current_ml_setup = ml_setup.get_ml_setup_from_model_type(model_type, dataset_type=dataset_type)
+    current_ml_setup = ml_setup.get_ml_setup_from_config(model_type, dataset_type=dataset_type)
 
     if not os.path.exists(model_file_path):
         print(f"file not found. {model_file_path}")

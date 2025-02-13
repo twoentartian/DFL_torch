@@ -943,7 +943,7 @@ if __name__ == '__main__':
         assert model_type == start_folder_info['model_type']
 
     # prepare model and dataset
-    current_ml_setup = ml_setup.get_ml_setup_from_model_type(model_type)
+    current_ml_setup = ml_setup.get_ml_setup_from_config(model_type)
 
     # create output folder
     if args.output_folder_name is None:
