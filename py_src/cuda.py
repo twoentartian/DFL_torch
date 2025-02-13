@@ -256,6 +256,7 @@ class CudaEnv:
             stat_dict[k] = v.to(device, non_blocking=True)
 
     def submit_training_job(self, training_node, criterion, training_data: torch.Tensor, training_label: torch.Tensor, use_amp=True):
+        lrs = []
         if training_node.is_using_model_stat:
             """use model stat (share model on gpu)"""
             gpu = training_node.allocated_gpu
@@ -274,7 +275,8 @@ class CudaEnv:
 
             data, labels = training_data.cuda(device=gpu.device), training_label.cuda(device=gpu.device)
             shared_optimizer_on_gpu.zero_grad(set_to_none=True)
-
+            for param_group in shared_optimizer_on_gpu.param_groups:
+                lrs.append(param_group['lr'])
             if use_amp:
                 scaler = torch.cuda.amp.GradScaler()
                 with torch.cuda.amp.autocast():
@@ -306,6 +308,8 @@ class CudaEnv:
             model = training_node.model
             gpu = training_node.allocated_gpu
             optimizer = training_node.optimizer
+            for param_group in optimizer.param_groups:
+                lrs.append(param_group['lr'])
             lr_scheduler = training_node.lr_scheduler
             data, labels = training_data.cuda(device=gpu.device), training_label.cuda(device=gpu.device)
             optimizer.zero_grad(set_to_none=True)
@@ -324,4 +328,4 @@ class CudaEnv:
                 optimizer.step()
             lr_scheduler.step()
         loss_val = float(loss.item())
-        return loss_val
+        return loss_val, lrs

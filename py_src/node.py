@@ -77,6 +77,7 @@ class Node:
         self.send_model_after_P_training = 1
         self._send_model_counter = 0
         self.most_recent_loss = 0
+        self.most_recent_lrs = []
 
         """enable all functions"""
         self.enable_receiving = True
@@ -176,11 +177,12 @@ class Node:
         if self.enable_training:
             if cuda_env is None:
                 # submit to cpu
-                loss = cpu.submit_training_job_cpu(self, criterion, data, label)
+                loss, lrs = cpu.submit_training_job_cpu(self, criterion, data, label)
             else:
                 # submit to cuda
-                loss = cuda_env.submit_training_job(self, criterion, data, label)
+                loss, lrs = cuda_env.submit_training_job(self, criterion, data, label)
             self.most_recent_loss = loss
+            self.most_recent_lrs = lrs
         if self.enable_sending:
             self.is_training_this_tick = True # this flag will trigger sending model to others
 
