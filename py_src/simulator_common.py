@@ -52,13 +52,12 @@ def simulation_phase_training(runtime_parameters: RuntimeParameters, logger, con
             for data, label in node_target.train_loader:
                 if config_file.force_use_cpu:
                     node_target.submit_training(ml_config.criterion, data, label)
-                    logger.info(f"tick: {runtime_parameters.current_tick}, training node: {node_target.name}, loss={node_target.most_recent_loss:.2f}")
                 else:
                     node_target.submit_training(ml_config.criterion, data, label, cuda_env=current_cuda_env)
-                    logger.info(f"tick: {runtime_parameters.current_tick}, training node: {node_target.name}, loss={node_target.most_recent_loss:.2f}")
                 training_batch_count += 1
                 if training_batch_count >= node_target.num_of_batch_per_training:
                     break
+            logger.info(f"tick: {runtime_parameters.current_tick}, training node: {node_target.name} for {training_batch_count} times, loss={node_target.most_recent_loss:.2f}")
 
     """update next training tick"""
     for index, node_name in enumerate(training_node_names):
