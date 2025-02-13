@@ -40,8 +40,11 @@ class DatasetWithFastLabelSelection():
         for single_label in labels_set:
             self.indices_by_labels[single_label] = indices[self.labels == single_label]
 
-    def get_train_loader_by_label_prob(self, label_prob, batch_size, worker=1) -> DataLoader:
+    def get_train_loader_by_label_prob(self, label_prob, batch_size, worker=None) -> DataLoader:
         label_sampler = LabelProbabilitySampler(self.labels, label_prob, self.indices_by_labels, batch_size)
-        train_loader = torch.utils.data.DataLoader(self.raw_dataset, batch_size=batch_size, sampler=label_sampler, num_workers=worker)
+        if worker is None:
+            train_loader = torch.utils.data.DataLoader(self.raw_dataset, batch_size=batch_size, sampler=label_sampler)
+        else:
+            train_loader = torch.utils.data.DataLoader(self.raw_dataset, batch_size=batch_size, sampler=label_sampler, num_workers=worker)
         return train_loader
 

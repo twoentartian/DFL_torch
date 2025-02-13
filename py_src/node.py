@@ -124,7 +124,7 @@ class Node:
     def set_next_training_tick(self, tick):
         self.next_training_tick = tick
 
-    def set_label_distribution(self, dataset_label_distribution, dataset_with_fast_label: dataset.DatasetWithFastLabelSelection=None, worker=1):
+    def set_label_distribution(self, dataset_label_distribution, dataset_with_fast_label: dataset.DatasetWithFastLabelSelection=None, worker=None):
         self.__dataset_label_distribution = dataset_label_distribution
         if dataset_with_fast_label is not None:
             self.__dataset_with_fast_label = dataset_with_fast_label
