@@ -49,16 +49,16 @@ def simulation_phase_training(runtime_parameters: RuntimeParameters, logger, con
         if node_target.next_training_tick == runtime_parameters.current_tick:
             training_node_names.append(node_name)
             training_batch_count = 0
-            while training_batch_count < node_target.num_of_batch_per_training:
-                for data, label in node_target.train_loader:
-                    if config_file.force_use_cpu:
-                        node_target.submit_training(ml_config.criterion, data, label)
-                        logger.info(f"tick: {runtime_parameters.current_tick}, training node: {node_target.name}, loss={node_target.most_recent_loss:.2f}")
-                    else:
-                        node_target.submit_training(ml_config.criterion, data, label, cuda_env=current_cuda_env)
-                        logger.info(f"tick: {runtime_parameters.current_tick}, training node: {node_target.name}, loss={node_target.most_recent_loss:.2f}")
-                    break
+            for data, label in node_target.train_loader:
+                if config_file.force_use_cpu:
+                    node_target.submit_training(ml_config.criterion, data, label)
+                    logger.info(f"tick: {runtime_parameters.current_tick}, training node: {node_target.name}, loss={node_target.most_recent_loss:.2f}")
+                else:
+                    node_target.submit_training(ml_config.criterion, data, label, cuda_env=current_cuda_env)
+                    logger.info(f"tick: {runtime_parameters.current_tick}, training node: {node_target.name}, loss={node_target.most_recent_loss:.2f}")
                 training_batch_count += 1
+                if training_batch_count >= node_target.num_of_batch_per_training:
+                    break
 
     """update next training tick"""
     for index, node_name in enumerate(training_node_names):
