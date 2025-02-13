@@ -57,7 +57,8 @@ def simulation_phase_training(runtime_parameters: RuntimeParameters, logger, con
                 training_batch_count += 1
                 if training_batch_count >= node_target.num_of_batch_per_training:
                     break
-            logger.info(f"tick: {runtime_parameters.current_tick}, training node: {node_target.name} for {training_batch_count} times, loss={node_target.most_recent_loss:.2f}, lrs={node_target.most_recent_lrs:.3e}")
+            most_recent_lrs_str = [f"{i:.3e}" for i in node_target.most_recent_lrs]
+            logger.info(f"tick: {runtime_parameters.current_tick}, training node: {node_target.name} for {training_batch_count} times, loss={node_target.most_recent_loss:.2f}, lrs={most_recent_lrs_str}")
 
     """update next training tick"""
     for index, node_name in enumerate(training_node_names):
