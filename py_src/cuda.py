@@ -45,15 +45,18 @@ def _measure_memory_consumption_for_performing_ml_proc_func(cuda_device_list, se
     temp_training_data = copy.deepcopy(setup.training_data)
     temp_testing_data = copy.deepcopy(setup.testing_data)
     # we don't use data loader here, so we should take care of whether they are tensor or ndarray
-    if isinstance(temp_training_data.data, np.ndarray):
-        temp_training_data.data = torch.from_numpy(temp_training_data.data)
-    if isinstance(temp_testing_data.data, np.ndarray):
-        temp_testing_data.data = torch.from_numpy(temp_testing_data.data)
-    temp_training_data.data = temp_training_data.data.to(device=gpu_device)
-    temp_testing_data.data = temp_testing_data.data.to(device=gpu_device)
+    if hasattr(temp_training_data, "data"):
+        if isinstance(temp_training_data.data, np.ndarray):
+            temp_training_data.data = torch.from_numpy(temp_training_data.data)
+        temp_training_data.data = temp_training_data.data.to(device=gpu_device)
+        del temp_training_data.data
+    if hasattr(temp_testing_data, "data"):
+        if isinstance(temp_testing_data.data, np.ndarray):
+            temp_testing_data.data = torch.from_numpy(temp_testing_data.data)
+        temp_testing_data.data = temp_testing_data.data.to(device=gpu_device)
+        del temp_testing_data.data
     final_memory = torch.cuda.memory_allocated(device=gpu_device)
     memory_consumption_dataset_MB = (final_memory - initial_memory) / 1024 ** 2  # convert to MB
-    del temp_training_data.data, temp_testing_data.data
     del temp_training_data, temp_testing_data
     # model
     initial_memory = torch.cuda.memory_allocated(device=gpu_device)
