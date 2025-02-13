@@ -73,6 +73,7 @@ class Node:
         self.is_averaging_this_tick = False
 
         """initial state"""
+        self.num_of_batch_per_training = 1
         self.send_model_after_P_training = 1
         self._send_model_counter = 0
         self.most_recent_loss = 0
