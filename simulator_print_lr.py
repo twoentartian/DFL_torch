@@ -76,7 +76,6 @@ def main(config_file_path, output_folder_name):
         temp_node.set_average_buffer_size(average_buffer_size)
         # label distribution
         label_distribution = config_file.get_label_distribution(temp_node, runtime_parameters)
-        assert label_distribution is not None
         temp_node.set_label_distribution(label_distribution, dataset_with_fast_label=training_dataset)
         # add node to container
         runtime_parameters.node_container[single_node] = temp_node

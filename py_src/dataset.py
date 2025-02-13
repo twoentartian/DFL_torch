@@ -43,8 +43,14 @@ class DatasetWithFastLabelSelection():
     def get_train_loader_by_label_prob(self, label_prob, batch_size, worker=None) -> DataLoader:
         label_sampler = LabelProbabilitySampler(self.labels, label_prob, self.indices_by_labels, batch_size)
         if worker is None:
-            train_loader = torch.utils.data.DataLoader(self.raw_dataset, batch_size=batch_size, sampler=label_sampler)
+            train_loader = torch.utils.data.DataLoader(self.raw_dataset, batch_size=batch_size, sampler=label_sampler, persistent_workers=True)
         else:
-            train_loader = torch.utils.data.DataLoader(self.raw_dataset, batch_size=batch_size, sampler=label_sampler, num_workers=worker)
+            train_loader = torch.utils.data.DataLoader(self.raw_dataset, batch_size=batch_size, sampler=label_sampler, persistent_workers=True, num_workers=worker)
         return train_loader
 
+    def get_train_loader_default(self, batch_size, worker=None) -> DataLoader:
+        if worker is None:
+            train_loader = torch.utils.data.DataLoader(self.raw_dataset, batch_size=batch_size, persistent_workers=True)
+        else:
+            train_loader = torch.utils.data.DataLoader(self.raw_dataset, batch_size=batch_size, persistent_workers=True, num_workers=worker)
+        return train_loader
