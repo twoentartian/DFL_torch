@@ -18,7 +18,7 @@ from py_src.model_variance_correct import VarianceCorrector, VarianceCorrectionT
 config_name = "default_config"
 
 max_tick = 1000  # total simulation ticks
-save_name = "TEMP_TEST"
+save_name = "sample"
 force_use_cpu = False
 
 """enable flags"""
@@ -30,12 +30,13 @@ override_use_model_stat = None
 override_allocate_all_models = None
 
 """"""""""" Preset """""""""""
-preset_network = 'GL'  # 'GL', 'FL', 'single'
+preset_network = 'single'  # None, 'GL', 'FL', 'single'
 preset_variance_correction = None  # None, 'VC'
 preset_network_size = 50
 preset_network_degree = 8  # only valid for GL
 preset_P = 100
-
+preset_training_batch_count = 1 # how many batches of training data per training tick
+preset_training_loader_worker = 2
 """"""""" Global Machine learning related parameters """""""""""
 """ predefined: """
 
@@ -43,10 +44,10 @@ preset_P = 100
 def get_ml_setup():
     get_ml_setup.__ml_setup = None
     if get_ml_setup.__ml_setup is None:
-        # get_ml_setup.__ml_setup = ml_setup.resnet18_cifar10()
+        # get_ml_setup.__ml_setup = ml_setup.cct7_imagenet100()
         # get_ml_setup.__ml_setup = ml_setup.resnet18_cifar100()
-        # get_ml_setup.__ml_setup = ml_setup.lenet4_mnist()
-        get_ml_setup.__ml_setup = ml_setup.lenet5_mnist()
+        get_ml_setup.__ml_setup = ml_setup.lenet4_mnist()
+        # get_ml_setup.__ml_setup = ml_setup.lenet5_mnist()
         # get_ml_setup.__ml_setup = ml_setup.cct7_cifar10()
         # get_ml_setup.__ml_setup = ml_setup.mobilenet_v3_small_cifar10()
         # get_ml_setup.__ml_setup = ml_setup.vgg11_mnist()
@@ -62,8 +63,7 @@ def get_ml_setup():
 
 
 """"""""""" Dataset related parameters """""""""""
-
-
+""" return a tuple of optimizer, lr_scheduler """
 def get_optimizer(target_node: node.Node, model: torch.nn.Module, parameters: RuntimeParameters, ml_setup: MlSetup):
     """warning: you are not allowed to change optimizer during simulation when use_model_stat == True"""
     assert model is not None
@@ -166,7 +166,9 @@ def node_behavior_control(parameters: RuntimeParameters, mpi_world=None):
         if enable_global_broadcast_at_beginning:
             global_broadcast(parameters, 0, mpi_world=mpi_world)
 
-
+    # training_batch_count
+    for node_name, node_target in parameters.node_container.items():
+        node_target.num_of_batch_per_training = preset_training_batch_count
 
 """"""""""" Training time related parameters """""""""""
 """this function will be called after training to get the next training tick"""
@@ -197,9 +199,9 @@ def get_next_training_time(target_node: node.Node, parameters: RuntimeParameters
 def get_label_distribution(target_node: node.Node, parameters: RuntimeParameters):
     if parameters.phase == SimulationPhase.INITIALIZING:  # init
         # return label_distribution.label_distribution_non_iid_dirichlet(target_node, parameters, 0.5)
-        get_label_distribution.current = label_distribution.label_distribution_iid(target_node, parameters)
+        # get_label_distribution.current = label_distribution.label_distribution_iid(target_node, parameters)
+        get_label_distribution.current = label_distribution.label_distribution_default(target_node, parameters)
         return get_label_distribution.current
-
     return None
 
 
