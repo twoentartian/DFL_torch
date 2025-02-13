@@ -301,6 +301,17 @@ def cct7_cifar10():
     output_ml_setup.has_normalization_layer = True
     return output_ml_setup
 
+def cct7_imagenet100():
+    output_ml_setup = MlSetup()
+    dataset = dataset_imagenet100()
+
+    output_ml_setup.model = cct.cct_7_7x2_224()
+    output_ml_setup.model_name = "cct7"
+    output_ml_setup.get_info_from_dataset(dataset)
+    output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
+    output_ml_setup.training_batch_size = 32
+    output_ml_setup.has_normalization_layer = True
+    return output_ml_setup
 
 """ CIFAR10 + ResNet18 """
 class GroupNorm(nn.Module):
@@ -519,13 +530,17 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default):
         elif dataset_type in [dataset_type.imagenet100]:
             output_ml_setup = resnet18_imagenet100(enable_replace_bn_with_group_norm=enable_replace_bn_with_group_norm)
         else:
-            raise NotImplementedError
+            raise NotImplemented
     elif model_name == ModelType.simplenet:
         assert dataset_type in [dataset_type.default, dataset_type.cifar10]
         output_ml_setup = simplenet_cifar10()
     elif model_name == ModelType.cct7:
-        assert dataset_type in [dataset_type.default, dataset_type.cifar10]
-        output_ml_setup = cct7_cifar10()
+        if dataset_type in [dataset_type.default, dataset_type.cifar10]:
+            output_ml_setup = cct7_cifar10()
+        elif dataset_type in [dataset_type.imagenet100]:
+            output_ml_setup = cct7_imagenet100()
+        else:
+            raise NotImplemented
     elif model_name == ModelType.lenet5_large_fc:
         assert dataset_type in [dataset_type.default, dataset_type.mnist]
         output_ml_setup = lenet5_large_fc_mnist()
@@ -539,19 +554,19 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default):
         if dataset_type in [DatasetType.default, DatasetType.cifar10]:
             output_ml_setup = mobilenet_v2_cifar10()
         else:
-            raise NotImplementedError
+            raise NotImplemented
     elif model_name == ModelType.vgg11_no_bn:
         if dataset_type in [DatasetType.default, DatasetType.mnist]:
             output_ml_setup = vgg11_mnist()
         elif dataset_type in [DatasetType.cifar10]:
             output_ml_setup = vgg11_cifar10()
         else:
-            raise NotImplementedError
+            raise NotImplemented
     elif model_name == ModelType.vit:
         if dataset_type in [DatasetType.default, DatasetType.imagenet100]:
             output_ml_setup = vit_b_16_imagenet100()
         else:
-            raise NotImplementedError
+            raise NotImplemented
     else:
         raise ValueError(f'Invalid model type: {model_name}')
     return output_ml_setup
