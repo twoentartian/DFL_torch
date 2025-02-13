@@ -309,7 +309,7 @@ def cct7_imagenet100():
     output_ml_setup.model_name = "cct7"
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
-    output_ml_setup.training_batch_size = 32
+    output_ml_setup.training_batch_size = 64
     output_ml_setup.has_normalization_layer = True
     return output_ml_setup
 
@@ -371,7 +371,7 @@ def resnet18_imagenet100(enable_replace_bn_with_group_norm=False):
         output_ml_setup.model_name = "resnet18_bn"
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
-    output_ml_setup.training_batch_size = 64
+    output_ml_setup.training_batch_size = 128
     output_ml_setup.has_normalization_layer = True
     return output_ml_setup
 
