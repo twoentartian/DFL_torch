@@ -130,7 +130,10 @@ def main(config_file_path, output_folder_name=None):
         # label distribution
         label_distribution = config_file.get_label_distribution(temp_node, runtime_parameters)
         assert label_distribution is not None
-        temp_node.set_label_distribution(label_distribution, dataset_with_fast_label=training_dataset)
+        dataloader_worker = 1
+        if hasattr(config_file, "preset_training_loader_worker"):
+            dataloader_worker = config_file.preset_training_loader_worker
+        temp_node.set_label_distribution(label_distribution, dataset_with_fast_label=training_dataset, worker=dataloader_worker)
         # add node to container
         runtime_parameters.node_container[single_node] = temp_node
 

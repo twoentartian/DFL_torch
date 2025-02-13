@@ -124,14 +124,14 @@ class Node:
     def set_next_training_tick(self, tick):
         self.next_training_tick = tick
 
-    def set_label_distribution(self, dataset_label_distribution, dataset_with_fast_label: dataset.DatasetWithFastLabelSelection=None):
+    def set_label_distribution(self, dataset_label_distribution, dataset_with_fast_label: dataset.DatasetWithFastLabelSelection=None, worker=1):
         self.__dataset_label_distribution = dataset_label_distribution
         if dataset_with_fast_label is not None:
             self.__dataset_with_fast_label = dataset_with_fast_label
         else:
             assert self.__dataset_label_distribution is not None
         self.normalized_dataset_label_distribution = dataset_label_distribution / dataset_label_distribution.sum()
-        self.train_loader = self.__dataset_with_fast_label.get_train_loader_by_label_prob(self.normalized_dataset_label_distribution, self.ml_setup.training_batch_size)
+        self.train_loader = self.__dataset_with_fast_label.get_train_loader_by_label_prob(self.normalized_dataset_label_distribution, self.ml_setup.training_batch_size, worker=worker)
 
     def set_model_stat(self, model_stat):
         """warning: model_stat is shallow copied for dedicated GPU and CPU"""
