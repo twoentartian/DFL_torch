@@ -8,7 +8,7 @@ import multiprocessing as python_mp
 import torch.multiprocessing as pytorch_mp
 from torch.utils.data import DataLoader
 from typing import List, Final
-from py_src import internal_names, util, ml_setup, node
+from py_src import internal_names, util, ml_setup
 from py_src.simulation_runtime_parameters import RuntimeParameters, SimulationPhase
 
 logger = logging.getLogger(f"{internal_names.logger_simulator_base_name}.{util.basename_without_extension(__file__)}")
@@ -255,7 +255,7 @@ class CudaEnv:
         for k, v in stat_dict.items():
             stat_dict[k] = v.to(device, non_blocking=True)
 
-    def submit_training_job(self, training_node: node.Node, criterion, training_data: torch.Tensor, training_label: torch.Tensor, use_amp=True):
+    def submit_training_job(self, training_node, criterion, training_data: torch.Tensor, training_label: torch.Tensor, use_amp=True):
         if training_node.is_using_model_stat:
             """use model stat (share model on gpu)"""
             gpu = training_node.allocated_gpu
