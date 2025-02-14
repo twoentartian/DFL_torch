@@ -9,6 +9,8 @@ from enum import Enum, auto
 from torchvision import transforms, models, datasets
 from py_src.models import simplenet, lenet, vgg, mobilenet
 import py_src.third_party.compact_transformers.src.cct as cct
+import py_src.third_party.shared_dataset.shareddataset as shared_mem_dataset
+
 
 def replace_bn_with_ln(model):
     for name, module in model.named_children():
@@ -246,6 +248,9 @@ def dataset_imagenet100(transforms_training=None, transforms_testing=None):
     imagenet_train = datasets.ImageFolder(root=os.path.join(dataset_path, "train"), transform=final_transforms_train)
     imagenet_test = datasets.ImageFolder(root=os.path.join(dataset_path, "val"), transform=final_transforms_test)
     return DatasetSetup(dataset_name, imagenet_train, imagenet_test)
+
+def dataset_imagenet100_shared_mem_no_data_augmentation():
+    shared_mem_dataset.SharedDataset()
 
 
 """ MNIST + LeNet """
