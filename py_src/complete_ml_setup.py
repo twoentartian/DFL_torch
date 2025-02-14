@@ -3,6 +3,7 @@ import math
 
 from py_src import ml_setup
 
+""" this class records the hyperparameters need for training a model in generate_high_accuracy_model.py """
 class FastTrainingSetup(object):
     @staticmethod
     def get_optimizer_lr_scheduler_epoch(arg_ml_setup: ml_setup, model):
