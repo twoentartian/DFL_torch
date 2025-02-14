@@ -200,7 +200,6 @@ def main(config_file_path, output_folder_name=None):
         temp_node.set_average_buffer_size(average_buffer_size)
         # label distribution
         label_distribution = config_file.get_label_distribution(temp_node, runtime_parameters)
-        assert label_distribution is not None
         dataloader_worker = None
         if hasattr(config_file, "preset_training_loader_worker"):
             dataloader_worker = config_file.preset_training_loader_worker
