@@ -8,9 +8,8 @@ import numpy as np
 from enum import Enum, auto
 from torchvision import transforms, models, datasets
 from py_src.models import simplenet, lenet, vgg, mobilenet
+from py_src.dataset import DatasetInSharedMem
 import py_src.third_party.compact_transformers.src.cct as cct
-import py_src.third_party.shared_dataset.shareddataset as shared_mem_dataset
-
 
 def replace_bn_with_ln(model):
     for name, module in model.named_children():
@@ -245,12 +244,13 @@ def dataset_imagenet100(transforms_training=None, transforms_testing=None):
             normalize,
     ])
 
-    imagenet_train = datasets.ImageFolder(root=os.path.join(dataset_path, "train"), transform=final_transforms_train)
-    imagenet_test = datasets.ImageFolder(root=os.path.join(dataset_path, "val"), transform=final_transforms_test)
-    return DatasetSetup(dataset_name, imagenet_train, imagenet_test)
+    label_transform = lambda label: torch.tensor(label, dtype=torch.float32)
+    imagenet_raw_train = datasets.ImageFolder(root=os.path.join(dataset_path, "train"), transform=transforms.Compose([transforms.Resize([300, 300]), transforms.ToTensor()]), target_transform=label_transform)
+    imagenet_raw_test = datasets.ImageFolder(root=os.path.join(dataset_path, "val"), transform=transforms.Compose([transforms.Resize([300, 300]), transforms.ToTensor()]), target_transform=label_transform)
+    imagenet_mem_train = DatasetInSharedMem(imagenet_raw_train, "imagenet100_train", transform=final_transforms_train)
+    imagenet_mem_test = DatasetInSharedMem(imagenet_raw_test, "imagenet100_test", transform=final_transforms_test)
 
-def dataset_imagenet100_shared_mem_no_data_augmentation():
-    shared_mem_dataset.SharedDataset()
+    return DatasetSetup(dataset_name, imagenet_mem_train, imagenet_mem_test)
 
 
 """ MNIST + LeNet """

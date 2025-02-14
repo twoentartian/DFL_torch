@@ -1,8 +1,12 @@
 import numpy as np
 import torch
 import random
+import logging
 from torch.utils.data import Dataset, DataLoader, Sampler
 
+import py_src.third_party.shared_dataset.shareddataset as shared_mem_dataset
+from py_src import internal_names, util
+logger = logging.getLogger(f"{internal_names.logger_simulator_base_name}.{util.basename_without_extension(__file__)}")
 
 class LabelProbabilitySampler(Sampler):
     def __init__(self, labels, label_probs, indices_by_labels, num_samples):
@@ -58,3 +62,25 @@ class DatasetWithFastLabelSelection():
         else:
             train_loader = torch.utils.data.DataLoader(self.raw_dataset, batch_size=batch_size, persistent_workers=True, shuffle=True, num_workers=worker)
         return train_loader
+
+class DatasetInSharedMem(Dataset):
+    def __init__(self, dataset: Dataset, shared_mem_name, transform=None):
+        self.dataset_in_shared_mem = shared_mem_dataset.SharedDataset(dataset, shared_mem_name)
+        self.transform = transform
+
+        logger.info(f"loading shared memory dataset, shared memory name: {shared_mem_name}")
+        for (image, label) in self.dataset_in_shared_mem:
+            pass
+        logger.info(f"loading shared memory dataset, shared memory name: {shared_mem_name} -- done")
+
+    def __len__(self):
+        return len(self.dataset_in_shared_mem)
+
+    def __getitem__(self, idx):
+        if idx >= len(self.dataset_in_shared_mem):
+            raise StopIteration()
+        sample, label = self.dataset_in_shared_mem.__getitem__(idx)
+        if self.transform:
+            sample = self.transform(sample)
+            print("transform applied")
+        return sample, label
