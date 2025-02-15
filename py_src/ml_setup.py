@@ -338,7 +338,7 @@ def cct7_cifar10():
 
 def cct7_imagenet100():
     output_ml_setup = MlSetup()
-    dataset = dataset_imagenet10()
+    dataset = dataset_imagenet100()
 
     output_ml_setup.model = cct.cct_7_7x2_224()
     output_ml_setup.model_name = "cct7"
