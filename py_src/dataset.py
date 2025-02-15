@@ -64,7 +64,7 @@ class DatasetWithFastLabelSelection():
             train_loader = torch.utils.data.DataLoader(self.raw_dataset, batch_size=batch_size, persistent_workers=True, shuffle=True, num_workers=worker)
         return train_loader
 
-class SharedDataset(Dataset):
+class SharedMemDataset(Dataset):
     """Dataset with lock-free shared memory cache (reused across processes).
 
     Wraps another Dataset, such that:
@@ -212,10 +212,9 @@ class SharedDataset(Dataset):
         except FileNotFoundError:
             print('SharedDataset: SharedMemory was not initialized, so unlinking has no effect.')
 
-
 class DatasetInSharedMem(Dataset):
     def __init__(self, dataset: Dataset, shared_mem_name, transform=None):
-        self.dataset_in_shared_mem = SharedDataset(dataset, shared_mem_name)
+        self.dataset_in_shared_mem = SharedMemDataset(dataset, shared_mem_name)
         self.transform = transform
         self.raw_dataset = dataset
 
@@ -233,5 +232,25 @@ class DatasetInSharedMem(Dataset):
         sample, label = self.dataset_in_shared_mem.__getitem__(idx)
         if self.transform:
             sample = self.transform(sample)
-            print("transform applied")
         return sample, label
+
+class DatasetInMem(Dataset):
+    def __init__(self, dataset: Dataset, transform=None):
+        self.transform = transform
+        self.raw_dataset = dataset
+        self.cached_dataset = []
+        self._initialize()
+
+    def _initialize(self):
+        dataset_len = len(self.raw_dataset)
+        for index, sample_label in enumerate(self.raw_dataset):
+            logger.info(f"loading image {index}/{dataset_len}")
+            self.cached_dataset.append(sample_label)
+
+    def __len__(self):
+        return len(self.raw_dataset)
+
+    def __getitem__(self, idx):
+        if idx >= len(self.raw_dataset):
+            raise StopIteration()
+        return self.cached_dataset[idx]
