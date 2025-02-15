@@ -220,7 +220,7 @@ def dataset_imagenet1k(transforms_training=None, transforms_testing=None):
     imagenet_test = datasets.ImageNet(root=dataset_path, split='val', transform=final_transforms_test)
     return DatasetSetup(dataset_name, imagenet_train, imagenet_test)
 
-def dataset_imagenet100(transforms_training=None, transforms_testing=None, cache_to_mem=False, cache_raw_data_to_mem=False, cache_to_shared_mem=False):
+def dataset_imagenet100(transforms_training=None, transforms_testing=None):
     dataset_path = '~/dataset/imagenet100'
     dataset_name = "imagenet100_224"
 
@@ -244,18 +244,12 @@ def dataset_imagenet100(transforms_training=None, transforms_testing=None, cache
             normalize,
     ])
 
-    label_transform = lambda label: torch.tensor(label, dtype=torch.float32)
-    imagenet_raw_train = datasets.ImageFolder(root=os.path.join(dataset_path, "train"), transform=transforms.Compose([transforms.Resize([300, 300]), transforms.ToTensor()]), target_transform=label_transform)
-    imagenet_raw_test = datasets.ImageFolder(root=os.path.join(dataset_path, "val"), transform=transforms.Compose([transforms.Resize([300, 300]), transforms.ToTensor()]), target_transform=label_transform)
-    # imagenet_mem_train = DatasetInSharedMem(imagenet_raw_train, "imagenet100_train", transform=final_transforms_train)
-    # imagenet_mem_test = DatasetInSharedMem(imagenet_raw_test, "imagenet100_test", transform=final_transforms_test)
+    imagenet_train = ImageDatasetWithCachedInputInSharedMem(os.path.join(dataset_path, "train"), "imagenet100_train", transform = final_transforms_train)
+    imagenet_test = ImageDatasetWithCachedInputInSharedMem(os.path.join(dataset_path, "val"), "imagenet100_test", transform = final_transforms_test)
 
-    imagenet_mem_train = DatasetWithCachedOutputInMem(imagenet_raw_train, transform=final_transforms_train)
-    imagenet_mem_test = DatasetWithCachedOutputInMem(imagenet_raw_test, transform=final_transforms_test)
+    return DatasetSetup(dataset_name, imagenet_train, imagenet_test)
 
-    return DatasetSetup(dataset_name, imagenet_mem_train, imagenet_mem_test)
-
-def dataset_imagenet10(transforms_training=None, transforms_testing=None, cache_to_mem=False, cache_raw_data_to_mem=False):
+def dataset_imagenet10(transforms_training=None, transforms_testing=None):
     dataset_path = '~/dataset/imagenet10'
     dataset_name = "imagenet10_224"
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
