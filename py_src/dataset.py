@@ -63,7 +63,7 @@ class DatasetWithFastLabelSelection():
     """ default dataloader without iid/noniid control """
     def get_train_loader_default(self, batch_size, worker=None) -> DataLoader:
         if worker is None:
-            train_loader = torch.utils.data.DataLoader(self.raw_dataset, batch_size=batch_size, persistent_workers=True, shuffle=True)
+            train_loader = torch.utils.data.DataLoader(self.raw_dataset, batch_size=batch_size, shuffle=True)
         else:
             train_loader = torch.utils.data.DataLoader(self.raw_dataset, batch_size=batch_size, persistent_workers=True, shuffle=True, num_workers=worker)
         return train_loader
