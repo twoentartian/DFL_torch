@@ -84,7 +84,7 @@ class ModelAverager:
 
     @staticmethod
     def _get_device_from_model_stat(state_dict):
-        _, model_buffer_tensor = state_dict.iter()
+        model_buffer_tensor = next(iter(state_dict.values()))
         device = model_buffer_tensor.device
         return device
 
