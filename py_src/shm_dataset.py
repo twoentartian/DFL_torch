@@ -31,6 +31,7 @@ class SharedDataset(Dataset):
     def __init__(self, dataset, shared_mem_name):
         self.dataset = dataset
         self.shared_mem_name = shared_mem_name
+        self.shared_mem_size = None
         self._initialize()
 
     def _initialize(self):
@@ -63,13 +64,14 @@ class SharedDataset(Dataset):
         except FileNotFoundError:
             # doesn't exist, create it.
             shm_size = total_sample_size * len(self.dataset)
+            self.shared_mem_size = shm_size
             shm_size = ((shm_size // 4096) + 1) * 4096
             self.mem = shared_memory.SharedMemory(name=self.shared_mem_name, create=True,
                                                   size=shm_size)
 
             # initialize those single-byte flags with 0.
             # it's OK if this overwrites the progress of some concurrent processes; it just means a bit more loading overhead.
-            self.mem.buf[::total_sample_size] = bytes(len(self.dataset))
+            self.mem.buf[:self.shared_mem_size:total_sample_size] = bytes(len(self.dataset))
 
     def __getitem__(self, index):
         """Return a single sample. Samples will be cached in the SharedMemory buffer
