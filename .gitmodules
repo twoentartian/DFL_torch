@@ -4,6 +4,3 @@
 [submodule "py_src/third_party/vit_pytorch"]
 	path = py_src/third_party/vit_pytorch
 	url = https://github.com/lucidrains/vit-pytorch.git
-[submodule "py_src/third_party/shared_dataset"]
-	path = py_src/third_party/shared_dataset
-	url = https://github.com/jotaf98/shareddataset.git
