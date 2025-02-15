@@ -2,9 +2,13 @@ import numpy as np
 import torch
 import itertools
 import random
+import os
+import io
 import logging
 from multiprocessing import shared_memory
 from torch.utils.data import Dataset, DataLoader, Sampler
+from torchvision import transforms
+from PIL import Image
 
 from py_src import internal_names, util
 logger = logging.getLogger(f"{internal_names.logger_simulator_base_name}.{util.basename_without_extension(__file__)}")
@@ -64,7 +68,8 @@ class DatasetWithFastLabelSelection():
             train_loader = torch.utils.data.DataLoader(self.raw_dataset, batch_size=batch_size, persistent_workers=True, shuffle=True, num_workers=worker)
         return train_loader
 
-class SharedMemDataset(Dataset):
+""" cache the output of dataset in shared memory """
+class _DatasetWithCachedOutputInSharedMem(Dataset):
     """Dataset with lock-free shared memory cache (reused across processes).
 
     Wraps another Dataset, such that:
@@ -212,9 +217,9 @@ class SharedMemDataset(Dataset):
         except FileNotFoundError:
             print('SharedDataset: SharedMemory was not initialized, so unlinking has no effect.')
 
-class DatasetInSharedMem(Dataset):
+class DatasetWithCachedOutputInSharedMem(Dataset):
     def __init__(self, dataset: Dataset, shared_mem_name, transform=None):
-        self.dataset_in_shared_mem = SharedMemDataset(dataset, shared_mem_name)
+        self.dataset_in_shared_mem = _DatasetWithCachedOutputInSharedMem(dataset, shared_mem_name)
         self.transform = transform
         self.raw_dataset = dataset
 
@@ -234,7 +239,7 @@ class DatasetInSharedMem(Dataset):
             sample = self.transform(sample)
         return sample, label
 
-class DatasetInMem(Dataset):
+class DatasetWithCachedOutputInMem(Dataset):
     def __init__(self, dataset: Dataset, transform=None):
         self.transform = transform
         self.raw_dataset = dataset
@@ -243,8 +248,11 @@ class DatasetInMem(Dataset):
 
     def _initialize(self):
         dataset_len = len(self.raw_dataset)
+        current_progress = 0
         for index, sample_label in enumerate(self.raw_dataset):
-            logger.info(f"loading image {index}/{dataset_len}")
+            if index * 100 >= dataset_len*current_progress:
+                logger.info(f"creating cache {current_progress}%")
+                current_progress += 1
             self.cached_dataset.append(sample_label)
 
     def __len__(self):
@@ -254,3 +262,93 @@ class DatasetInMem(Dataset):
         if idx >= len(self.raw_dataset):
             raise StopIteration()
         return self.cached_dataset[idx]
+
+class ImageDatasetWithCachedInputInSharedMem(Dataset):
+    def __init__(self, root_dir, shared_mem_name, transform=None):
+        home_dir = os.path.expanduser('~')
+        self.root_dir = root_dir
+        self.root_dir = self.root_dir.replace('~', home_dir)
+        self.transform = transform if transform else transforms.ToTensor()
+        self.image_paths = []
+        self.image_offsets = []
+        self.targets = []
+        self.label_map = {}  # Mapping folder names to integer labels
+
+        self.shared_mem_name = shared_mem_name
+        self.shared_shape = None
+        self.shared_mem = None
+        self.shared_mem_size = None
+
+        self._prepare_data() # Collect image paths and labels
+        self._cache_images()  # Cache images in shared memory
+
+    def _prepare_data(self):
+        """ Collect image file paths and assign integer labels. """
+        folders = sorted(os.listdir(self.root_dir))
+        for idx, folder in enumerate(folders):
+            folder_path = os.path.join(self.root_dir, folder)
+            if not os.path.isdir(folder_path):
+                continue
+            self.label_map[folder] = idx
+            for filename in os.listdir(folder_path):
+                if filename.lower().endswith(('png', 'jpg', 'jpeg')):
+                    self.image_paths.append(os.path.join(folder_path, filename))
+                    self.targets.append(idx)
+
+    def _cache_images(self):
+        """ Load images and store them in shared memory. """
+        try:
+            self.shared_mem = shared_memory.SharedMemory(name=self.shared_mem_name, create=False)
+            logger.info(f"loading existing shared memory {self.shared_mem_name} success")
+        except FileNotFoundError:
+            file_contents = []
+            current_offset = 0
+            current_progress = 0
+            for index, file_path in enumerate(self.image_paths):
+                if index * 100 >= len(self.image_paths) * current_progress:
+                    logger.info(f"loading image for {self.shared_mem_name} {current_progress}%")
+                    current_progress += 1
+                with open(file_path, "rb") as f:
+                    data = f.read()
+                file_contents.append(data)
+                self.image_offsets.append((current_offset, len(data)))
+                current_offset += len(data)
+
+            # Create shared memory
+            self.shared_mem_size = current_offset
+
+            logger.info(f"creating shared memory {self.shared_mem_name} with size {self.shared_mem_size / 1024 ** 3:.3f} GB")
+            self.shared_mem = shared_memory.SharedMemory(name=self.shared_mem_name, create=True, size=self.shared_mem_size)
+
+            for index, data in enumerate(file_contents):
+                offset, length = self.image_offsets[index]
+                self.shared_mem.buf[offset:offset+length] = data
+
+    def _load_image(self, img_stream):
+        """ Load image and return as numpy array (H, W, C). """
+        bytestream = io.BytesIO(img_stream)
+        img = Image.open(bytestream).convert("RGB")
+        return img
+
+    def __len__(self):
+        return len(self.image_paths)
+
+    def __getitem__(self, idx):
+        """ Read image from shared memory and apply transformations. """
+        if self.shared_mem is None:
+            self.shared_mem = shared_memory.SharedMemory(name=self.shared_mem_name)
+
+        offset, length = self.image_offsets[idx]
+        image = self._load_image(self.shared_mem.buf[offset:offset+length])
+        image = self.transform(image)
+        label = self.targets[idx]
+        return image, label
+
+    def __del__(self):
+        """ Clean up shared memory when the dataset is deleted. """
+        try:
+            existing_shm = shared_memory.SharedMemory(name=self.shared_mem_name)
+            existing_shm.close()
+            existing_shm.unlink()
+        except FileNotFoundError:
+            pass  # Already unlinked

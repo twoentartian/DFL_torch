@@ -2,7 +2,6 @@ import torch
 import copy
 import logging
 import gc
-import subprocess
 import numpy as np
 import multiprocessing as python_mp
 import torch.multiprocessing as pytorch_mp
@@ -16,7 +15,7 @@ logger = logging.getLogger(f"{internal_names.logger_simulator_base_name}.{util.b
 GPU_RESERVED_MEMORY_RATIO: Final[float] = 0.1
 GPU_MAX_WORKERS: Final[int] = 1
 GPU_SINGLE_THREAD_MODE: Final[bool] = True
-MEASURE_MODEL_MEMORY_CONSUMPTION_IN_A_NEW_PROCESS: Final[bool] = True
+MEASURE_MODEL_MEMORY_CONSUMPTION_IN_A_NEW_PROCESS: Final[bool] = False
 
 
 class CudaDevice:
@@ -41,30 +40,15 @@ def _measure_memory_consumption_for_performing_ml_proc_func(cuda_device_list, se
 
     gpu_device = cuda_device_list[0].device
     # dataset
-    initial_memory = torch.cuda.memory_allocated(device=gpu_device)
-    temp_training_data = copy.deepcopy(setup.training_data)
-    temp_testing_data = copy.deepcopy(setup.testing_data)
-    # we don't use data loader here, so we should take care of whether they are tensor or ndarray
-    if hasattr(temp_training_data, "data"):
-        if isinstance(temp_training_data.data, np.ndarray):
-            temp_training_data.data = torch.from_numpy(temp_training_data.data)
-        temp_training_data.data = temp_training_data.data.to(device=gpu_device)
-        del temp_training_data.data
-    if hasattr(temp_testing_data, "data"):
-        if isinstance(temp_testing_data.data, np.ndarray):
-            temp_testing_data.data = torch.from_numpy(temp_testing_data.data)
-        temp_testing_data.data = temp_testing_data.data.to(device=gpu_device)
-        del temp_testing_data.data
-    final_memory = torch.cuda.memory_allocated(device=gpu_device)
-    memory_consumption_dataset_MB = (final_memory - initial_memory) / 1024 ** 2  # convert to MB
-    del temp_training_data, temp_testing_data
+    memory_consumption_dataset_MB = 0 # we do not measure the dataset size anymore
+
     # model
     initial_memory = torch.cuda.memory_allocated(device=gpu_device)
     temp_model = copy.deepcopy(setup.model)
-    temp_training_data = copy.deepcopy(setup.training_data)
+    temp_training_data = setup.training_data
     temp_model = temp_model.to(device=gpu_device)
     temp_train_loader = DataLoader(temp_training_data, batch_size=setup.training_batch_size, shuffle=True)
-    criterion = copy.deepcopy(setup.criterion)
+    criterion = setup.criterion
     optimizer = torch.optim.Adam(temp_model.parameters(), lr=0.001)
     for index, (data, labels) in enumerate(temp_train_loader):
         data, labels = data.to(device=gpu_device), labels.to(device=gpu_device)
@@ -138,22 +122,16 @@ class CudaEnv:
 
     @staticmethod
     def get_gpu_memory_info():
-        nvidia_smi_result = subprocess.run(['nvidia-smi', '--query-gpu=memory.total,memory.used,memory.free,gpu_name', '--format=csv,nounits,noheader'], stdout=subprocess.PIPE)
-        output = nvidia_smi_result.stdout.decode('utf-8').strip().split('\n')
-        nvidia_smi_gpu_info = []
-        for i, line in enumerate(output):
-            total_memory, used_memory, free_memory, gpu_name = map(str, line.split(', '))
-            total_memory, used_memory, free_memory = map(int, [total_memory, used_memory, free_memory])
-            nvidia_smi_gpu_info.append({'gpu_id': i, 'total_memory': total_memory, 'used_memory': used_memory, 'free_memory': free_memory, 'gpu_name': gpu_name})
-
         output_list = []
-        for index, gpu in enumerate(nvidia_smi_gpu_info):
-            current_nvidia_smi_info = nvidia_smi_gpu_info[index]
-            device_name = current_nvidia_smi_info['gpu_name']
-            total_memory_MB = current_nvidia_smi_info['total_memory']
-            used_memory_MB = current_nvidia_smi_info['used_memory']
-            free_memory_MB = total_memory_MB - used_memory_MB
-            output_list.append((device_name, total_memory_MB, used_memory_MB, free_memory_MB))
+        num_gpus = torch.cuda.device_count()
+        for i in range(num_gpus):
+            device_name = torch.cuda.get_device_name(i)
+            total_memory_MB = torch.cuda.get_device_properties(i).total_memory / 1024 ** 2
+            allocated_memory = torch.cuda.memory_allocated(i) / 1024 ** 2
+            cached_memory_MB = torch.cuda.memory_reserved(i) / 1024 ** 2
+            used_memory = allocated_memory+cached_memory_MB
+            free_memory_MB = total_memory_MB - used_memory
+            output_list.append((device_name, total_memory_MB, used_memory, free_memory_MB))
         return output_list
 
     def __update_gpu_free_memory__(self):

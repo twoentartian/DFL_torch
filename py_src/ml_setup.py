@@ -8,7 +8,7 @@ import numpy as np
 from enum import Enum, auto
 from torchvision import transforms, models, datasets
 from py_src.models import simplenet, lenet, vgg, mobilenet
-from py_src.dataset import DatasetInSharedMem, DatasetInMem
+from py_src.dataset import DatasetWithCachedOutputInSharedMem, DatasetWithCachedOutputInMem, ImageDatasetWithCachedInputInSharedMem
 import py_src.third_party.compact_transformers.src.cct as cct
 
 def replace_bn_with_ln(model):
@@ -220,7 +220,7 @@ def dataset_imagenet1k(transforms_training=None, transforms_testing=None):
     imagenet_test = datasets.ImageNet(root=dataset_path, split='val', transform=final_transforms_test)
     return DatasetSetup(dataset_name, imagenet_train, imagenet_test)
 
-def dataset_imagenet100(transforms_training=None, transforms_testing=None):
+def dataset_imagenet100(transforms_training=None, transforms_testing=None, cache_to_mem=False, cache_raw_data_to_mem=False, cache_to_shared_mem=False):
     dataset_path = '~/dataset/imagenet100'
     dataset_name = "imagenet100_224"
 
@@ -250,11 +250,38 @@ def dataset_imagenet100(transforms_training=None, transforms_testing=None):
     # imagenet_mem_train = DatasetInSharedMem(imagenet_raw_train, "imagenet100_train", transform=final_transforms_train)
     # imagenet_mem_test = DatasetInSharedMem(imagenet_raw_test, "imagenet100_test", transform=final_transforms_test)
 
-    imagenet_mem_train = DatasetInMem(imagenet_raw_train, transform=final_transforms_train)
-    imagenet_mem_test = DatasetInMem(imagenet_raw_test, transform=final_transforms_test)
+    imagenet_mem_train = DatasetWithCachedOutputInMem(imagenet_raw_train, transform=final_transforms_train)
+    imagenet_mem_test = DatasetWithCachedOutputInMem(imagenet_raw_test, transform=final_transforms_test)
 
     return DatasetSetup(dataset_name, imagenet_mem_train, imagenet_mem_test)
 
+def dataset_imagenet10(transforms_training=None, transforms_testing=None, cache_to_mem=False, cache_raw_data_to_mem=False):
+    dataset_path = '~/dataset/imagenet10'
+    dataset_name = "imagenet10_224"
+    normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    if transforms_training is not None:
+        final_transforms_train = transforms_training
+    else:
+        final_transforms_train = transforms.Compose([
+            transforms.RandomResizedCrop(224),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(),
+            normalize
+    ])
+    if transforms_testing is not None:
+        final_transforms_test = transforms_testing
+    else:
+        final_transforms_test = transforms.Compose([
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            normalize,
+    ])
+
+    imagenet_train = ImageDatasetWithCachedInputInSharedMem(os.path.join(dataset_path, "train"), "imagenet10_train", transform = final_transforms_train)
+    imagenet_test = ImageDatasetWithCachedInputInSharedMem(os.path.join(dataset_path, "val"), "imagenet10_test", transform = final_transforms_test)
+
+    return DatasetSetup(dataset_name, imagenet_train, imagenet_test)
 
 """ MNIST + LeNet """
 def lenet4_mnist():
@@ -311,7 +338,7 @@ def cct7_cifar10():
 
 def cct7_imagenet100():
     output_ml_setup = MlSetup()
-    dataset = dataset_imagenet100()
+    dataset = dataset_imagenet10()
 
     output_ml_setup.model = cct.cct_7_7x2_224()
     output_ml_setup.model_name = "cct7"
