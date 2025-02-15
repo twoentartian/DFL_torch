@@ -4,8 +4,7 @@ import random
 import logging
 from torch.utils.data import Dataset, DataLoader, Sampler
 
-import py_src.third_party.shared_dataset.shareddataset as shared_mem_dataset
-from py_src import internal_names, util
+from py_src import internal_names, util, shm_dataset
 logger = logging.getLogger(f"{internal_names.logger_simulator_base_name}.{util.basename_without_extension(__file__)}")
 
 class LabelProbabilitySampler(Sampler):
@@ -65,7 +64,7 @@ class DatasetWithFastLabelSelection():
 
 class DatasetInSharedMem(Dataset):
     def __init__(self, dataset: Dataset, shared_mem_name, transform=None):
-        self.dataset_in_shared_mem = shared_mem_dataset.SharedDataset(dataset, shared_mem_name)
+        self.dataset_in_shared_mem = shm_dataset.SharedDataset(dataset, shared_mem_name)
         self.transform = transform
 
         logger.info(f"loading shared memory dataset, shared memory name: {shared_mem_name}")
