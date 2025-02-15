@@ -217,10 +217,11 @@ class DatasetInSharedMem(Dataset):
     def __init__(self, dataset: Dataset, shared_mem_name, transform=None):
         self.dataset_in_shared_mem = SharedDataset(dataset, shared_mem_name)
         self.transform = transform
+        self.raw_dataset = dataset
 
         logger.info(f"loading shared memory dataset, shared memory name: {shared_mem_name}")
-        for (image, label) in self.dataset_in_shared_mem:
-            pass
+        for index, (image, label) in enumerate(self.dataset_in_shared_mem):
+            logger.info(f"loading image {index}/{len(self.raw_dataset)}")
         logger.info(f"loading shared memory dataset, shared memory name: {shared_mem_name} -- done")
 
     def __len__(self):
