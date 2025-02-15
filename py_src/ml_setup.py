@@ -342,6 +342,19 @@ def cct7_imagenet100():
     output_ml_setup.has_normalization_layer = True
     return output_ml_setup
 
+def cct7_imagenet10():
+    output_ml_setup = MlSetup()
+    dataset = dataset_imagenet10()
+
+    output_ml_setup.model = cct.cct_7_7x2_224()
+    output_ml_setup.model_name = "cct7"
+    output_ml_setup.get_info_from_dataset(dataset)
+    output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
+    output_ml_setup.training_batch_size = 64
+    output_ml_setup.has_normalization_layer = True
+    return output_ml_setup
+
+
 """ CIFAR10 + ResNet18 """
 class GroupNorm(nn.Module):
     def __init__(self, num_channels):
