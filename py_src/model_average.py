@@ -77,6 +77,16 @@ class ModelAverager:
                     src[layer_name] = src[layer_name] * weight_src + addition[layer_name] * weight_addition
             return src
 
+    @staticmethod
+    def _move_state_dict(state_dict, device):
+        for k, v in state_dict.items():
+            state_dict[k] = v.to(device)
+
+    @staticmethod
+    def _get_device_from_model_stat(state_dict):
+        _, model_buffer_tensor = state_dict.iter()
+        device = model_buffer_tensor.device
+        return device
 
 class StandardModelAverager(ModelAverager):
     def __init__(self, *args, **kwargs):
@@ -103,7 +113,11 @@ class StandardModelAverager(ModelAverager):
                 self.variance_corrector.add_variance(model_stat)
 
     def get_model(self, self_model, *args, **kwargs):
+        assert self.model_buffer is not None
         with torch.no_grad():
+            device = ModelAverager._get_device_from_model_stat(self.model_buffer)
+            ModelAverager._move_state_dict(self_model, device)
+
             output = copy.deepcopy(self_model)
             for layer_name, layer_weights in output.items():
                 if layer_name not in self.model_buffer.keys():
@@ -149,7 +163,11 @@ class ConservativeModelAverager(ModelAverager):
                 self.variance_corrector.add_variance(model_stat)
 
     def get_model(self, self_model, *args, **kwargs):
+        assert self.model_buffer is not None
         with torch.no_grad():
+            device = ModelAverager._get_device_from_model_stat(self.model_buffer)
+            ModelAverager._move_state_dict(self_model, device)
+
             output = copy.deepcopy(self_model)
             for layer_name, layer_weights in output.items():
                 if layer_name not in self.model_buffer.keys():

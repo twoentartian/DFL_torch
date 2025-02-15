@@ -199,8 +199,6 @@ class Node:
             if buffer_size <= received_model_count:
                 # performing average!
                 self_model = self.get_model_stat()
-                for k, v in self_model.items():
-                    self_model[k] = v.cpu()
                 averaged_model = self.model_averager.get_model(self_model=self_model)
                 self.set_model_stat(averaged_model)
                 self.is_averaging_this_tick = True
