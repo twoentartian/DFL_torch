@@ -26,3 +26,5 @@ class RuntimeParameters:
         self.service_container = {}
         self.mpi_enabled = None
         self.output_path = None
+
+        self.average_on_cpu = True
