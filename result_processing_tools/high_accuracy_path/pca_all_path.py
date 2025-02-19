@@ -133,7 +133,7 @@ if __name__ == '__main__':
     parser.add_argument("--node_name", type=int, default=0)
     parser.add_argument("--disable_3d", action='store_true')
     parser.add_argument("--disable_2d", action='store_true')
-    parser.add_argument("-c", "--cache", type=bool, default=True, help="enable/disable cache lmdb in memory")
+    parser.add_argument('--cache', default=False, action=argparse.BooleanOptionalAction, help="enable/disable cache lmdb in memory")
 
     args = parser.parse_args()
     path_folder = args.path_folder
