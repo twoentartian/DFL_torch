@@ -116,15 +116,15 @@ def incremental_pca_all_path(arg_path_folder, arg_output_folder, arg_node_name: 
                     df.to_csv(output_file_path)
 
     info_file = "info.json"
-    output_file_path = os.path.join(arg_output_folder, info_file)
+    info_file_path = os.path.join(arg_output_folder, info_file)
     info_target = {"targets": generated_targets, "layer_names": list(generated_layer_names), "dimension": dimension}
-    with open(output_file_path, "w") as f:
-        json.dump(info_target, f)
+    with open(info_file_path, "w") as f:
+        json.dump(info_target, f, indent=4)
 
 if __name__ == '__main__':
     torch.multiprocessing.set_start_method('spawn')
 
-    parser = argparse.ArgumentParser(description='Visualize high accuracy paths')
+    parser = argparse.ArgumentParser(description='Ues PCA to reduce dimension for high accuracy paths')
     parser.add_argument("path_folder", type=str, nargs='+', help="high accuracy path data folder")
     parser.add_argument("-p", "--points", type=int, help="number of sample points per path to visualize", default=0)
     parser.add_argument("-l", "--layer", type=str, nargs='+', help="only plot these layers, default: plot all layers")
@@ -151,4 +151,4 @@ if __name__ == '__main__':
     output_folder_path = os.path.join(os.curdir, f"{__file__}_{datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")}")
     os.mkdir(output_folder_path)
 
-    incremental_pca_all_path(path_folder, output_folder_path, node_name, sample_points=points, only_layers=only_layers, dimension=plot_dimensions, enable_lmdb_cache=enable_lmdb_cache)
+    info_file_path = incremental_pca_all_path(path_folder, output_folder_path, node_name, sample_points=points, only_layers=only_layers, dimension=plot_dimensions, enable_lmdb_cache=enable_lmdb_cache)
