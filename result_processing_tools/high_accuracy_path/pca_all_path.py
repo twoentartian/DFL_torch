@@ -62,8 +62,10 @@ def incremental_pca_all_path(arg_path_folder, arg_output_folder, arg_node_name: 
     all_sub_folders = sorted(all_sub_folders)
 
     if enable_lmdb_cache:
+        print("enable lmdb cache")
         lmdb_cache = {}
     else:
+        print("disable lmdb cache")
         lmdb_cache = None
 
     layer_and_ipca = []
