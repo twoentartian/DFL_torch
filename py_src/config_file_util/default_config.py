@@ -18,7 +18,7 @@ from py_src.model_variance_correct import VarianceCorrector, VarianceCorrectionT
 config_name = "default_config"
 
 max_tick = 1000  # total simulation ticks
-save_name = "sample"
+save_name = None
 force_use_cpu = False
 
 """enable flags"""
@@ -30,13 +30,13 @@ override_use_model_stat = None
 override_allocate_all_models = None
 
 """"""""""" Preset """""""""""
-preset_network = 'single'  # None, 'GL', 'FL', 'single'
+preset_network = 'GL'  # None, 'GL', 'FL', 'single'
 preset_variance_correction = None  # None, 'VC'
 preset_network_size = 50
 preset_network_degree = 8  # only valid for GL
 preset_P = 100
 preset_training_batch_count = 1 # how many batches of training data per training tick
-preset_training_loader_worker = 2
+preset_training_loader_worker = None
 """"""""" Global Machine learning related parameters """""""""""
 """ predefined: """
 
@@ -46,8 +46,8 @@ def get_ml_setup():
     if get_ml_setup.__ml_setup is None:
         # get_ml_setup.__ml_setup = ml_setup.cct7_imagenet100()
         # get_ml_setup.__ml_setup = ml_setup.resnet18_cifar100()
-        get_ml_setup.__ml_setup = ml_setup.lenet4_mnist()
-        # get_ml_setup.__ml_setup = ml_setup.lenet5_mnist()
+        # get_ml_setup.__ml_setup = ml_setup.lenet4_mnist()
+        get_ml_setup.__ml_setup = ml_setup.lenet5_mnist()
         # get_ml_setup.__ml_setup = ml_setup.cct7_cifar10()
         # get_ml_setup.__ml_setup = ml_setup.mobilenet_v3_small_cifar10()
         # get_ml_setup.__ml_setup = ml_setup.vgg11_mnist()
