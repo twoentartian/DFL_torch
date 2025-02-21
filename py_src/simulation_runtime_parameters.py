@@ -28,3 +28,6 @@ class RuntimeParameters:
         self.output_path = None
 
         self.average_on_cpu = True
+
+        self.performance_disable_training = False
+        self.performance_disable_communication = False

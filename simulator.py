@@ -61,6 +61,10 @@ def main(config_file_path, output_folder_name=None):
     runtime_parameters.phase = SimulationPhase.INITIALIZING
     runtime_parameters.output_path = output_folder_path
     runtime_parameters.mpi_enabled = False
+    if hasattr(config_file, "performance_disable_training"):
+        runtime_parameters.performance_disable_training = config_file.performance_disable_training
+    if hasattr(config_file, "performance_disable_communication"):
+        runtime_parameters.performance_disable_communication = config_file.performance_disable_communication
 
     # check and create topology
     nodes_set = initial_checking.check_consistent_nodes(config_file.get_topology, config_file.max_tick)

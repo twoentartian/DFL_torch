@@ -34,9 +34,10 @@ preset_network = 'GL'  # None, 'GL', 'FL', 'single'
 preset_variance_correction = None  # None, 'VC'
 preset_network_size = 50
 preset_network_degree = 8  # only valid for GL
-preset_P = 100
+preset_P = 1
 preset_training_batch_count = 1 # how many batches of training data per training tick
 preset_training_loader_worker = None
+preset_averaging_on_cpu = False
 """"""""" Global Machine learning related parameters """""""""""
 """ predefined: """
 
@@ -217,3 +218,9 @@ def get_service_list():
     service_list.append(ServiceWeightsDifferenceRecorder(100))
 
     return service_list
+
+
+""""""""""" Performance test related parameters """""""""""
+""""""""""" DON'T CHANGE THESE PARAMETERS UNLESS YOU KNOW WHAT YOU ARE DOING """""""""""
+performance_disable_training = False
+performance_disable_communication = False

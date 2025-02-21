@@ -183,8 +183,6 @@ class Node:
                 loss, lrs = cuda_env.submit_training_job(self, criterion, data, label)
             self.most_recent_loss = loss
             self.most_recent_lrs = lrs
-        if self.enable_sending:
-            self.is_training_this_tick = True # this flag will trigger sending model to others
 
     def add_model_to_buffer(self, model_stat):
         if self.enable_receiving:

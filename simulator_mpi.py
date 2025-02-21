@@ -79,6 +79,10 @@ def main(config_file_path, output_folder_name=None):
     runtime_parameters.phase = SimulationPhase.INITIALIZING
     runtime_parameters.output_path = output_folder_path
     runtime_parameters.mpi_enabled = True
+    if hasattr(config_file, "performance_disable_training"):
+        runtime_parameters.performance_disable_training = config_file.performance_disable_training
+    if hasattr(config_file, "performance_disable_communication"):
+        runtime_parameters.performance_disable_communication = config_file.performance_disable_communication
 
     # check, create topology and split nodes
     if MPI_rank == 0:

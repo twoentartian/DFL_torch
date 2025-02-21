@@ -50,10 +50,13 @@ def simulation_phase_training(runtime_parameters: RuntimeParameters, logger, con
             training_node_names.append(node_name)
             training_batch_count = 0
             for data, label in node_target.train_loader:
-                if config_file.force_use_cpu:
-                    node_target.submit_training(ml_config.criterion, data, label)
-                else:
-                    node_target.submit_training(ml_config.criterion, data, label, cuda_env=current_cuda_env)
+                if not runtime_parameters.performance_disable_training: # skip training to benchmark performance
+                    if config_file.force_use_cpu:
+                        node_target.submit_training(ml_config.criterion, data, label)
+                    else:
+                        node_target.submit_training(ml_config.criterion, data, label, cuda_env=current_cuda_env)
+                if node_target.enable_sending:
+                    node_target.is_training_this_tick = True  # this flag will trigger sending model to others
                 training_batch_count += 1
                 if training_batch_count >= node_target.num_of_batch_per_training:
                     break
@@ -79,6 +82,9 @@ def simulation_phase_averaging(runtime_parameters: RuntimeParameters, logger, mp
     runtime_parameters.phase = SimulationPhase.AVERAGING
     for service_name, service_inst in runtime_parameters.service_container.items():
         service_inst.trigger(runtime_parameters)
+
+    if runtime_parameters.performance_disable_communication: # skip averaging to benchmark performance
+        return
 
     use_mpi = mpi_world is not None
 
