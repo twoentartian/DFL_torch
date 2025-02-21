@@ -304,6 +304,7 @@ class CudaEnv:
                 loss = criterion(output, labels)
                 loss.backward()
                 optimizer.step()
-            lr_scheduler.step()
+            if lr_scheduler is not None:
+                lr_scheduler.step()
         loss_val = float(loss.item())
         return loss_val, lrs
