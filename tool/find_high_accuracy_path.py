@@ -358,8 +358,10 @@ def process_file_func(args: List[FindPathArgs]):
 
     if arg0.use_cpu:
         device = torch.device("cpu")
+        gpu = None
     else:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        gpu = cuda.CudaDevice(0)
 
     thread_per_process = arg0.total_cpu_count // arg0.worker_count
     torch.set_num_threads(thread_per_process)
@@ -454,7 +456,7 @@ def process_file_func(args: List[FindPathArgs]):
         child_logger.info("record_model_service is OFF")
         record_model_service = None
     record_test_accuracy_loss_service = record_test_accuracy_loss.ServiceTestAccuracyLossRecorder(1, 100, use_fixed_testing_dataset=True)
-    record_test_accuracy_loss_service.initialize_without_runtime_parameters(arg_output_folder_path, [0], start_model, criterion, training_dataset, use_cuda=True)
+    record_test_accuracy_loss_service.initialize_without_runtime_parameters(arg_output_folder_path, [0], start_model, criterion, training_dataset, gpu=gpu)
     record_training_loss_service = record_training_loss.ServiceTrainingLossRecorder(1)
     record_training_loss_service.initialize_without_runtime_parameters(arg_output_folder_path, [0])
 
