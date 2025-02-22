@@ -874,6 +874,8 @@ if __name__ == '__main__':
 
             # update from cli interface
             stage.save_format = args.save_format
+            stage.save_ticks = args.save_ticks
+            stage.save_interval = args.save_interval
 
             find_path_arg_template.append(stage)
     else:
