@@ -8,6 +8,7 @@ import torch
 import umap
 import pickle
 import numpy as np
+import pandas as pd
 from typing import Optional
 
 from datetime import datetime
@@ -276,12 +277,13 @@ def visualize_all_path(arg_path_folder, arg_output_folder, arg_node_name: int, m
     layers_and_trajectory = {}
     layer_and_trajectory_index = {}
     layers_and_trajectory_length = {}
-
+    sub_folder_to_ticks = {}
     for single_sub_folder in all_sub_folders:
         lmdb_path = os.path.join(single_sub_folder, "model_stat.lmdb")
         print(f"loading lmdb: {lmdb_path}")
         tick_and_models = load_models_from_lmdb(lmdb_path, arg_node_name, desired_length=sample_points)
         ticks_ordered = sorted(tick_and_models.keys())
+        sub_folder_to_ticks[single_sub_folder] = ticks_ordered
         sample_model = tick_and_models[next(iter(tick_and_models))]
         for layer_name in sample_model.keys():
             if only_layers is not None and (layer_name not in only_layers):
@@ -312,6 +314,21 @@ def visualize_all_path(arg_path_folder, arg_output_folder, arg_node_name: int, m
                 elif method == 'pca':
                     pca_2d = PCA(n_components=2)
                     projected_2d = pca_2d.fit_transform(layers_and_trajectory[layer_name])
+
+                    # save to files
+                    row_counter = 0
+                    for index, single_sub_folder in enumerate(all_sub_folders):
+                        ticks_ordered = sub_folder_to_ticks[single_sub_folder]
+                        length = layers_and_trajectory_length[layer_name][index]
+                        column_names = [f"PCA Dimension {i}" for i in range(2)]
+                        df = pd.DataFrame(projected_2d[row_counter:row_counter+length, :], columns=[column_names])
+                        row_counter += length
+                        df.insert(0, "tick", pd.Series(ticks_ordered))
+                        output_file_path = os.path.join(arg_output_folder, f"{single_sub_folder}_{layer_name}_2d.csv")
+                        output_file_dir = os.path.dirname(output_file_path)
+                        os.makedirs(output_file_dir, exist_ok=True)
+                        df.to_csv(output_file_path)
+
                     if arg_remove_duplicate_points:
                         projected_2d, projection_index, new_trajectory_length = de_duplicate_weights_all_path(projected_2d, trajectory_length_list, shrink_ratio=shrink_ratio)
                         layers_and_trajectory_length[layer_name] = new_trajectory_length
