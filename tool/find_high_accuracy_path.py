@@ -871,6 +871,10 @@ if __name__ == '__main__':
             stage = FindPathArgs()
             stage.set_default()
             stage.update_object_from_json(single_stage_json)
+
+            # update from cli interface
+            stage.save_format = args.save_format
+
             find_path_arg_template.append(stage)
     else:
         """for single arg"""
