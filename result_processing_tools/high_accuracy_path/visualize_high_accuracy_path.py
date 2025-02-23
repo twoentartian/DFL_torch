@@ -24,6 +24,12 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 plot_alpha = 0.5
 plot_size = 1
 
+def pca_torch(X, n_components):
+    X_tensor = torch.tensor(X, dtype=torch.float32)
+    X_centered = X_tensor - X_tensor.mean(dim=0)
+    U, S, V = torch.linalg.svd(X_centered, full_matrices=False)
+    return X_centered @ V[:, :n_components]
+
 def load_models_from_lmdb(lmdb_path, arg_node_name, desired_length:Optional[int]=None):
     lmdb_env = lmdb.open(lmdb_path, readonly=True)
     tick_and_models = {}
@@ -190,7 +196,8 @@ def visualize_single_path(arg_path_folder, arg_output_folder, arg_node_name: int
                     projected_2d = umap_2d.fit_transform(weights_array)
                     projection_index = range(len(projected_2d))
                 elif method == 'pca':
-                    pca_2d = PCA(n_components=2)
+                    # pca_2d = PCA(n_components=2)
+                    pca_2d = pca_torch(weights_array, 2).numpy()
                     projected_2d = pca_2d.fit_transform(weights_array)
                     if arg_remove_duplicate_points:
                         projected_2d, projection_index = deduplicate_weights_dbscan(projected_2d)
@@ -223,7 +230,8 @@ def visualize_single_path(arg_path_folder, arg_output_folder, arg_node_name: int
                     projected_3d = umap_3d.fit_transform(weights_array)
                     projection_index = range(len(projected_3d))
                 elif method == 'pca':
-                    pca_3d = PCA(n_components=3)
+                    # pca_3d = PCA(n_components=3)
+                    pca_3d = pca_torch(weights_array, 3).numpy()
                     projected_3d = pca_3d.fit_transform(weights_array)
                     if arg_remove_duplicate_points:
                         projected_3d, projection_index = deduplicate_weights_dbscan(projected_3d)
