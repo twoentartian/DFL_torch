@@ -196,9 +196,9 @@ def visualize_single_path(arg_path_folder, arg_output_folder, arg_node_name: int
                     projected_2d = umap_2d.fit_transform(weights_array)
                     projection_index = range(len(projected_2d))
                 elif method == 'pca':
-                    # pca_2d = PCA(n_components=2)
-                    # projected_2d = pca_2d.fit_transform(weights_array)
-                    projected_2d = pca_torch(weights_array, 2).numpy()
+                    pca_2d = PCA(n_components=2, svd_solver='arpack')
+                    projected_2d = pca_2d.fit_transform(weights_array)
+                    # projected_2d = pca_torch(weights_array, 2).numpy()
                     if arg_remove_duplicate_points:
                         projected_2d, projection_index = deduplicate_weights_dbscan(projected_2d)
                     else:
@@ -230,9 +230,9 @@ def visualize_single_path(arg_path_folder, arg_output_folder, arg_node_name: int
                     projected_3d = umap_3d.fit_transform(weights_array)
                     projection_index = range(len(projected_3d))
                 elif method == 'pca':
-                    # pca_3d = PCA(n_components=3)
-                    # projected_3d = pca_3d.fit_transform(weights_array)
-                    projected_3d = pca_torch(weights_array, 3).numpy()
+                    pca_3d = PCA(n_components=3, svd_solver='arpack')
+                    projected_3d = pca_3d.fit_transform(weights_array)
+                    # projected_3d = pca_torch(weights_array, 3).numpy()
                     if arg_remove_duplicate_points:
                         projected_3d, projection_index = deduplicate_weights_dbscan(projected_3d)
                     else:
@@ -320,9 +320,9 @@ def visualize_all_path(arg_path_folder, arg_output_folder, arg_node_name: int, m
                     umap_2d = umap.UMAP(n_components=2)
                     projected_2d = umap_2d.fit_transform(layers_and_trajectory[layer_name])
                 elif method == 'pca':
-                    # pca_2d = PCA(n_components=2)
-                    # projected_2d = pca_2d.fit_transform(layers_and_trajectory[layer_name])
-                    projected_2d = pca_torch(layers_and_trajectory[layer_name], 2).numpy()
+                    pca_2d = PCA(n_components=2, svd_solver='arpack')
+                    projected_2d = pca_2d.fit_transform(layers_and_trajectory[layer_name])
+                    # projected_2d = pca_torch(layers_and_trajectory[layer_name], 2).numpy()
 
                     # save to files
                     row_counter = 0
@@ -370,9 +370,9 @@ def visualize_all_path(arg_path_folder, arg_output_folder, arg_node_name: int, m
                     umap_3d = umap.UMAP(n_components=3)
                     projected_3d = umap_3d.fit_transform(layers_and_trajectory[layer_name])
                 elif method == 'pca':
-                    # pca_3d = PCA(n_components=3)
-                    # projected_3d = pca_3d.fit_transform(layers_and_trajectory[layer_name])
-                    projected_3d = pca_torch(layers_and_trajectory[layer_name], 3).numpy()
+                    pca_3d = PCA(n_components=3, svd_solver='arpack')
+                    projected_3d = pca_3d.fit_transform(layers_and_trajectory[layer_name])
+                    # projected_3d = pca_torch(layers_and_trajectory[layer_name], 3).numpy()
                     if arg_remove_duplicate_points:
                         projected_3d, projection_index, new_trajectory_length = de_duplicate_weights_all_path(projected_3d, trajectory_length_list, shrink_ratio=shrink_ratio)
                         layers_and_trajectory_length[layer_name] = new_trajectory_length
