@@ -7,6 +7,7 @@ import lmdb
 import torch
 import umap
 import pickle
+import logging
 import numpy as np
 import pandas as pd
 from typing import Optional
@@ -23,6 +24,31 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 plot_alpha = 0.5
 plot_size = 1
+
+logger = logging.getLogger()
+
+def set_logging(target_logger, task_name, log_file_path=None):
+    class ExitOnExceptionHandler(logging.StreamHandler):
+        def emit(self, record):
+            if record.levelno == logging.CRITICAL:
+                raise SystemExit(-1)
+
+    formatter = logging.Formatter(f"[%(asctime)s] [%(levelname)8s] [{task_name}] --- %(message)s (%(filename)s:%(lineno)s)")
+
+    console = logging.StreamHandler(sys.stdout)
+    console.setLevel(logging.INFO)
+    console.setFormatter(formatter)
+
+    target_logger.setLevel(logging.DEBUG)
+    target_logger.addHandler(console)
+    target_logger.addHandler(ExitOnExceptionHandler())
+
+    if log_file_path is not None:
+        file = logging.FileHandler(log_file_path)
+        file.setLevel(logging.DEBUG)
+        file.setFormatter(formatter)
+        target_logger.addHandler(file)
+    del console, formatter
 
 def pca_torch(X, n_components):
     X_tensor = torch.tensor(X, dtype=torch.float32)
@@ -65,9 +91,9 @@ def visualize_single_path_all_weights(arg_path_folder, arg_output_folder, arg_no
     tick_and_models = load_models_from_lmdb(lmdb_path, arg_node_name, desired_length=sample_points)
     max_tick = max(tick_and_models.keys())
     sample_model = tick_and_models[next(iter(tick_and_models))]
-    print("model digest:")
+    logger.info("model digest:")
     for layer_name, weights in sample_model.items():
-        print(f"layer: {layer_name}, weights: {weights.shape}")
+        logger.info(f"layer: {layer_name}, weights: {weights.shape}")
 
     # plot
     for layer_name, weights in sample_model.items():
@@ -75,7 +101,7 @@ def visualize_single_path_all_weights(arg_path_folder, arg_output_folder, arg_no
         os.mkdir(output_folder)
         weights_count = len(weights.view(-1))
         for weight_index in range(weights_count):
-            print(f"processing: {layer_name}:{weight_index}")
+            logger.info(f"processing: {layer_name}:{weight_index}")
             ticks = []
             values = []
             for tick in range(max_tick+1):
@@ -131,7 +157,7 @@ def deduplicate_weights_dbscan(weights_trajectory, shrink_ratio: float | None = 
                 index_reduced.append(index)
     weights_trajectory_reduced = np.array(weights_trajectory_reduced)
     index_reduced = np.array(index_reduced)
-    print(f"De-duplicate trajectory points: {weights_trajectory.shape[0]} -> {weights_trajectory_reduced.shape[0]}")
+    logger.info(f"De-duplicate trajectory points: {weights_trajectory.shape[0]} -> {weights_trajectory_reduced.shape[0]}")
     if shrink_ratio is None:
         return weights_trajectory_reduced, index_reduced
     else:
@@ -140,7 +166,7 @@ def deduplicate_weights_dbscan(weights_trajectory, shrink_ratio: float | None = 
         sample_rate = round(current_len / target_len)
         if sample_rate < 1:
             sample_rate = 1
-        print(f"De-duplicate extra sampling rate: {sample_rate}")
+        logger.info(f"De-duplicate extra sampling rate: {sample_rate}")
         return weights_trajectory_reduced[::sample_rate], index_reduced[::sample_rate]
 
 def deduplicate_weights_kde(weights_trajectory, n_samples):
@@ -164,23 +190,23 @@ def visualize_single_path(arg_path_folder, arg_output_folder, arg_node_name: int
     while True:
         lmdb_path_1 = os.path.join(arg_path_folder, "model_stat.lmdb")
         if check_lmdb_exists(lmdb_path_1):
-            print(f"find lmdb: {lmdb_path_1}")
+            logger.info(f"find lmdb: {lmdb_path_1}")
             lmdb_path = lmdb_path_1
             break
         lmdb_path_2 = arg_path_folder
         if check_lmdb_exists(lmdb_path_2):
-            print(f"find lmdb: {lmdb_path_2}")
+            logger.info(f"find lmdb: {lmdb_path_2}")
             lmdb_path = lmdb_path_2
             break
-        print(f"lmdb not found in these paths: {[lmdb_path_1, lmdb_path_2]}")
+        logger.info(f"lmdb not found in these paths: {[lmdb_path_1, lmdb_path_2]}")
         exit(-1)
 
     tick_and_models = load_models_from_lmdb(lmdb_path, arg_node_name, desired_length=sample_points)
     sample_model = tick_and_models[next(iter(tick_and_models))]
     ticks_ordered = sorted(tick_and_models.keys())
-    print("model digest:")
+    logger.info("model digest:")
     for layer_name, weights in sample_model.items():
-        print(f"layer: {layer_name}, weights: {weights.shape}")
+        logger.info(f"layer: {layer_name}, weights: {weights.shape}")
 
     for method in methods:
         assert method in ['umap', 'pca', 'tsne']
@@ -190,7 +216,7 @@ def visualize_single_path(arg_path_folder, arg_output_folder, arg_node_name: int
             weights_array = np.array(weights_list)
 
             if 2 in dimension:
-                print(f"processing {method}(2d): {layer_name}")
+                logger.info(f"processing {method}(2d): {layer_name}")
                 if method == 'umap':
                     umap_2d = umap.UMAP(n_components=2)
                     projected_2d = umap_2d.fit_transform(weights_array)
@@ -224,7 +250,7 @@ def visualize_single_path(arg_path_folder, arg_output_folder, arg_node_name: int
                 plt.close(fig)
 
             if 3 in dimension:
-                print(f"processing {method}(3d): {layer_name}")
+                logger.info(f"processing {method}(3d): {layer_name}")
                 if method == 'umap':
                     umap_3d = umap.UMAP(n_components=3)
                     projected_3d = umap_3d.fit_transform(weights_array)
@@ -288,7 +314,7 @@ def visualize_all_path(arg_path_folder, arg_output_folder, arg_node_name: int, m
     sub_folder_to_ticks = {}
     for single_sub_folder in all_sub_folders:
         lmdb_path = os.path.join(single_sub_folder, "model_stat.lmdb")
-        print(f"loading lmdb: {lmdb_path}")
+        logger.info(f"loading lmdb: {lmdb_path}")
         tick_and_models = load_models_from_lmdb(lmdb_path, arg_node_name, desired_length=sample_points)
         ticks_ordered = sorted(tick_and_models.keys())
         sub_folder_to_ticks[single_sub_folder] = ticks_ordered
@@ -306,7 +332,7 @@ def visualize_all_path(arg_path_folder, arg_output_folder, arg_node_name: int, m
             layers_and_trajectory_length[layer_name].append(len(weights_list))
 
     for layer_name in layers_and_trajectory.keys():
-        print(f"converting {layer_name} to np array")
+        logger.info(f"converting {layer_name} to np array")
         layers_and_trajectory[layer_name] = np.array(layers_and_trajectory[layer_name])
     all_layer_names = layers_and_trajectory.keys()
 
@@ -316,7 +342,7 @@ def visualize_all_path(arg_path_folder, arg_output_folder, arg_node_name: int, m
             projection_index = layer_and_trajectory_index[layer_name]
             trajectory_length_list = layers_and_trajectory_length[layer_name]
             if 2 in dimension:
-                print(f"processing {method}(2d): {layer_name}")
+                logger.info(f"processing {method}(2d): {layer_name}")
                 if method == 'umap':
                     umap_2d = umap.UMAP(n_components=2)
                     projected_2d = umap_2d.fit_transform(layers_and_trajectory[layer_name])
@@ -366,7 +392,7 @@ def visualize_all_path(arg_path_folder, arg_output_folder, arg_node_name: int, m
                 plt.close(fig)
 
             if 3 in dimension:
-                print(f"processing {method}(3d): {layer_name}")
+                logger.info(f"processing {method}(3d): {layer_name}")
                 if method == 'umap':
                     umap_3d = umap.UMAP(n_components=3)
                     projected_3d = umap_3d.fit_transform(layers_and_trajectory[layer_name])
@@ -403,6 +429,14 @@ def visualize_all_path(arg_path_folder, arg_output_folder, arg_node_name: int, m
 if __name__ == '__main__':
     torch.multiprocessing.set_start_method('spawn')
 
+    # create output folder
+    output_folder_path = os.path.join(os.curdir, f"{__file__}_{datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")}")
+    os.mkdir(output_folder_path)
+
+    # logger
+    set_logging(logger, "main", log_file_path=os.path.join(output_folder_path, "log.txt"))
+    logger.info("logging setup complete")
+
     parser = argparse.ArgumentParser(description='Visualize high accuracy paths')
     parser.add_argument("mode", type=str, choices=['single_path_all_weights', 'all_path', 'single_path'], help="single_path_all_weights: draw the weights change for all weights."
                                                                                                                "all_path: reduce the dimension and plot the path for all models in this path, suitable for paths generated 'find_high_accuracy_path'"
@@ -434,10 +468,6 @@ if __name__ == '__main__':
     only_layers = args.layer
     remove_duplicate_points = args.remove_duplicate_points
     remove_duplicate_shrink_ratio = args.remove_duplicate_shrink_ratio
-
-    # create output folder
-    output_folder_path = os.path.join(os.curdir, f"{__file__}_{datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")}")
-    os.mkdir(output_folder_path)
 
     if mode == 'single_path_all_weights':
         visualize_single_path_all_weights(path_folder, output_folder_path, node_name, sample_points=points)
