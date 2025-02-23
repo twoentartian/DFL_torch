@@ -69,12 +69,16 @@ class ModelAverager:
     @staticmethod
     def _iadd_two_model(src, addition, weight_src: float = 1.0, weight_addition: float = 1.0, check_same_keys=True):
         with torch.no_grad():
+            if src.device != addition.device:
+                addition_on_src = addition.to(src.device)
+            else:
+                addition_on_src = addition
             assert (not check_same_keys) or (set(src.keys()) == set(addition.keys()))
             for layer_name in src.keys():
                 if weight_src == 1.0 and weight_addition == 1.0:
-                    src[layer_name] += addition[layer_name]
+                    src[layer_name] += addition_on_src[layer_name]
                 else:
-                    src[layer_name] = src[layer_name] * weight_src + addition[layer_name] * weight_addition
+                    src[layer_name] = src[layer_name] * weight_src + addition_on_src[layer_name] * weight_addition
             return src
 
     @staticmethod
