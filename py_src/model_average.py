@@ -72,7 +72,7 @@ class ModelAverager:
             assert (not check_same_keys) or (set(src.keys()) == set(addition.keys()))
             for layer_name in src.keys():
                 if src[layer_name].device != addition[layer_name].device:
-                    addition_layer_on_src = addition[layer_name].to(src.device)
+                    addition_layer_on_src = addition[layer_name].to(src[layer_name].device)
                 else:
                     addition_layer_on_src = addition[layer_name]
                 if weight_src == 1.0 and weight_addition == 1.0:
