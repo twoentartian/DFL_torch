@@ -324,16 +324,19 @@ def visualize_all_path(arg_path_folder, arg_output_folder, arg_node_name: int, m
                 continue
             weights_list = [extract_weights(tick_and_models[tick], layer_name) for tick in ticks_ordered]
             if layer_name not in layers_and_trajectory.keys():
-                layers_and_trajectory[layer_name] = []
+                layers_and_trajectory[layer_name] = np.empty((len(all_sub_folders) * len(weights_list), weights_list[0].shape[0])) # we should allocate all memory now
                 layer_and_trajectory_index[layer_name] = []
                 layers_and_trajectory_length[layer_name] = []
-            layers_and_trajectory[layer_name].extend(weights_list)
+            # layers_and_trajectory[layer_name].extend(weights_list)
+            for index, weights in enumerate(weights_list):
+                start_pos = len(layer_and_trajectory_index[layer_name])
+                layers_and_trajectory[layer_name][start_pos+index,:] = weights
             layer_and_trajectory_index[layer_name].extend(range(len(weights_list)))
             layers_and_trajectory_length[layer_name].append(len(weights_list))
 
-    for layer_name in layers_and_trajectory.keys():
-        logger.info(f"converting {layer_name} to np array")
-        layers_and_trajectory[layer_name] = np.array(layers_and_trajectory[layer_name])
+    # for layer_name in layers_and_trajectory.keys():
+    #     logger.info(f"converting {layer_name} to np array")
+    #     layers_and_trajectory[layer_name] = np.array(layers_and_trajectory[layer_name])
     all_layer_names = layers_and_trajectory.keys()
 
     # plotting
