@@ -50,18 +50,27 @@ class MpiDataPack(object):
         return output_list
 
 def serialize_model_stat(model_stat):
-    buffer = io.BytesIO()
-    torch.save(model_stat, buffer)
-    buffer.seek(0)
-    data = buffer.read()
-    return data
+    # buffer = io.BytesIO()
+    # torch.save(model_stat, buffer)
+    # buffer.seek(0)
+    # data = buffer.read()
+    # return data
+
+    output = {}
+    for layer_name, layer_tensor in model_stat.items():
+        output[layer_name] = layer_tensor.detach().cpu().numpy()
+    return output
 
 def deserialize_model_stat(data):
-    buffer = io.BytesIO(data)
-    buffer.seek(0)
-    model_stat = torch.load(buffer)
-    return model_stat
+    # buffer = io.BytesIO(data)
+    # buffer.seek(0)
+    # model_stat = torch.load(buffer)
+    # return model_stat
 
+    model_stat = {}
+    for layer_name, layer_numpy in data.items():
+        model_stat[layer_name] = torch.from_numpy(layer_numpy)
+    return model_stat
 
 def mpi_isend_large_data(data, dest, MPI_comm, tag=0, chunk_size=DEFAULT_CHUNk_SIZE):
     """

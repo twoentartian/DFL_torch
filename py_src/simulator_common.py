@@ -122,7 +122,7 @@ def simulation_phase_averaging(runtime_parameters: RuntimeParameters, logger, mp
             model_stat_serialized = None
             if runtime_parameters.average_on_cpu:
                 for k, v in model_stat.items():
-                    model_stat[k] = v.cpu()
+                    model_stat[k] = v.detach().cpu()
             # send model to peers
             neighbors = list(runtime_parameters.topology.neighbors(node_target.name))
 
