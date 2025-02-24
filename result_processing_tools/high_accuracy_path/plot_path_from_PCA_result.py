@@ -1,7 +1,6 @@
 import json
 import os
 import argparse
-import pickle
 import pandas as pd
 import numpy as np
 import re
@@ -14,6 +13,7 @@ from sklearn.preprocessing import StandardScaler
 plot_alpha = 0.5
 plot_size = 1
 
+ignore_layers_keyword = ["bias"]
 
 def deduplicate_weights_dbscan(weights_trajectory, shrink_ratio: float | None = None):
     if shrink_ratio is not None:
@@ -62,14 +62,22 @@ def plot_pca_all_path(info_file_path, data_path, shrink_ratio=None):
         all_targets.extend(v)
     all_layers = info_target["layer_names"]
     all_layers = sorted(all_layers)
+    filtered_layers = []
+    for layer in all_layers:
+        for keyword in ignore_layers_keyword:
+            if keyword not in layer:
+                filtered_layers.append(layer)
+    all_layers = filtered_layers
     all_dimensions = info_target["dimension"]
 
     for d in all_dimensions:
         if d == 2:
-            fig, axs = plt.subplots(1, len(all_layers), figsize=(len(all_layers) * 10, 10), squeeze=False)
+            fig, axs = plt.subplots(1, len(all_layers), figsize=(len(all_layers) * 15, 15), squeeze=False)
             file_name = "pca_2d"
             for layer_index, layer in enumerate(all_layers):
-                ax = axs[layer_index]
+                print(f"processing layer {layer}")
+                ax = axs[0, layer_index]
+                ax.set_title(f'PCA Projection of layer {layer}')
                 for target_index, target in enumerate(all_targets):
                     csv_file_path = os.path.join(data_path, f"{target}_{layer}_{d}d.csv")
                     df = pd.read_csv(csv_file_path)
@@ -77,60 +85,38 @@ def plot_pca_all_path(info_file_path, data_path, shrink_ratio=None):
                     pca_dimensions = [col for col in df.columns if re.match(pattern, col)]
                     assert len(pca_dimensions) == d
 
-                    projected = df[pca_dimensions].to_numpy()
+                    projected_2d = df[pca_dimensions].to_numpy()
 
                     if shrink_ratio is not None:
-                        projected_final, index_final = deduplicate_weights_dbscan(projected, shrink_ratio=shrink_ratio)
+                        projected_2d_final, index_final = deduplicate_weights_dbscan(projected_2d, shrink_ratio=shrink_ratio)
                     else:
-                        projected_final = projected
-                        index_final = projected.shape[0]
-
-                    sc = ax.scatter(projected_final[:, 0], projected_final[:, 1], s=plot_size, alpha=plot_alpha,
+                        projected_2d_final = projected_2d
+                        index_final = range(projected_2d.shape[0])
+                    sc = ax.scatter(projected_2d_final[:, 0], projected_2d_final[:, 1], s=plot_size, alpha=plot_alpha,
                                     c=df["tick"][index_final], cmap='viridis')
                     if target_index == 0:
                         plt.colorbar(sc, label='Model Index')
             fig.tight_layout()
             fig.savefig(f"{data_path}/{file_name}.pdf")
-            fig.savefig(f"{data_path}/{file_name}.png", dpi=400)
+            fig.savefig(f"{data_path}/{file_name}.jpg", dpi=400)
             plt.close(fig)
         if d == 3:
-            for layer_index, layer in enumerate(all_layers):
-                fig = plt.figure(figsize=(10, 8))
-                ax = fig.add_subplot(111, projection='3d')
-                for target_index, target in enumerate(all_targets):
-                    csv_file_path = os.path.join(data_path, f"{target}_{layer}_{d}d.csv")
-                    df = pd.read_csv(csv_file_path)
-                    pattern = r'^PCA Dimension \d+$'
-                    pca_dimensions = [col for col in df.columns if re.match(pattern, col)]
-                    assert len(pca_dimensions) == d
-                    projected = df[pca_dimensions].to_numpy()
-                    if shrink_ratio is not None:
-                        projected_final, index_final = deduplicate_weights_dbscan(projected, shrink_ratio=shrink_ratio)
-                    else:
-                        projected_final = projected
-                        index_final = projected.shape[0]
-                    sc = ax.scatter(projected_final[:, 0], projected_final[:, 1], projected_final[:, 2], s=plot_size, alpha=plot_alpha,
-                                    c=df["tick"][index_final], cmap='viridis')
-                    if target_index == 0:
-                        plt.colorbar(sc, label='Model Index')
-                ax.set_xlabel(f'PCA Dimension 1')
-                ax.set_ylabel(f'PCA Dimension 2')
-                ax.set_zlabel(f'PCA Dimension 3')
-                ax.set_title(f'3D PCA Projection of layer {layer}')
-                file_name = os.path.join(data_path, f"3d_{layer}")
-                pickle.dump(fig, open(f'{file_name}.plt3d', 'wb'))
-                plt.close(fig)
+            pass
+            # not implemented yet
+
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Plot high accuracy paths')
     parser.add_argument("path", type=str, help="the folder containing info.json and PCA results")
     parser.add_argument("-i","--info", type=str, help="info file path, default: {PCA results path}/info.json")
+    parser.add_argument("-s", "--shrink", type=float, default=0.1, help="shrink ratio, a value between 0 and 1 to reduce output image size")
 
     args = parser.parse_args()
 
     path = Path(args.path)
+    shrink_ratio = args.shrink
     if args.info is None:
         info_path = os.path.join(path, "info.json")
     else:
         info_path = Path(args.info)
-    plot_pca_all_path(info_path, path)
+    plot_pca_all_path(info_path, path, shrink_ratio=shrink_ratio)
