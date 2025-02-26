@@ -811,7 +811,7 @@ def process_file_func(args: List[FindPathArgs]):
 if __name__ == '__main__':
     torch.multiprocessing.set_start_method('spawn')
 
-    parser = argparse.ArgumentParser(description='Generate some high accuracy models')
+    parser = argparse.ArgumentParser(description='Find the high accuracy path between two models')
     parser.add_argument("start_folder", type=str, help="folder containing starting models")
     parser.add_argument("end_folder", type=str, help="folder containing destination models")
     parser.add_argument("--mapping_mode", type=str, default='auto', choices=['auto', 'all_to_all', 'each_to_each', 'one_to_all', 'all_to_one'])
