@@ -310,10 +310,10 @@ def process_file_func(index, runtime_parameter: RuntimeParameters):
             child_logger.info(f"update parameter (move) at tick {runtime_parameter.current_tick}")
             parameter_move = new_parameter_move
             # update layers to move
-            averaged_layers, ignore_move_layers = find_layers_according_to_name_and_keyword(start_model_stat_dict, parameter_move.layer_skip_move, parameter_move.layer_skip_move_keyword)
+            ignore_move_layers, moved_layers = find_layers_according_to_name_and_keyword(start_model_stat_dict, parameter_move.layer_skip_move, parameter_move.layer_skip_move_keyword)
             child_logger.info(f"updating layers to move at tick {runtime_parameter.current_tick}")
             child_logger.info(f"ignore moving {len(ignore_move_layers)} layers: {ignore_move_layers}")
-            child_logger.info(f"plan to move {len(averaged_layers)} layers: {averaged_layers}")
+            child_logger.info(f"plan to move {len(moved_layers)} layers: {moved_layers}")
         new_parameter_rebuild_norm: ParameterRebuildNorm = config_file.get_parameter_rebuild_norm(runtime_parameter, current_ml_setup)
         if new_parameter_rebuild_norm is not None:
             child_logger.info(f"update parameter (rebuild_norm) at tick {runtime_parameter.current_tick}")
