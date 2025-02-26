@@ -130,8 +130,6 @@ if __name__ == '__main__':
         if herd_effect_delay is not None:
             axs[plot_index].axvline(x=herd_effect_delay, color='r', label=f'herd effect delay={herd_effect_delay}')
         for col in weight_diff_df.columns:
-            if not col.isdigit():
-                continue
             if numpy.sum(weight_diff_df[col]) == 0:
                 continue
             if is_ignored_layer(col):
@@ -158,8 +156,6 @@ if __name__ == '__main__':
         if herd_effect_delay is not None:
             axs[plot_index].axvline(x=herd_effect_delay, color='r', label=f'herd effect delay={herd_effect_delay}')
         for col in col_to_plot:
-            if not col.isdigit():
-                continue
             axs[plot_index].plot(df_x, df[col], label=col)
 
         axs[plot_index].grid()
