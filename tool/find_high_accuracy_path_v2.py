@@ -40,7 +40,8 @@ def load_existing_optimizer_stat(optimizer, optimizer_stat_dict_path, logger=Non
     del optimizer_test
 
 def pre_train(model, optimizer, criterion, dataloader, device, cpu_device, logger=None):
-    logger.info(f"pre training")
+    if logger is not None:
+        logger.info(f"pre training")
     temp_model_state = model.state_dict()
     cuda.CudaEnv.model_state_dict_to(temp_model_state, cpu_device)
     model.train()
@@ -58,7 +59,8 @@ def pre_train(model, optimizer, criterion, dataloader, device, cpu_device, logge
             break
     model.load_state_dict(temp_model_state)
     model.to(device)
-    logger.info(f"pre training finished")
+    if logger is not None:
+        logger.info(f"pre training finished")
 
 def find_layers_according_to_name_and_keyword(model_state_dict, layer_names, layer_name_keywords):
     ignore_layers = []
@@ -81,7 +83,8 @@ def find_layers_according_to_name_and_keyword(model_state_dict, layer_names, lay
             found_layers.append(l)
     return found_layers, ignore_layers
 
-def rebuild_norm_layer_function(model: torch.nn.Module, initial_model_state, rebuild_norm_optimizer: torch.optim.Optimizer, training_optimizer_state, norm_layers, ml_setup: MlSetup,
+def rebuild_norm_layer_function(model: torch.nn.Module, initial_model_state, rebuild_norm_optimizer: torch.optim.Optimizer,
+                                training_optimizer_state, norm_layers, ml_setup: MlSetup,
                                 dataloader, parameter_rebuild_norm, runtime_parameter: RuntimeParameters, rebuild_on_device=None, logger=None):
     model_stat = model.state_dict()
 
@@ -180,7 +183,10 @@ def process_file_func(index, runtime_parameter: RuntimeParameters):
     cpu_device = torch.device("cpu")
     start_model_stat_dict, start_model_name = util.load_model_state_file(start_point)
     child_logger.info(f"loading start model at {start_point}")
-    current_ml_setup = ml_setup.get_ml_setup_from_config(start_model_name)
+    if runtime_parameter.dataset_name is not None:
+        current_ml_setup = ml_setup.get_ml_setup_from_config(start_model_name, dataset_type=runtime_parameter.dataset_name)
+    else:
+        current_ml_setup = ml_setup.get_ml_setup_from_config(start_model_name)
     child_logger.info(f"find model type is {start_model_name}")
 
     target_model: torch.nn.Module = copy.deepcopy(current_ml_setup.model)
@@ -315,7 +321,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters):
                 logger.critical("cannot enable both pretrain_optimizer and load_existing_optimizer")
             # pretrain optimizer
             if parameter_train.pretrain_optimizer:
-                pre_train(target_model, optimizer, criterion, dataloader, device, cpu_device)
+                pre_train(target_model, optimizer, criterion, dataloader, device, cpu_device, logger=child_logger)
             # load existing optimizer
             if parameter_train.load_existing_optimizer:
                 optimizer_state_dict_path = start_point.replace('model.pt', 'optimizer.pt')
@@ -379,7 +385,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters):
                 optimizer_for_rebuild_norm = optimizer_for_rebuild_norm_new
             training_optimizer_stat = optimizer.state_dict()
             rebuild_norm_layer_function(target_model, initial_model_stat, optimizer_for_rebuild_norm, training_optimizer_stat,
-                                        norm_layers, current_ml_setup, dataloader, parameter_rebuild_norm, runtime_parameter, device)
+                                        norm_layers, current_ml_setup, dataloader, parameter_rebuild_norm, runtime_parameter, device, logger=child_logger)
 
         """variance correction"""
         if runtime_parameter.work_mode == WorkMode.to_certain_model:
@@ -425,6 +431,7 @@ if __name__ == '__main__':
 
     parser.add_argument("-c", '--core', type=int, default=os.cpu_count(), help='specify the number of CPU cores to use')
     parser.add_argument("-w", "--worker", type=int, default=1, help='specify how many models to train in parallel')
+    parser.add_argument("-d", "--dataset", type=str, default=None, help='specify the dataset name')
 
     parser.add_argument("--save_ticks", type=str, help='specify when to record the models (e.g. [1,2,3,5-10]), only works when --save_format is set to work.')
     parser.add_argument("--save_interval", type=int, default=1, help='specify the saving interval')
@@ -449,6 +456,7 @@ if __name__ == '__main__':
     runtime_parameter.save_interval = args.save_interval
     runtime_parameter.save_format = args.save_format
     runtime_parameter.config_file_path = config_file_path
+    runtime_parameter.dataset_name = args.dataset
 
     # find all paths to process
     start_folder = args.start_folder

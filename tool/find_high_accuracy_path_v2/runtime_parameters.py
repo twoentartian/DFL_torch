@@ -22,6 +22,7 @@ class RuntimeParameters(object):
     save_format = None
 
     config_file_path = None
+    dataset_name = None
 
     """real-time values"""
     current_tick = None
