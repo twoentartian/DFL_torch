@@ -63,8 +63,8 @@ def pre_train(model, optimizer, criterion, dataloader, device, cpu_device, logge
         logger.info(f"pre training finished")
 
 def find_layers_according_to_name_and_keyword(model_state_dict, layer_names, layer_name_keywords):
-    ignore_layers = []
     found_layers = []
+    ignored_layers = []
     if layer_names is None:
         _layer_names = []
     else:
@@ -75,13 +75,13 @@ def find_layers_according_to_name_and_keyword(model_state_dict, layer_names, lay
         _layer_name_keywords = layer_name_keywords
     for l in model_state_dict.keys():
         if l in _layer_names:
-            ignore_layers.append(l)
-        if special_torch_layers.is_keyword_in_layer_name(l, _layer_name_keywords):
-            ignore_layers.append(l)
-    for l in model_state_dict.keys():
-        if l not in ignore_layers:
             found_layers.append(l)
-    return found_layers, ignore_layers
+        if special_torch_layers.is_keyword_in_layer_name(l, _layer_name_keywords):
+            found_layers.append(l)
+    for l in model_state_dict.keys():
+        if l not in found_layers:
+            ignored_layers.append(l)
+    return found_layers, ignored_layers
 
 def rebuild_norm_layer_function(model: torch.nn.Module, initial_model_state, rebuild_norm_optimizer: torch.optim.Optimizer,
                                 training_optimizer_state, norm_layers, ml_setup: MlSetup,
