@@ -436,6 +436,7 @@ if __name__ == '__main__':
     parser.add_argument("start_folder", type=str, help="folder containing starting models")
 
     parser.add_argument("end_folder", type=str, help="folder containing destination models, or 'inf', 'origin' ")
+    parser.add_argument("--config", type=str, help="the config file")
     parser.add_argument("--mapping_mode", type=str, default='auto', choices=['auto', 'all_to_all', 'each_to_each', 'one_to_all', 'all_to_one'])
 
     parser.add_argument("-c", '--core', type=int, default=os.cpu_count(), help='specify the number of CPU cores to use')
@@ -449,10 +450,13 @@ if __name__ == '__main__':
     parser.add_argument("--amp", action='store_true', help='enable auto mixed precision')
     parser.add_argument("-o", "--output_folder_name", default=None, help='specify the output folder name')
 
-    config_file_path = "find_high_accuracy_path_v2_config.py"
-    config_file = configuration_file.load_configuration(config_file_path)
-
     args = parser.parse_args()
+
+    if args.config is None:
+        config_file_path = "find_high_accuracy_path_v2_config.py"
+    else:
+        config_file_path = args.config
+    config_file = configuration_file.load_configuration(config_file_path)
 
     set_logging(logger, "main")
     logger.info("logging setup complete")
