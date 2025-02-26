@@ -86,7 +86,6 @@ class ServiceTestAccuracyLossRecorder(Service):
             if self.allocated_gpu is not None:
                 self.test_model = self.test_model.to(gpu.device)
         else:
-            assert gpu.model == existing_model_for_testing, "testing model is not on the specified GPU"
             self.allocated_gpu = gpu
             self.test_model = existing_model_for_testing
 

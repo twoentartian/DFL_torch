@@ -1,13 +1,28 @@
 class Parameter(object):
-    def set_default(self):
-        pass
+    def validate(self):
+        assert all(value is not None for value in vars(self).values())
+
+class ParameterGeneral(Parameter):
+    max_tick = None
+    dataloader_worker = None
 
 class ParameterMove(Parameter):
-    pass
-
+    step_size = None
+    adoptive_step_size = None
+    layer_skip_move = None
+    layer_skip_move_keyword = None
+    merge_bias_and_move_together = None
 
 class ParameterTrain(Parameter):
-    pass
+    train_for_max_rounds = None
+    train_until_loss = None
+    train_for_min_rounds = None
+    pretrain_optimizer = None
+    load_existing_optimizer = None
 
 class ParameterRebuildNorm(Parameter):
-    pass
+    rebuild_norm_for_max_rounds = None
+    rebuild_norm_for_min_rounds = None
+    rebuild_norm_until_loss = None
+    rebuild_norm_layer = None
+    rebuild_norm_layer_keyword = None

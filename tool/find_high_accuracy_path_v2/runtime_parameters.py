@@ -9,6 +9,7 @@ class WorkMode(Enum):
 class RuntimeParameters(object):
     start_and_end_point_for_paths = None
 
+    """should not change these values during simulation"""
     use_cpu = None
     use_amp = None
     work_mode = WorkMode.unknown
@@ -19,6 +20,12 @@ class RuntimeParameters(object):
     save_ticks = None
     save_interval = None
     save_format = None
+
+    config_file_path = None
+
+    """real-time values"""
+    current_tick = None
+    max_tick = None
 
     def print(self):
         s = []

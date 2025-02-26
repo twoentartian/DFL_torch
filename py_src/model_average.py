@@ -16,6 +16,20 @@ def move_tensor_toward(layer_name, src_tensor, dest_tensor, step, adoptive_step,
     return src_tensor + move_tensor
 
 def move_model_state_toward(src_model_stat, dest_model_stat, step, adoptive_step, enable_merge_bias_with_weight=False, ignore_layers=None, random_scale=None):
+    """
+    move src_model_stat to dest_model_stat
+    Args:
+        src_model_stat: source model point
+        dest_model_stat: destination model point
+        step: the length of move
+        adoptive_step: move for distance * adoptive_step
+        enable_merge_bias_with_weight: merge bias layer and weight layer and then move together
+        ignore_layers: skip these layers
+        random_scale: move different weight values randomly
+
+    Returns:
+
+    """
     if ignore_layers is None:
         ignore_layers = []
     output_stat = copy.deepcopy(src_model_stat)
