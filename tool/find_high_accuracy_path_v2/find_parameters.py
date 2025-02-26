@@ -11,7 +11,7 @@ class ParameterMove(Parameter):
     adoptive_step_size = None
     layer_skip_move = None
     layer_skip_move_keyword = None
-    merge_bias_and_move_together = None
+    merge_bias_with_weights = None
 
 class ParameterTrain(Parameter):
     train_for_max_rounds = None

@@ -262,6 +262,11 @@ def process_file_func(index, runtime_parameter: RuntimeParameters):
     record_training_loss_service = record_training_loss.ServiceTrainingLossRecorder(1)
     record_training_loss_service.initialize_without_runtime_parameters(arg_output_folder_path, [0])
 
+    """record variance"""
+    variance_record = model_variance_correct.VarianceCorrector(model_variance_correct.VarianceCorrectionType.FollowOthers)
+    variance_record.add_variance(target_model.state_dict())
+    target_variance = variance_record.get_variance()
+
     """begin finding the path"""
     if runtime_parameter.use_amp:
         scaler = torch.cuda.amp.GradScaler()
@@ -316,15 +321,10 @@ def process_file_func(index, runtime_parameter: RuntimeParameters):
                 optimizer_state_dict_path = start_point.replace('model.pt', 'optimizer.pt')
                 load_existing_optimizer_stat(optimizer, optimizer_state_dict_path, logger=child_logger)
 
-        """record variance"""
-        variance_record = model_variance_correct.VarianceCorrector(model_variance_correct.VarianceCorrectionType.FollowOthers)
-        variance_record.add_variance(target_model.state_dict())
-        target_variance = variance_record.get_variance()
-
         """move model"""
         target_model_stat_dict = model_average.move_model_state_toward(target_model.state_dict(), end_model_stat_dict,
                                                                        parameter_move.step_size, parameter_move.adoptive_step_size,
-                                                                       enable_merge_bias_with_weight=parameter_move.merge_bias_and_move_together,
+                                                                       enable_merge_bias_with_weight=parameter_move.merge_bias_with_weights,
                                                                        ignore_layers=ignore_move_layers)
         target_model.load_state_dict(target_model_stat_dict)
 
@@ -386,7 +386,6 @@ def process_file_func(index, runtime_parameter: RuntimeParameters):
             child_logger.info(f"current tick: rescale variance")
             target_model_stat_dict = model_variance_correct.VarianceCorrector.scale_model_stat_to_variance(target_model.state_dict(), target_variance)
             target_model.load_state_dict(target_model_stat_dict)
-
 
         """service"""
         target_model_stat_dict = target_model.state_dict()
