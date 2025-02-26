@@ -275,7 +275,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters):
         if runtime_parameter.current_tick % REPORT_FINISH_TIME_PER_TICK == 0 and runtime_parameter.current_tick != 0:
             time_elapsed = time.time() - timer
             timer = time.time()
-            remaining = (config_file.max_tick - runtime_parameter.current_tick) // REPORT_FINISH_TIME_PER_TICK
+            remaining = (runtime_parameter.max_tick - runtime_parameter.current_tick) // REPORT_FINISH_TIME_PER_TICK
             time_to_finish = remaining * time_elapsed
             finish_time = timer + time_to_finish
             logger.info(f"time taken for {REPORT_FINISH_TIME_PER_TICK} ticks: {time_elapsed:.2f}s, expected to finish at {datetime.fromtimestamp(finish_time)}")
