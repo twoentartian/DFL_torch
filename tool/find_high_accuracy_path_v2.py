@@ -131,13 +131,6 @@ def rebuild_norm_layer_function(model: torch.nn.Module, initial_model_state, reb
                 training_loss.backward()
                 rebuild_norm_optimizer.step()
 
-            # reset all non-norm layers
-            current_model_stat = model.state_dict()
-            for layer_name, layer_weights in current_model_stat.items():
-                if layer_name not in norm_layers:
-                    current_model_stat[layer_name] = start_model_stat[layer_name]
-            model.load_state_dict(current_model_stat)
-
             training_loss_val = training_loss.item()
             moving_average.add(training_loss_val)
             if training_iter_counter == parameter_rebuild_norm.rebuild_norm_for_max_rounds:
