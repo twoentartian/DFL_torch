@@ -139,9 +139,9 @@ def rebuild_norm_layer_function(model: torch.nn.Module, initial_model_state, reb
             if moving_average.get_average() <= parameter_rebuild_norm.rebuild_norm_until_loss and training_iter_counter >= parameter_rebuild_norm.rebuild_norm_for_min_rounds:
                 exit_training = True
                 break
-        if logger is not None:
-            logger.info(f"current tick: {runtime_parameter.current_tick}, rebuilding norm for {training_iter_counter} rounds, loss = {moving_average.get_average():.3f}")
         if exit_training:
+            if logger is not None:
+                logger.info(f"current tick: {runtime_parameter.current_tick}, rebuilding norm for {training_iter_counter} rounds, loss = {moving_average.get_average():.3f}")
             break
 
 
@@ -376,8 +376,8 @@ def process_file_func(index, runtime_parameter: RuntimeParameters):
                 if moving_average.get_average() <= parameter_train.train_until_loss and training_iter_counter >= parameter_train.train_for_min_rounds:
                     exit_training = True
                     break
-            child_logger.info(f"current tick: {runtime_parameter.current_tick}, training {training_iter_counter} rounds, loss = {moving_average.get_average():.3f}")
             if exit_training:
+                child_logger.info(f"current tick: {runtime_parameter.current_tick}, training {training_iter_counter} rounds, loss = {moving_average.get_average():.3f}")
                 break
 
         """rebuilding normalization"""
