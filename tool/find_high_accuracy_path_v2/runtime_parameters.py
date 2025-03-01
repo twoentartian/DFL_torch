@@ -29,6 +29,7 @@ class RuntimeParameters(object):
     max_tick = None
 
     debug_check_config_mode = None
+    test_dataset_use_whole = None
 
     def print(self):
         s = []

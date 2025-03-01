@@ -216,6 +216,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters):
     general_parameter: ParameterGeneral = config_file.get_parameter_general(runtime_parameter, current_ml_setup)
     runtime_parameter.max_tick = general_parameter.max_tick
     runtime_parameter.current_tick = 0
+    runtime_parameter.test_dataset_use_whole = general_parameter.test_dataset_use_whole
 
     """load training data"""
     training_dataset = current_ml_setup.training_data
@@ -264,7 +265,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters):
     else:
         child_logger.info("record_model_service is OFF")
         record_model_service = None
-    record_test_accuracy_loss_service = record_test_accuracy_loss.ServiceTestAccuracyLossRecorder(1, 100, use_fixed_testing_dataset=True)
+    record_test_accuracy_loss_service = record_test_accuracy_loss.ServiceTestAccuracyLossRecorder(1, 100, use_fixed_testing_dataset=True, test_whole_dataset=runtime_parameter.test_dataset_use_whole)
     record_test_accuracy_loss_service.initialize_without_runtime_parameters(arg_output_folder_path, [0], target_model, criterion, current_ml_setup.testing_data,
                                                                             existing_model_for_testing=target_model, gpu=gpu)
     record_training_loss_service = record_training_loss.ServiceTrainingLossRecorder(1)

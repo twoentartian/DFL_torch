@@ -10,7 +10,7 @@ from py_src.simulation_runtime_parameters import RuntimeParameters, SimulationPh
 from py_src.node import Node
 
 class ServiceTestAccuracyLossRecorder(Service):
-    def __init__(self, interval, test_batch_size, phase_to_record=(SimulationPhase.END_OF_TICK,), use_fixed_testing_dataset=True, accuracy_file_name="accuracy.csv", loss_file_name="loss.csv"):
+    def __init__(self, interval, test_batch_size, phase_to_record=(SimulationPhase.END_OF_TICK,), use_fixed_testing_dataset=True, accuracy_file_name="accuracy.csv", loss_file_name="loss.csv", test_whole_dataset=False):
         super().__init__()
         self.accuracy_file = None
         self.loss_file = None
@@ -23,6 +23,7 @@ class ServiceTestAccuracyLossRecorder(Service):
         self.test_model = None
         self.criterion = None
         self.use_fixed_testing_dataset = use_fixed_testing_dataset
+        self.test_whole_dataset = test_whole_dataset
         self.test_batch_size = test_batch_size
         self.test_dataset = None
         self.allocated_gpu = None
@@ -104,24 +105,44 @@ class ServiceTestAccuracyLossRecorder(Service):
         row_accuracy = []
         row_loss = []
         for node_name in self.node_order:
-            test_data = None
-            test_labels = None
-            for d, l in self.test_dataset:
-                test_data = d
-                test_labels = l
-                break
-            if self.allocated_gpu is not None:
-                test_data, test_labels = test_data.to(self.allocated_gpu.device), test_labels.to(self.allocated_gpu.device)
-            model_stat = node_names_and_model_stats[node_name]
-            self.test_model.load_state_dict(model_stat)
-            if self.allocated_gpu is not None:
-                self.test_model.to(self.allocated_gpu.device)
-            self.test_model.eval()
-            outputs = self.test_model(test_data)
-            loss = self.criterion(outputs, test_labels)
-            _, predicted = torch.max(outputs, 1)
-            correct_predictions = (predicted == test_labels).sum().item()
-            accuracy = correct_predictions / len(test_labels)
+            if self.test_whole_dataset:
+                model_stat = node_names_and_model_stats[node_name]
+                self.test_model.load_state_dict(model_stat)
+                if self.allocated_gpu is not None:
+                    self.test_model.to(self.allocated_gpu.device)
+                self.test_model.eval()
+                total_loss, correct, total = 0, 0, 0
+                for d, l in self.test_dataset:
+                    test_data = d
+                    test_labels = l
+                    if self.allocated_gpu is not None:
+                        test_data, test_labels = test_data.to(self.allocated_gpu.device), test_labels.to(self.allocated_gpu.device)
+                    outputs = self.test_model(test_data)
+                    total_loss += self.criterion(outputs, test_labels).item() * test_labels.size(0)
+                    _, predicted = torch.max(outputs, 1)
+                    correct += (predicted == test_labels).sum().item()
+                    total += test_labels.size(0)
+                loss = total_loss / total
+                accuracy = correct / total
+            else:
+                test_data = None
+                test_labels = None
+                for d, l in self.test_dataset:
+                    test_data = d
+                    test_labels = l
+                    break
+                if self.allocated_gpu is not None:
+                    test_data, test_labels = test_data.to(self.allocated_gpu.device), test_labels.to(self.allocated_gpu.device)
+                model_stat = node_names_and_model_stats[node_name]
+                self.test_model.load_state_dict(model_stat)
+                if self.allocated_gpu is not None:
+                    self.test_model.to(self.allocated_gpu.device)
+                self.test_model.eval()
+                outputs = self.test_model(test_data)
+                loss = self.criterion(outputs, test_labels)
+                _, predicted = torch.max(outputs, 1)
+                correct_predictions = (predicted == test_labels).sum().item()
+                accuracy = correct_predictions / len(test_labels)
             row_accuracy.append(str(accuracy))
             row_loss.append('%.4f' % loss.item())
         row_accuracy_str = ",".join([str(tick), str(phase_str), *row_accuracy])
