@@ -77,7 +77,7 @@ def get_parameter_train(runtime_parameter: RuntimeParameters, ml_setup: MlSetup)
         elif runtime_parameter.current_tick == 10000:
             output.train_for_max_rounds = 200
             output.train_for_min_rounds = 5
-            output.train_until_loss = 0.02
+            output.train_until_loss = 0.05
             output.pretrain_optimizer = False
             output.load_existing_optimizer = False
         else:
