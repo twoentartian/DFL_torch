@@ -64,19 +64,22 @@ class ServiceTestAccuracyLossRecorder(Service):
         unique_labels = set(labels)
         n_labels = len(unique_labels)
         assert self.test_batch_size % n_labels == 0, f"test batch size({self.test_batch_size}) must be divisible by number of labels({n_labels})"
-        if self.use_fixed_testing_dataset:
-            samples_per_label = self.test_batch_size // n_labels
-            label_indices = {label: np.where(labels == label)[0] for label in unique_labels}
-            balanced_indices = []
-            for label in unique_labels:
-                indices = label_indices[label]
-                sampled_indices = np.random.choice(indices, samples_per_label, replace=False)
-                balanced_indices.extend(sampled_indices)
-            balanced_subset = Subset(test_dataset, balanced_indices)
-            balanced_loader = DataLoader(balanced_subset, batch_size=self.test_batch_size, shuffle=True)
-            self.test_dataset = balanced_loader
-        else:
+        if self.test_whole_dataset:
             self.test_dataset = DataLoader(test_dataset, batch_size=self.test_batch_size, shuffle=True)
+        else:
+            if self.use_fixed_testing_dataset:
+                samples_per_label = self.test_batch_size // n_labels
+                label_indices = {label: np.where(labels == label)[0] for label in unique_labels}
+                balanced_indices = []
+                for label in unique_labels:
+                    indices = label_indices[label]
+                    sampled_indices = np.random.choice(indices, samples_per_label, replace=False)
+                    balanced_indices.extend(sampled_indices)
+                balanced_subset = Subset(test_dataset, balanced_indices)
+                balanced_loader = DataLoader(balanced_subset, batch_size=self.test_batch_size, shuffle=True)
+                self.test_dataset = balanced_loader
+            else:
+                self.test_dataset = DataLoader(test_dataset, batch_size=self.test_batch_size, shuffle=True)
 
         # set model
         if existing_model_for_testing is None:
