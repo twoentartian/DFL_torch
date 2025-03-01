@@ -110,7 +110,7 @@ def get_parameter_rebuild_norm(runtime_parameter: RuntimeParameters, ml_setup: M
             output.rebuild_norm_for_min_rounds = 0
             output.rebuild_norm_until_loss = 0
             output.rebuild_norm_layer = []
-            output.rebuild_norm_layer_keyword = []
+            output.rebuild_norm_layer_keyword = ['bn']
         else:
             return None
     else:

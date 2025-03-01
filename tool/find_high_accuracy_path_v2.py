@@ -216,7 +216,10 @@ def process_file_func(index, runtime_parameter: RuntimeParameters):
     general_parameter: ParameterGeneral = config_file.get_parameter_general(runtime_parameter, current_ml_setup)
     runtime_parameter.max_tick = general_parameter.max_tick
     runtime_parameter.current_tick = 0
-    runtime_parameter.test_dataset_use_whole = general_parameter.test_dataset_use_whole
+    if general_parameter.test_dataset_use_whole is not None:
+        runtime_parameter.test_dataset_use_whole = general_parameter.test_dataset_use_whole
+    else:
+        runtime_parameter.test_dataset_use_whole = False
 
     """load training data"""
     training_dataset = current_ml_setup.training_data
@@ -229,6 +232,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters):
     """get optimizer"""
     target_model.to(device)
     optimizer = config_file.get_optimizer_train(runtime_parameter, current_ml_setup, target_model.parameters())
+    initial_optimizer_state_dict = copy.deepcopy(optimizer.state_dict())
     optimizer_for_rebuild_norm = None
     assert optimizer is not None
 
@@ -355,6 +359,18 @@ def process_file_func(index, runtime_parameter: RuntimeParameters):
                 child_logger.info(f"current tick: rescale variance")
                 target_model_stat_dict = model_variance_correct.VarianceCorrector.scale_model_stat_to_variance(target_model.state_dict(), target_variance)
                 target_model.load_state_dict(target_model_stat_dict)
+
+        """update learning rate"""
+        if not runtime_parameter.debug_check_config_mode:
+            if runtime_parameter.work_mode == WorkMode.to_inf or runtime_parameter.work_mode == WorkMode.to_origin:
+                for param_group, initial_optimizer_state, (name, param) in zip(optimizer.param_groups, initial_optimizer_state_dict['param_groups'], target_model.named_parameters()):
+                    if special_torch_layers.is_keyword_in_layer_name(name, parameter_rebuild_norm.rebuild_norm_layer_keyword):
+                        continue  # skip norm layers
+                    if 'weight' in name and param.requires_grad:  # Only adjust weights, not biases
+                        current_layer_variance = torch.var(param.data).item()
+                        new_lr = initial_optimizer_state['lr'] / target_variance[name] * current_layer_variance
+                        child_logger.info(f"tick {runtime_parameter.current_tick}: update lr for layer {name} to {new_lr:.3E}")
+                        param_group['lr'] = new_lr
 
         """training"""
         training_loss_val = 0
