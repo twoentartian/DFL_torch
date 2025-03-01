@@ -28,6 +28,8 @@ class RuntimeParameters(object):
     current_tick = None
     max_tick = None
 
+    debug_check_config_mode = None
+
     def print(self):
         s = []
         for attr in dir(self):

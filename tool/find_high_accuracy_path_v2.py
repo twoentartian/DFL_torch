@@ -283,6 +283,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters):
     cuda.CudaEnv.model_state_dict_to(end_model_stat_dict, device)
     timer = time.time()
     while runtime_parameter.current_tick < runtime_parameter.max_tick:
+        parameter_updated = False
         child_logger.info(f"tick: {runtime_parameter.current_tick}")
 
         if runtime_parameter.current_tick % REPORT_FINISH_TIME_PER_TICK == 0 and runtime_parameter.current_tick != 0:
@@ -296,10 +297,12 @@ def process_file_func(index, runtime_parameter: RuntimeParameters):
         """update parameter"""
         new_parameter_train: ParameterTrain = config_file.get_parameter_train(runtime_parameter, current_ml_setup)
         if new_parameter_train is not None:
+            parameter_updated = True
             child_logger.info(f"update parameter (train) at tick {runtime_parameter.current_tick}")
             parameter_train = new_parameter_train
         new_parameter_move: ParameterMove = config_file.get_parameter_move(runtime_parameter, current_ml_setup)
         if new_parameter_move is not None:
+            parameter_updated = True
             child_logger.info(f"update parameter (move) at tick {runtime_parameter.current_tick}")
             parameter_move = new_parameter_move
             # update layers to move
@@ -309,116 +312,138 @@ def process_file_func(index, runtime_parameter: RuntimeParameters):
             child_logger.info(f"plan to move {len(moved_layers)} layers: {moved_layers}")
         new_parameter_rebuild_norm: ParameterRebuildNorm = config_file.get_parameter_rebuild_norm(runtime_parameter, current_ml_setup)
         if new_parameter_rebuild_norm is not None:
+            parameter_updated = True
             child_logger.info(f"update parameter (rebuild_norm) at tick {runtime_parameter.current_tick}")
             parameter_rebuild_norm = new_parameter_rebuild_norm
             # update norm layer list
             norm_layers, non_norm_layers = find_layers_according_to_name_and_keyword(start_model_stat_dict, parameter_rebuild_norm.rebuild_norm_layer, parameter_rebuild_norm.rebuild_norm_layer_keyword)
             child_logger.info(f"updating norm layers at tick {runtime_parameter.current_tick}")
-            child_logger.info(f"totally {len(norm_layers)} norm layers: {norm_layers}")
-            child_logger.info(f"totally {len(non_norm_layers)} non-norm layers: {non_norm_layers}")
+            child_logger.info(f"totally {len(norm_layers)} layers to rebuild: {norm_layers}")
+            child_logger.info(f"totally {len(non_norm_layers)} non-rebuild layers: {non_norm_layers}")
 
         """if this is the first tick"""
         if runtime_parameter.current_tick == 0:
             if parameter_train.pretrain_optimizer and parameter_train.load_existing_optimizer:
                 logger.critical("cannot enable both pretrain_optimizer and load_existing_optimizer")
             # pretrain optimizer
-            if parameter_train.pretrain_optimizer:
-                pre_train(target_model, optimizer, criterion, dataloader, device, cpu_device, logger=child_logger)
+            if not runtime_parameter.debug_check_config_mode:
+                if parameter_train.pretrain_optimizer:
+                    pre_train(target_model, optimizer, criterion, dataloader, device, cpu_device, logger=child_logger)
             # load existing optimizer
-            if parameter_train.load_existing_optimizer:
-                optimizer_state_dict_path = start_point.replace('model.pt', 'optimizer.pt')
-                load_existing_optimizer_stat(optimizer, optimizer_state_dict_path, logger=child_logger)
+            if not runtime_parameter.debug_check_config_mode:
+                if parameter_train.load_existing_optimizer:
+                    optimizer_state_dict_path = start_point.replace('model.pt', 'optimizer.pt')
+                    load_existing_optimizer_stat(optimizer, optimizer_state_dict_path, logger=child_logger)
+
+        """if parameter updated"""
+        if parameter_updated:
+            util.save_model_state(os.path.join(arg_output_folder_path, f"{runtime_parameter.current_tick}.model.pt"), target_model.state_dict(), current_ml_setup.model_name)
+            util.save_optimizer_state(os.path.join(arg_output_folder_path, f"{runtime_parameter.current_tick}.optimizer.pt"), optimizer.state_dict(), current_ml_setup.model_name)
 
         """move model"""
-        target_model_stat_dict = model_average.move_model_state_toward(target_model.state_dict(), end_model_stat_dict,
+        if not runtime_parameter.debug_check_config_mode:
+            target_model_stat_dict = model_average.move_model_state_toward(target_model.state_dict(), end_model_stat_dict,
                                                                        parameter_move.step_size, parameter_move.adoptive_step_size,
                                                                        enable_merge_bias_with_weight=parameter_move.merge_bias_with_weights,
                                                                        ignore_layers=ignore_move_layers)
-        target_model.load_state_dict(target_model_stat_dict)
+            target_model.load_state_dict(target_model_stat_dict)
 
         """variance correction"""
-        if runtime_parameter.work_mode == WorkMode.to_certain_model:
-            child_logger.info(f"current tick: rescale variance")
-            target_model_stat_dict = model_variance_correct.VarianceCorrector.scale_model_stat_to_variance(target_model.state_dict(), target_variance)
-            target_model.load_state_dict(target_model_stat_dict)
+        if not runtime_parameter.debug_check_config_mode:
+            if runtime_parameter.work_mode == WorkMode.to_certain_model:
+                child_logger.info(f"current tick: rescale variance")
+                target_model_stat_dict = model_variance_correct.VarianceCorrector.scale_model_stat_to_variance(target_model.state_dict(), target_variance)
+                target_model.load_state_dict(target_model_stat_dict)
 
         """training"""
-        target_model.train()
-        target_model.to(device)
-        cuda.CudaEnv.optimizer_to(optimizer, device)
+        training_loss_val = 0
+        if not runtime_parameter.debug_check_config_mode:
+            target_model.train()
+            target_model.to(device)
+            cuda.CudaEnv.optimizer_to(optimizer, device)
 
-        training_iter_counter = 0
-        moving_average = util.MovingAverage(parameter_train.train_for_min_rounds)
-        training_loss_val = None
-        while True:
-            exit_training = False
-            for data, label in dataloader:
-                training_iter_counter += 1
-                data, label = data.to(device), label.to(device)
-                optimizer.zero_grad(set_to_none=True)
-                if runtime_parameter.use_amp:
-                    with torch.cuda.amp.autocast():
+            training_iter_counter = 0
+            moving_average = util.MovingAverage(parameter_train.train_for_min_rounds)
+            while True:
+                exit_training = False
+                for data, label in dataloader:
+                    training_iter_counter += 1
+                    data, label = data.to(device), label.to(device)
+                    optimizer.zero_grad(set_to_none=True)
+                    if runtime_parameter.use_amp:
+                        with torch.cuda.amp.autocast():
+                            outputs = target_model(data)
+                            training_loss = criterion(outputs, label)
+                            scaler.scale(training_loss).backward()
+                            scaler.step(optimizer)
+                            scaler.update()
+                    else:
                         outputs = target_model(data)
                         training_loss = criterion(outputs, label)
-                        scaler.scale(training_loss).backward()
-                        scaler.step(optimizer)
-                        scaler.update()
-                else:
-                    outputs = target_model(data)
-                    training_loss = criterion(outputs, label)
-                    training_loss.backward()
-                    optimizer.step()
-                training_loss_val = training_loss.item()
-                moving_average.add(training_loss_val)
-                if training_iter_counter == parameter_train.train_for_max_rounds:
-                    exit_training = True
+                        training_loss.backward()
+                        optimizer.step()
+                    training_loss_val = training_loss.item()
+                    moving_average.add(training_loss_val)
+                    if training_iter_counter == parameter_train.train_for_max_rounds:
+                        exit_training = True
+                        break
+                    if moving_average.get_average() <= parameter_train.train_until_loss and training_iter_counter >= parameter_train.train_for_min_rounds:
+                        exit_training = True
+                        break
+                if exit_training:
+                    child_logger.info(f"current tick: {runtime_parameter.current_tick}, training {training_iter_counter} rounds, loss = {moving_average.get_average():.3f}")
                     break
-                if moving_average.get_average() <= parameter_train.train_until_loss and training_iter_counter >= parameter_train.train_for_min_rounds:
-                    exit_training = True
-                    break
-            if exit_training:
-                child_logger.info(f"current tick: {runtime_parameter.current_tick}, training {training_iter_counter} rounds, loss = {moving_average.get_average():.3f}")
-                break
 
         """rebuilding normalization"""
-        if parameter_rebuild_norm.rebuild_norm_for_max_rounds != 0:
-            optimizer_for_rebuild_norm_new = config_file.get_optimizer_rebuild_norm(runtime_parameter, current_ml_setup, target_model.parameters())
-            if optimizer_for_rebuild_norm_new is not None:
-                optimizer_for_rebuild_norm = optimizer_for_rebuild_norm_new
-            training_optimizer_stat = optimizer.state_dict()
-            rebuild_norm_layer_function(target_model, initial_model_stat, optimizer_for_rebuild_norm, training_optimizer_stat,
-                                        norm_layers, current_ml_setup, dataloader, parameter_rebuild_norm, runtime_parameter, device, logger=child_logger)
+        if not runtime_parameter.debug_check_config_mode:
+            if parameter_rebuild_norm.rebuild_norm_for_max_rounds != 0:
+                optimizer_for_rebuild_norm_new = config_file.get_optimizer_rebuild_norm(runtime_parameter, current_ml_setup, target_model.parameters())
+                if optimizer_for_rebuild_norm_new is not None:
+                    optimizer_for_rebuild_norm = optimizer_for_rebuild_norm_new
+                training_optimizer_stat = optimizer.state_dict()
+                rebuild_norm_layer_function(target_model, initial_model_stat, optimizer_for_rebuild_norm, training_optimizer_stat,
+                                            norm_layers, current_ml_setup, dataloader, parameter_rebuild_norm, runtime_parameter, device, logger=child_logger)
 
         """variance correction"""
-        if runtime_parameter.work_mode == WorkMode.to_certain_model:
-            child_logger.info(f"current tick: rescale variance")
-            target_model_stat_dict = model_variance_correct.VarianceCorrector.scale_model_stat_to_variance(target_model.state_dict(), target_variance)
-            target_model.load_state_dict(target_model_stat_dict)
+        if not runtime_parameter.debug_check_config_mode:
+            if runtime_parameter.work_mode == WorkMode.to_certain_model:
+                child_logger.info(f"current tick: rescale variance")
+                target_model_stat_dict = model_variance_correct.VarianceCorrector.scale_model_stat_to_variance(target_model.state_dict(), target_variance)
+                target_model.load_state_dict(target_model_stat_dict)
 
         """service"""
-        target_model_stat_dict = target_model.state_dict()
-        all_model_stats = [target_model_stat_dict, end_model_stat_dict]
-        for i in all_model_stats:
-            cuda.CudaEnv.model_state_dict_to(i, device)
-        weight_diff_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, all_model_stats)
-        weight_change_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, [model_state_of_last_tick, target_model_stat_dict])
-        model_state_of_last_tick = copy.deepcopy(target_model_stat_dict)
-        distance_to_origin_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, {0: target_model_stat_dict})
-        variance_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, [0], [target_model_stat_dict])
-        if record_model_service is not None:
-            record_flag = False
-            if runtime_parameter.save_ticks is None:
-                record_flag = runtime_parameter.current_tick % runtime_parameter.save_interval == 0
-            else:
-                if runtime_parameter.current_tick in runtime_parameter.save_ticks:
-                    record_flag = True
-            if record_flag:
-                record_model_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, [0], [target_model_stat_dict])
-        record_test_accuracy_loss_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, {0: target_model_stat_dict})
-        record_training_loss_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, {0: training_loss_val})
+        run_service = True
+        if runtime_parameter.debug_check_config_mode:
+            run_service = runtime_parameter.current_tick % 1000 == 0
+
+        if run_service:
+            target_model_stat_dict = target_model.state_dict()
+            all_model_stats = [target_model_stat_dict, end_model_stat_dict]
+            for i in all_model_stats:
+                cuda.CudaEnv.model_state_dict_to(i, device)
+            weight_diff_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, all_model_stats)
+            weight_change_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, [model_state_of_last_tick, target_model_stat_dict])
+            model_state_of_last_tick = copy.deepcopy(target_model_stat_dict)
+            distance_to_origin_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, {0: target_model_stat_dict})
+            variance_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, [0], [target_model_stat_dict])
+            if record_model_service is not None:
+                record_flag = False
+                if runtime_parameter.save_ticks is None:
+                    record_flag = runtime_parameter.current_tick % runtime_parameter.save_interval == 0
+                else:
+                    if runtime_parameter.current_tick in runtime_parameter.save_ticks:
+                        record_flag = True
+                if record_flag:
+                    record_model_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, [0], [target_model_stat_dict])
+            record_test_accuracy_loss_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, {0: target_model_stat_dict})
+            record_training_loss_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, {0: training_loss_val})
 
         # update tick
         runtime_parameter.current_tick += 1
+
+    # save final model and optimizer
+    util.save_model_state(os.path.join(arg_output_folder_path, f"{runtime_parameter.current_tick}.model.pt"), target_model.state_dict(), current_ml_setup.model_name)
+    util.save_optimizer_state(os.path.join(arg_output_folder_path, f"{runtime_parameter.current_tick}.optimizer.pt"), optimizer.state_dict(), current_ml_setup.model_name)
 
 
 
@@ -441,6 +466,7 @@ if __name__ == '__main__':
     parser.add_argument("--save_format", type=str, default='none', choices=['none', 'file', 'lmdb'])
     parser.add_argument("--cpu", action='store_true', help='force using CPU for training')
     parser.add_argument("--amp", action='store_true', help='enable auto mixed precision')
+    parser.add_argument("--check_config", action='store_true', help='only check configuration')
     parser.add_argument("-o", "--output_folder_name", default=None, help='specify the output folder name')
 
     args = parser.parse_args()
@@ -463,6 +489,7 @@ if __name__ == '__main__':
     runtime_parameter.save_format = args.save_format
     runtime_parameter.config_file_path = config_file_path
     runtime_parameter.dataset_name = args.dataset
+    runtime_parameter.debug_check_config_mode = args.check_config
 
     # find all paths to process
     start_folder = args.start_folder
