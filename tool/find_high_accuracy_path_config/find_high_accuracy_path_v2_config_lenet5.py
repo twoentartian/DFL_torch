@@ -13,6 +13,7 @@ def get_parameter_general(runtime_parameter: RuntimeParameters, ml_setup: MlSetu
     if ml_setup.model_name == 'lenet5':
         output.max_tick = 30000
         output.dataloader_worker = None
+        output.test_dataset_use_whole = True
     else:
         raise NotImplemented
     return output
