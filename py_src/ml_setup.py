@@ -125,10 +125,13 @@ def dataset_mnist_224():
     return DatasetSetup(dataset_name, train_data, test_data)
 
 """ CIFAR10 """
-def dataset_cifar10_32(transforms_training=None, transforms_testing=None):
+def dataset_cifar10_32(transforms_training=None, transforms_testing=None, mean_std = None):
     dataset_path = '~/dataset/cifar10'
     dataset_name = "cifar10_32"
-    stats = ((0.49139968, 0.48215841, 0.44653091), (0.24703223, 0.24348513, 0.26158784))
+    if mean_std is not None:
+        stats = mean_std
+    else:
+        stats = ((0.49139968, 0.48215841, 0.44653091), (0.24703223, 0.24348513, 0.26158784))
 
     if transforms_training is not None:
         transforms_cifar_train = transforms_training
@@ -146,10 +149,13 @@ def dataset_cifar10_32(transforms_training=None, transforms_testing=None):
     cifar10_test = datasets.CIFAR10(root=dataset_path, train=False, download=True, transform=transforms_cifar_test)
     return DatasetSetup(dataset_name, cifar10_train, cifar10_test)
 
-def dataset_cifar10_224(transforms_training=None, transforms_testing=None):
+def dataset_cifar10_224(transforms_training=None, transforms_testing=None, mean_std = None):
     dataset_path = '~/dataset/cifar10'
     dataset_name = "cifar10_224"
-    stats = ((0.49139968, 0.48215841, 0.44653091), (0.24703223, 0.24348513, 0.26158784))
+    if mean_std is not None:
+        stats = mean_std
+    else:
+        stats = ((0.49139968, 0.48215841, 0.44653091), (0.24703223, 0.24348513, 0.26158784))
 
     if transforms_training is not None:
         transforms_cifar_train = transforms_training
@@ -170,10 +176,13 @@ def dataset_cifar10_224(transforms_training=None, transforms_testing=None):
     cifar10_test = datasets.CIFAR10(root=dataset_path, train=False, download=True, transform=transforms_cifar_test)
     return DatasetSetup(dataset_name, cifar10_train, cifar10_test)
 
-def dataset_cifar100_32(transforms_training=None, transforms_testing=None):
+def dataset_cifar100_32(transforms_training=None, transforms_testing=None, mean_std = None):
     dataset_path = '~/dataset/cifar100'
     dataset_name = "cifar100_32"
-    stats = ((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
+    if mean_std is not None:
+        stats = mean_std
+    else:
+        stats = ((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
 
     if transforms_training is not None:
         transforms_cifar_train = transforms_training
@@ -187,6 +196,33 @@ def dataset_cifar100_32(transforms_training=None, transforms_testing=None):
         transforms_cifar_test = transforms_testing
     else:
         transforms_cifar_test = transforms.Compose([transforms.ToTensor(), transforms.Normalize(*stats)])
+    cifar100_train = datasets.CIFAR100(root=dataset_path, train=True, download=True, transform=transforms_cifar_train)
+    cifar100_test = datasets.CIFAR100(root=dataset_path, train=False, download=True, transform=transforms_cifar_test)
+    return DatasetSetup(dataset_name, cifar100_train, cifar100_test)
+
+def dataset_cifar100_224(transforms_training=None, transforms_testing=None, mean_std = None):
+    dataset_path = '~/dataset/cifar100'
+    dataset_name = "cifar100_224"
+    if mean_std is not None:
+        stats = mean_std
+    else:
+        stats = ((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
+
+    if transforms_training is not None:
+        transforms_cifar_train = transforms_training
+    else:
+        transforms_cifar_train = transforms.Compose(
+            [transforms.ToTensor(),
+             transforms.Resize((224, 224)),
+             transforms.RandomHorizontalFlip(p=0.5),
+             transforms.Normalize(*stats)])
+    if transforms_testing is not None:
+        transforms_cifar_test = transforms_testing
+    else:
+        transforms_cifar_test = transforms.Compose(
+            [transforms.ToTensor(),
+             transforms.Resize((224, 224)),
+             transforms.Normalize(*stats)])
     cifar100_train = datasets.CIFAR100(root=dataset_path, train=True, download=True, transform=transforms_cifar_train)
     cifar100_test = datasets.CIFAR100(root=dataset_path, train=False, download=True, transform=transforms_cifar_test)
     return DatasetSetup(dataset_name, cifar100_train, cifar100_test)
@@ -526,6 +562,43 @@ def vit_b_16_imagenet100():
     output_ml_setup.has_normalization_layer = False
     return output_ml_setup
 
+""" EfficientNet + CIFAR100 """
+def efficient_net_cifar100():
+    output_ml_setup = MlSetup()
+    mean, std = [0.485, 0.456, 0.406], [0.229, 0.224, 0.225]
+    img_size = 224
+    crop_size = 224
+    transform_train = transforms.Compose([
+            transforms.Resize(img_size),  # , interpolation=torchvision.transforms.InterpolationMode.BICUBIC),
+            transforms.CenterCrop(crop_size),
+            transforms.RandomRotation(20),
+            transforms.RandomHorizontalFlip(0.1),
+            transforms.ColorJitter(brightness=0.1, contrast=0.1, saturation=0.1),
+            transforms.RandomAdjustSharpness(sharpness_factor=2, p=0.1),
+            transforms.ToTensor(),
+            transforms.Normalize(mean, std),
+            transforms.RandomErasing(p=0.75, scale=(0.02, 0.1), value=1.0, inplace=False)
+        ])
+
+    transform_test = transforms.Compose([
+            transforms.Resize((img_size, img_size)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean, std)])
+
+    dataset = dataset_cifar100_224(transforms_training=transform_train, transforms_testing=transform_test)
+
+    model_ft = models.efficientnet_v2_l(weights=None)
+    in_features = model_ft.classifier[-1].in_features
+    model_ft.classifier[-1] = nn.Linear(in_features, 100)
+
+    output_ml_setup.model_name = "efficient_net_v2"
+    output_ml_setup.model = model_ft
+    output_ml_setup.get_info_from_dataset(dataset)
+    output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
+    output_ml_setup.training_batch_size = 32
+    output_ml_setup.has_normalization_layer = True
+    return output_ml_setup
+
 """ Helper function """
 class ModelType(Enum):
     lenet5 = auto()
@@ -540,6 +613,7 @@ class ModelType(Enum):
     mobilenet_v2 = auto()
     lenet4 = auto()
     vgg11_no_bn = auto()
+    efficient_net_v2 = auto()
 
 class DatasetType(Enum):
     default = auto()
@@ -607,6 +681,11 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default):
     elif model_name == ModelType.vit:
         if dataset_type in [DatasetType.default, DatasetType.imagenet100]:
             output_ml_setup = vit_b_16_imagenet100()
+        else:
+            raise NotImplemented
+    elif model_name == ModelType.efficient_net_v2:
+        if dataset_type in [DatasetType.default, DatasetType.cifar100]:
+            output_ml_setup = efficient_net_cifar100()
         else:
             raise NotImplemented
     else:
