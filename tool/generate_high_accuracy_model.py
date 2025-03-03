@@ -61,7 +61,7 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
     model.to(device)
     dataset = copy.deepcopy(arg_ml_setup.training_data)
     batch_size = arg_ml_setup.training_batch_size
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers=8, persistent_workers=True)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers=thread_per_process, persistent_workers=True)
     criterion = arg_ml_setup.criterion
     optimizer, lr_scheduler, epochs = complete_ml_setup.FastTrainingSetup.get_optimizer_lr_scheduler_epoch(arg_ml_setup, model)
 
@@ -135,10 +135,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Generate some high accuracy models')
     parser.add_argument("-n", "--number_of_models", type=int, default=1)
     parser.add_argument("-c", '--core', type=int, default=os.cpu_count(), help='specify the number of CPU cores to use')
-    parser.add_argument("-t", "--thread", type=int, default=1, help='specify how many models to train in parallel')
+    parser.add_argument("-w", "--worker", type=int, default=1, help='specify how many models to train in parallel')
     parser.add_argument("-m", "--model_type", type=str, default='lenet5',
                         choices=['lenet4', 'lenet5', 'resnet18_bn', 'resnet18_gn', 'simplenet', 'cct7', 'vit', 'lenet5_large_fc',
-                                 'vgg11_mnist', 'vgg11_cifar10', 'mobilenet_v3_small', 'mobilenet_v3_large', 'mobilenet_v2'])
+                                 'vgg11_mnist', 'vgg11_cifar10', 'mobilenet_v3_small', 'mobilenet_v3_large', 'mobilenet_v2', 'efficient_net_v2'])
     parser.add_argument("-d", "--dataset_type", type=str, default='default',
                         choices=['default', 'mnist', 'cifar10', 'cifar100', 'imagenet1k', 'imagenet100'])
     parser.add_argument("--cpu", action='store_true', help='force using CPU for training')
@@ -149,7 +149,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     number_of_models = args.number_of_models
-    worker_count = args.thread
+    worker_count = args.worker
     total_cpu_cores = args.core
     model_type = args.model_type
     dataset_type = args.dataset_type
