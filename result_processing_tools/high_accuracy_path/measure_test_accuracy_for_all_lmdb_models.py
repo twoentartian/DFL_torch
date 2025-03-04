@@ -133,6 +133,7 @@ if __name__ == "__main__":
     test_batch_size = args.test_batch_size
     data_loader_worker = args.dataloader_worker
     folders = [f for f in os.listdir(path) if os.path.isdir(os.path.join(path, f)) and "-" in f]
+    folders = sorted(folders)
     print(f"all folders: {folders}")
 
     output_base_path = os.path.join(path, "temp_test_accuracy")
