@@ -151,7 +151,10 @@ class FastTrainingSetup(object):
             if arg_ml_setup.dataset_name == "cifar100_224":
                 epochs = 100
                 optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9, weight_decay=1e-4)
-                lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[30, 60, 90], gamma=0.1)
+                steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
+                milestones_epoch = [30, 60, 90]
+                milestones = [steps_per_epoch * i for i in milestones_epoch]
+                lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones, gamma=0.1)
             else:
                 raise NotImplemented
             return optimizer, lr_scheduler, epochs
