@@ -10,7 +10,7 @@ import lmdb
 import argparse
 import concurrent.futures
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from py_src import ml_setup, util
 
 logger = logging.getLogger("measure_test_accuracy")
