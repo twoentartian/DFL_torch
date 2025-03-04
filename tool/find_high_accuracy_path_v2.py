@@ -13,11 +13,12 @@ from torch.utils.data import DataLoader
 from find_high_accuracy_path_v2.runtime_parameters import RuntimeParameters, WorkMode
 from find_high_accuracy_path_v2.find_parameters import ParameterGeneral, ParameterMove, ParameterTrain, ParameterRebuildNorm
 from find_high_accuracy_path import set_logging, get_files_to_process
-from py_src.ml_setup import MlSetup
+
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from py_src import ml_setup, model_average, model_variance_correct, special_torch_layers, cuda, util, configuration_file
 from py_src.service import record_weights_difference, record_test_accuracy_loss, record_variance, record_model_stat, record_training_loss
+from py_src.ml_setup import MlSetup
 
 logger = logging.getLogger("find_high_accuracy_path_v2")
 
