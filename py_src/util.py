@@ -1,4 +1,6 @@
 import torch
+import logging
+import sys
 from pathlib import Path
 from collections import deque
 
@@ -110,3 +112,26 @@ def assert_if_both_not_none(a, b):
     if a is not None and b is not None:
         assert a == b
 
+def set_logging(target_logger, task_name, log_file_path=None):
+    class ExitOnExceptionHandler(logging.StreamHandler):
+        def emit(self, record):
+            if record.levelno == logging.CRITICAL:
+                raise SystemExit(-1)
+
+    formatter = logging.Formatter(f"[%(asctime)s] [%(levelname)8s] [{task_name}] --- %(message)s (%(filename)s:%(lineno)s)")
+
+    console = logging.StreamHandler(sys.stdout)
+    console.setLevel(logging.INFO)
+    console.setFormatter(formatter)
+
+    target_logger.setLevel(logging.DEBUG)
+    target_logger.addHandler(console)
+    target_logger.addHandler(ExitOnExceptionHandler())
+
+    if log_file_path is not None:
+        file = logging.FileHandler(log_file_path)
+        file.setLevel(logging.DEBUG)
+        file.setFormatter(formatter)
+        target_logger.addHandler(file)
+
+    del console, formatter
