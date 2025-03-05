@@ -25,7 +25,7 @@ def testing_model(model, current_ml_setup):
     total = 0
     with torch.no_grad():
         for batch_idx, (data, label) in enumerate(dataloader_test):
-            print(f"batch_idx: {batch_idx}")
+            print(f"test batch_idx: {batch_idx}")
             data, label = data.to(device), label.to(device)
             outputs = model(data)
             loss = criterion(outputs, label)
@@ -37,6 +37,7 @@ def testing_model(model, current_ml_setup):
         test_accuracy = correct / total
 
         for batch_idx, (data, label) in enumerate(dataloader_train):
+            print(f"train batch_idx: {batch_idx}")
             data, label = data.to(device), label.to(device)
             outputs = model(data)
             loss = criterion(outputs, label)
