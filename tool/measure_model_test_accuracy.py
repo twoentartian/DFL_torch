@@ -13,9 +13,9 @@ def testing_model(model, current_ml_setup):
     testing_dataset = current_ml_setup.testing_data
     training_dataset = current_ml_setup.training_data
     criterion = current_ml_setup.criterion
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    dataloader_test = DataLoader(testing_dataset, batch_size=100, shuffle=True)
-    dataloader_train = DataLoader(training_dataset, batch_size=100, shuffle=True)
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    dataloader_test = DataLoader(testing_dataset, batch_size=100, shuffle=True, num_workers=4, persistent_workers=True)
+    dataloader_train = DataLoader(training_dataset, batch_size=100, shuffle=True, num_workers=4, persistent_workers=True)
 
     model.eval()
     model.to(device)
@@ -25,6 +25,7 @@ def testing_model(model, current_ml_setup):
     total = 0
     with torch.no_grad():
         for batch_idx, (data, label) in enumerate(dataloader_test):
+            print(f"batch_idx: {batch_idx}")
             data, label = data.to(device), label.to(device)
             outputs = model(data)
             loss = criterion(outputs, label)
