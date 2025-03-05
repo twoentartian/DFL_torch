@@ -52,8 +52,8 @@ def testing_model(model, current_ml_setup):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Measure model test accuracy and loss.')
     parser.add_argument("model_file", type=str)
-    parser.add_argument("-m", "--model_type", type=str, choices=["auto", "lenet5", "resnet18_bn", "resnet18_gn", "simplenet", "cct7"], default="auto")
-    parser.add_argument("-d", "--dataset_type", type=str, choices=["default", "mnist", "cifar10", "cifar100"], default="default")
+    parser.add_argument("-m", "--model_type", type=str, default="auto")
+    parser.add_argument("-d", "--dataset_type", type=str, default="default")
 
     args = parser.parse_args()
 
