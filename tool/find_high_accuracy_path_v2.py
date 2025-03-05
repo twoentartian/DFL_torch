@@ -199,7 +199,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters):
         end_model_stat_dict = {k: torch.zeros_like(v) for k, v in start_model_stat_dict.items()}
         child_logger.info(f"work mode: to_origin")
     elif runtime_parameter.work_mode == WorkMode.to_inf:
-        end_model_stat_dict = {k: v * 100 for k, v in start_model_stat_dict.items()}
+        end_model_stat_dict = {k: v * 2 for k, v in start_model_stat_dict.items()}
         child_logger.info(f"work mode: to_inf")
     elif runtime_parameter.work_mode == WorkMode.to_certain_model:
         end_model_stat_dict, end_model_name = util.load_model_state_file(end_point)
@@ -291,6 +291,11 @@ def process_file_func(index, runtime_parameter: RuntimeParameters):
     while runtime_parameter.current_tick < runtime_parameter.max_tick:
         parameter_updated = False
         child_logger.info(f"tick: {runtime_parameter.current_tick}")
+
+        """update end_model_stat_dict if work_mode = to_inf"""
+        if runtime_parameter.work_mode == WorkMode.to_inf:
+            end_model_stat_dict = {k: v.detach().clone() * 2 for k, v in start_model_stat_dict.items()}
+            cuda.CudaEnv.model_state_dict_to(end_model_stat_dict, device)
 
         if runtime_parameter.current_tick % REPORT_FINISH_TIME_PER_TICK == 0 and runtime_parameter.current_tick != 0:
             time_elapsed = time.time() - timer
