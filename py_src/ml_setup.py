@@ -661,6 +661,8 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default):
             output_ml_setup = resnet18_cifar100(enable_replace_bn_with_group_norm=enable_replace_bn_with_group_norm)
         elif dataset_type in [dataset_type.imagenet100]:
             output_ml_setup = resnet18_imagenet100(enable_replace_bn_with_group_norm=enable_replace_bn_with_group_norm)
+        elif dataset_type in [dataset_type.imagenet1k]:
+            output_ml_setup = resnet18_imagenet1k(enable_replace_bn_with_group_norm=enable_replace_bn_with_group_norm)
         else:
             raise NotImplemented
     elif model_name == ModelType.simplenet:
