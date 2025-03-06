@@ -13,6 +13,8 @@ from PIL import Image
 from py_src import internal_names, util
 logger = logging.getLogger(f"{internal_names.logger_simulator_base_name}.{util.basename_without_extension(__file__)}")
 
+util.set_logging(logger, "dataset component")
+
 class LabelProbabilitySampler(Sampler):
     def __init__(self, labels, label_probs, indices_by_labels, num_samples):
         self.labels = labels
@@ -222,11 +224,13 @@ class DatasetWithCachedOutputInSharedMem(Dataset):
         self.dataset_in_shared_mem = _DatasetWithCachedOutputInSharedMem(dataset, shared_mem_name)
         self.transform = transform
         self.raw_dataset = dataset
-
-        logger.info(f"loading shared memory dataset, shared memory name: {shared_mem_name}")
-        for index, (image, label) in enumerate(self.dataset_in_shared_mem):
-            logger.info(f"loading image {index}/{len(self.raw_dataset)}")
-        logger.info(f"loading shared memory dataset, shared memory name: {shared_mem_name} -- done")
+        self.init = False
+        if not self.init:
+            logger.info(f"loading shared memory dataset, shared memory name: {shared_mem_name}")
+            for index, (image, label) in enumerate(self.dataset_in_shared_mem):
+                logger.info(f"loading image {index}/{len(self.raw_dataset)}")
+            logger.info(f"loading shared memory dataset, shared memory name: {shared_mem_name} -- done")
+        self.init = True
 
     def __len__(self):
         return len(self.dataset_in_shared_mem)

@@ -63,11 +63,12 @@ class ServiceTestAccuracyLossRecorder(Service):
         labels = np.array([test_dataset[i][1] for i in range(len(test_dataset))])
         unique_labels = set(labels)
         n_labels = len(unique_labels)
-        assert self.test_batch_size % n_labels == 0, f"test batch size({self.test_batch_size}) must be divisible by number of labels({n_labels})"
         if self.test_whole_dataset:
             self.test_dataset = DataLoader(test_dataset, batch_size=self.test_batch_size, shuffle=True)
         else:
             if self.use_fixed_testing_dataset:
+                """we should iterate whole dataset"""
+                assert self.test_batch_size % n_labels == 0, f"test batch size({self.test_batch_size}) must be divisible by number of labels({n_labels})"
                 samples_per_label = self.test_batch_size // n_labels
                 label_indices = {label: np.where(labels == label)[0] for label in unique_labels}
                 balanced_indices = []
@@ -76,9 +77,11 @@ class ServiceTestAccuracyLossRecorder(Service):
                     sampled_indices = np.random.choice(indices, samples_per_label, replace=False)
                     balanced_indices.extend(sampled_indices)
                 balanced_subset = Subset(test_dataset, balanced_indices)
-                balanced_loader = DataLoader(balanced_subset, batch_size=self.test_batch_size, shuffle=True)
+                batch_size = 100 if self.test_batch_size > 100 else self.test_batch_size
+                balanced_loader = DataLoader(balanced_subset, batch_size=batch_size, shuffle=True)
                 self.test_dataset = balanced_loader
             else:
+                """we should only iterate the first batch of test data"""
                 self.test_dataset = DataLoader(test_dataset, batch_size=self.test_batch_size, shuffle=True)
 
         # set model
@@ -128,24 +131,42 @@ class ServiceTestAccuracyLossRecorder(Service):
                 loss = total_loss / total
                 accuracy = correct / total
             else:
-                test_data = None
-                test_labels = None
-                for d, l in self.test_dataset:
-                    test_data = d
-                    test_labels = l
-                    break
-                if self.allocated_gpu is not None:
-                    test_data, test_labels = test_data.to(self.allocated_gpu.device), test_labels.to(self.allocated_gpu.device)
-                model_stat = node_names_and_model_stats[node_name]
-                self.test_model.load_state_dict(model_stat)
-                if self.allocated_gpu is not None:
-                    self.test_model.to(self.allocated_gpu.device)
-                self.test_model.eval()
-                outputs = self.test_model(test_data)
-                loss = self.criterion(outputs, test_labels).item()
-                _, predicted = torch.max(outputs, 1)
-                correct_predictions = (predicted == test_labels).sum().item()
-                accuracy = correct_predictions / len(test_labels)
+                if self.use_fixed_testing_dataset:
+                    total_loss, correct, total = 0, 0, 0
+                    for test_data, test_labels in self.test_dataset:
+                        if self.allocated_gpu is not None:
+                            test_data, test_labels = test_data.to(self.allocated_gpu.device), test_labels.to(self.allocated_gpu.device)
+                        model_stat = node_names_and_model_stats[node_name]
+                        self.test_model.load_state_dict(model_stat)
+                        if self.allocated_gpu is not None:
+                            self.test_model.to(self.allocated_gpu.device)
+                        self.test_model.eval()
+                        outputs = self.test_model(test_data)
+                        total_loss += self.criterion(outputs, test_labels).item()
+                        _, predicted = torch.max(outputs, 1)
+                        correct += (predicted == test_labels).sum().item()
+                        total += test_labels.size(0)
+                    loss = total_loss / total
+                    accuracy = correct / total
+                else:
+                    test_data = None
+                    test_labels = None
+                    for d, l in self.test_dataset:
+                        test_data = d
+                        test_labels = l
+                        break
+                    if self.allocated_gpu is not None:
+                        test_data, test_labels = test_data.to(self.allocated_gpu.device), test_labels.to(self.allocated_gpu.device)
+                    model_stat = node_names_and_model_stats[node_name]
+                    self.test_model.load_state_dict(model_stat)
+                    if self.allocated_gpu is not None:
+                        self.test_model.to(self.allocated_gpu.device)
+                    self.test_model.eval()
+                    outputs = self.test_model(test_data)
+                    loss = self.criterion(outputs, test_labels).item()
+                    _, predicted = torch.max(outputs, 1)
+                    correct_predictions = (predicted == test_labels).sum().item()
+                    accuracy = correct_predictions / len(test_labels)
             row_accuracy.append(str(accuracy))
             row_loss.append('%.4f' % loss)
         row_accuracy_str = ",".join([str(tick), str(phase_str), *row_accuracy])
