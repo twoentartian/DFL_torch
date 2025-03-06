@@ -292,6 +292,12 @@ def process_file_func(index, runtime_parameter: RuntimeParameters):
         parameter_updated = False
         child_logger.info(f"tick: {runtime_parameter.current_tick}")
 
+        """update end_model_stat_dict if work_mode = to_inf"""
+        if runtime_parameter.work_mode == WorkMode.to_inf:
+            target_model_stat = target_model.state_dict()
+            end_model_stat_dict = {k: v.detach().clone() * 2 for k, v in target_model_stat.items()}
+            cuda.CudaEnv.model_state_dict_to(end_model_stat_dict, device)
+
         if runtime_parameter.current_tick % REPORT_FINISH_TIME_PER_TICK == 0 and runtime_parameter.current_tick != 0:
             time_elapsed = time.time() - timer
             timer = time.time()
