@@ -654,7 +654,6 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default):
         output_ml_setup = lenet4_mnist()
     elif model_name == ModelType.resnet18_bn or model_name == ModelType.resnet18_gn:
         enable_replace_bn_with_group_norm = model_name == ModelType.resnet18_gn
-        assert dataset_type in [dataset_type.default, dataset_type.cifar10, dataset_type.cifar100, dataset_type.imagenet100]
         if dataset_type in [dataset_type.default, dataset_type.cifar10]:
             output_ml_setup = resnet18_cifar10(enable_replace_bn_with_group_norm=enable_replace_bn_with_group_norm)
         elif dataset_type in [dataset_type.cifar100]:
