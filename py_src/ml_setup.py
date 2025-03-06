@@ -228,7 +228,7 @@ def dataset_cifar100_224(transforms_training=None, transforms_testing=None, mean
     return DatasetSetup(dataset_name, cifar100_train, cifar100_test)
 
 """ ImageNet """
-def dataset_imagenet1k(transforms_training=None, transforms_testing=None):
+def dataset_imagenet1k(transforms_training=None, transforms_testing=None, enable_memory_cache=False):
     dataset_path = '~/dataset/imagenet1k'
     dataset_name = "imagenet1k_224"
 
@@ -252,8 +252,12 @@ def dataset_imagenet1k(transforms_training=None, transforms_testing=None):
             normalize,
     ])
 
-    imagenet_train = datasets.ImageNet(root=dataset_path, split='train', transform=final_transforms_train)
-    imagenet_test = datasets.ImageNet(root=dataset_path, split='val', transform=final_transforms_test)
+    if enable_memory_cache:
+        imagenet_train = ImageDatasetWithCachedInputInSharedMem(os.path.join(dataset_path, "train"), "imagenet1k_train", transform=final_transforms_train)
+        imagenet_test = ImageDatasetWithCachedInputInSharedMem(os.path.join(dataset_path, "val"), "imagenet1k_test", transform=final_transforms_test)
+    else:
+        imagenet_train = datasets.ImageNet(root=dataset_path, split='train', transform=final_transforms_train)
+        imagenet_test = datasets.ImageNet(root=dataset_path, split='val', transform=final_transforms_test)
     return DatasetSetup(dataset_name, imagenet_train, imagenet_test)
 
 def dataset_imagenet100(transforms_training=None, transforms_testing=None):
