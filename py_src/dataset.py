@@ -327,6 +327,7 @@ class ImageDatasetWithCachedInputInSharedMem(Dataset):
             for index, data in enumerate(file_contents):
                 offset, length = self.image_offsets[index]
                 self.shared_mem.buf[offset:offset+length] = data
+            del file_contents
 
     def _load_image(self, img_stream):
         """ Load image and return as numpy array (H, W, C). """
