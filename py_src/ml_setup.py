@@ -453,6 +453,22 @@ def resnet18_imagenet100(enable_replace_bn_with_group_norm=False):
     output_ml_setup.has_normalization_layer = True
     return output_ml_setup
 
+def resnet18_imagenet1k(enable_replace_bn_with_group_norm=False):
+    output_ml_setup = MlSetup()
+    dataset = dataset_imagenet1k()
+
+    if enable_replace_bn_with_group_norm:
+        output_ml_setup.model = models.resnet18(progress=False, num_classes=1000, norm_layer=GroupNorm)
+        output_ml_setup.model_name = "resnet18_gn"
+    else:
+        output_ml_setup.model = models.resnet18(progress=False, num_classes=1000)
+        output_ml_setup.model_name = "resnet18_bn"
+    output_ml_setup.get_info_from_dataset(dataset)
+    output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
+    output_ml_setup.training_batch_size = 128
+    output_ml_setup.has_normalization_layer = True
+    return output_ml_setup
+
 """ CIFAR10 + MobileNet V3 small """
 def mobilenet_v3_small_cifar10():
     output_ml_setup = MlSetup()
