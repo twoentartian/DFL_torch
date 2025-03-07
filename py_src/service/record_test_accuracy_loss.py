@@ -60,9 +60,6 @@ class ServiceTestAccuracyLossRecorder(Service):
         self.criterion = criterion
 
         # set testing dataset
-        labels = np.array([test_dataset[i][1] for i in range(len(test_dataset))])
-        unique_labels = set(labels)
-        n_labels = len(unique_labels)
         if self.test_whole_dataset:
             if num_workers is None:
                 self.test_dataset = DataLoader(test_dataset, batch_size=self.test_batch_size, shuffle=True)
@@ -71,6 +68,9 @@ class ServiceTestAccuracyLossRecorder(Service):
         else:
             if self.use_fixed_testing_dataset:
                 """we should iterate whole dataset"""
+                labels = np.array([test_dataset[i][1] for i in range(len(test_dataset))])
+                unique_labels = set(labels)
+                n_labels = len(unique_labels)
                 assert self.test_batch_size % n_labels == 0, f"test batch size({self.test_batch_size}) must be divisible by number of labels({n_labels})"
                 samples_per_label = self.test_batch_size // n_labels
                 label_indices = {label: np.where(labels == label)[0] for label in unique_labels}
