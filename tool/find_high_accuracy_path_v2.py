@@ -221,8 +221,10 @@ def process_file_func(index, runtime_parameter: RuntimeParameters):
     runtime_parameter.max_tick = general_parameter.max_tick
     runtime_parameter.current_tick = 0
     if general_parameter.test_dataset_use_whole is not None:
+        child_logger.info(f"setting test_dataset_use_whole to {general_parameter.test_dataset_use_whole}")
         runtime_parameter.test_dataset_use_whole = general_parameter.test_dataset_use_whole
     else:
+        child_logger.info(f"setting test_dataset_use_whole to default (False)")
         runtime_parameter.test_dataset_use_whole = False
 
     """load training data"""
