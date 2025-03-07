@@ -88,7 +88,6 @@ def rebuild_norm_layer_function(model: torch.nn.Module, initial_model_state, reb
                                 training_optimizer_state, norm_layers, ml_setup: MlSetup,
                                 dataloader, parameter_rebuild_norm, runtime_parameter: RuntimeParameters, rebuild_on_device=None, logger=None):
     model_stat = model.state_dict()
-    start_model_stat = copy.deepcopy(model_stat)
 
     """reset the weights of norm layers"""
     for layer_name, layer_weights in model_stat.items():
@@ -132,6 +131,10 @@ def rebuild_norm_layer_function(model: torch.nn.Module, initial_model_state, reb
                 training_loss.backward()
                 rebuild_norm_optimizer.step()
 
+            if runtime_parameter.verbose:
+                if training_iter_counter % 10 == 0:
+                    logger.info(f"current tick: {runtime_parameter.current_tick}, rebuilding norm for {training_iter_counter} rounds, loss = {moving_average.get_average():.3f}")
+
             training_loss_val = training_loss.item()
             moving_average.add(training_loss_val)
             if training_iter_counter == parameter_rebuild_norm.rebuild_norm_for_max_rounds:
@@ -142,7 +145,7 @@ def rebuild_norm_layer_function(model: torch.nn.Module, initial_model_state, reb
                 break
         if exit_training:
             if logger is not None:
-                logger.info(f"current tick: {runtime_parameter.current_tick}, rebuilding norm for {training_iter_counter} rounds, loss = {moving_average.get_average():.3f}")
+                logger.info(f"current tick: {runtime_parameter.current_tick}, rebuilding norm for {training_iter_counter} rounds(final), loss = {moving_average.get_average():.3f}")
             break
 
 
@@ -246,19 +249,28 @@ def process_file_func(index, runtime_parameter: RuntimeParameters):
     parameter_rebuild_norm.validate()
 
     """services"""
+    child_logger.info("setting services")
     all_model_stats = [target_model.state_dict(), end_model_stat_dict]
 
     weight_diff_service = record_weights_difference.ServiceWeightsDifferenceRecorder(1)
     weight_diff_service.initialize_without_runtime_parameters(all_model_stats, arg_output_folder_path)
+    child_logger.info("setting service done: weight_diff_service")
+
     weight_change_service = record_weights_difference.ServiceWeightsDifferenceRecorder(1,
                                                                                        l1_save_file_name="weight_change_l1.csv",
                                                                                        l2_save_file_name="weight_change_l2.csv")
     model_state_of_last_tick = target_model.state_dict()
     weight_change_service.initialize_without_runtime_parameters(all_model_stats, arg_output_folder_path)
+    child_logger.info("setting service done: weight_change_service")
+
     distance_to_origin_service = record_weights_difference.ServiceDistanceToOriginRecorder(1, [0])
     distance_to_origin_service.initialize_without_runtime_parameters({0: start_model_stat_dict}, arg_output_folder_path)
+    child_logger.info("setting service done: distance_to_origin_service")
+
     variance_service = record_variance.ServiceVarianceRecorder(1)
     variance_service.initialize_without_runtime_parameters([0], [start_model_stat_dict], arg_output_folder_path)
+    child_logger.info("setting service done: variance_service")
+
     if runtime_parameter.save_format != 'none':
         if not runtime_parameter.save_ticks:
             child_logger.info(f"record_model_service is ON at every {runtime_parameter.save_interval} tick")
@@ -270,11 +282,16 @@ def process_file_func(index, runtime_parameter: RuntimeParameters):
     else:
         child_logger.info("record_model_service is OFF")
         record_model_service = None
+    child_logger.info("setting service done: record_model_service")
+
     record_test_accuracy_loss_service = record_test_accuracy_loss.ServiceTestAccuracyLossRecorder(1, 100, use_fixed_testing_dataset=True, test_whole_dataset=runtime_parameter.test_dataset_use_whole)
     record_test_accuracy_loss_service.initialize_without_runtime_parameters(arg_output_folder_path, [0], target_model, criterion, current_ml_setup.testing_data,
-                                                                            existing_model_for_testing=target_model, gpu=gpu)
+                                                                            existing_model_for_testing=target_model, gpu=gpu, num_workers=general_parameter.dataloader_worker)
+    child_logger.info("setting service done: record_test_accuracy_loss_service")
+
     record_training_loss_service = record_training_loss.ServiceTrainingLossRecorder(1)
     record_training_loss_service.initialize_without_runtime_parameters(arg_output_folder_path, [0])
+    child_logger.info("setting service done: record_training_loss_service")
 
     """record variance"""
     variance_record = model_variance_correct.VarianceCorrector(model_variance_correct.VarianceCorrectionType.FollowOthers)
@@ -408,6 +425,11 @@ def process_file_func(index, runtime_parameter: RuntimeParameters):
                         optimizer.step()
                     training_loss_val = training_loss.item()
                     moving_average.add(training_loss_val)
+
+                    if runtime_parameter.verbose:
+                        if training_iter_counter % 10 == 0:
+                            child_logger.info(f"current tick: {runtime_parameter.current_tick}, training {training_iter_counter} rounds, loss = {moving_average.get_average():.3f}")
+
                     if training_iter_counter == parameter_train.train_for_max_rounds:
                         exit_training = True
                         break
@@ -415,7 +437,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters):
                         exit_training = True
                         break
                 if exit_training:
-                    child_logger.info(f"current tick: {runtime_parameter.current_tick}, training {training_iter_counter} rounds, loss = {moving_average.get_average():.3f}")
+                    child_logger.info(f"current tick: {runtime_parameter.current_tick}, training {training_iter_counter} rounds(final), loss = {moving_average.get_average():.3f}")
                     break
 
         """rebuilding normalization"""
@@ -491,6 +513,7 @@ if __name__ == '__main__':
     parser.add_argument("--cpu", action='store_true', help='force using CPU for training')
     parser.add_argument("--amp", action='store_true', help='enable auto mixed precision')
     parser.add_argument("--check_config", action='store_true', help='only check configuration')
+    parser.add_argument("-v", "--verbose", action='store_true', help='verbose mode')
     parser.add_argument("-o", "--output_folder_name", default=None, help='specify the output folder name')
 
     args = parser.parse_args()
@@ -514,6 +537,7 @@ if __name__ == '__main__':
     runtime_parameter.config_file_path = config_file_path
     runtime_parameter.dataset_name = args.dataset
     runtime_parameter.debug_check_config_mode = args.check_config
+    runtime_parameter.verbose = args.verbose
 
     # find all paths to process
     start_folder = args.start_folder

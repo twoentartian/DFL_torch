@@ -31,6 +31,8 @@ class RuntimeParameters(object):
     debug_check_config_mode = None
     test_dataset_use_whole = None
 
+    verbose = False
+
     def print(self):
         s = []
         for attr in dir(self):
