@@ -49,7 +49,7 @@ class ServiceTestAccuracyLossRecorder(Service):
 
         self.initialize_without_runtime_parameters(output_path, node_names, ml_setup.model, ml_setup.criterion, ml_setup.testing_data, gpu=gpu, existing_model_for_testing=pre_allocated_model)
 
-    def initialize_without_runtime_parameters(self, output_path, node_names, model, criterion, test_dataset, gpu: CudaDevice=None, existing_model_for_testing=None):
+    def initialize_without_runtime_parameters(self, output_path, node_names, model, criterion, test_dataset, gpu: CudaDevice=None, existing_model_for_testing=None, num_workers=None):
         self.accuracy_file = open(os.path.join(output_path, f"{self.accuracy_file_name}"), "w+")
         self.loss_file = open(os.path.join(output_path, f"{self.loss_file_name}"), "w+")
         self.node_order = node_names
@@ -64,7 +64,10 @@ class ServiceTestAccuracyLossRecorder(Service):
         unique_labels = set(labels)
         n_labels = len(unique_labels)
         if self.test_whole_dataset:
-            self.test_dataset = DataLoader(test_dataset, batch_size=self.test_batch_size, shuffle=True)
+            if num_workers is None:
+                self.test_dataset = DataLoader(test_dataset, batch_size=self.test_batch_size, shuffle=True)
+            else:
+                self.test_dataset = DataLoader(test_dataset, batch_size=self.test_batch_size, shuffle=True, num_workers=num_workers, persistent_workers=True)
         else:
             if self.use_fixed_testing_dataset:
                 """we should iterate whole dataset"""
@@ -78,11 +81,17 @@ class ServiceTestAccuracyLossRecorder(Service):
                     balanced_indices.extend(sampled_indices)
                 balanced_subset = Subset(test_dataset, balanced_indices)
                 batch_size = 100 if self.test_batch_size > 100 else self.test_batch_size
-                balanced_loader = DataLoader(balanced_subset, batch_size=batch_size, shuffle=True)
+                if num_workers is None:
+                    balanced_loader = DataLoader(balanced_subset, batch_size=batch_size, shuffle=True)
+                else:
+                    balanced_loader = DataLoader(balanced_subset, batch_size=batch_size, shuffle=True, num_workers=num_workers, persistent_workers=True)
                 self.test_dataset = balanced_loader
             else:
                 """we should only iterate the first batch of test data"""
-                self.test_dataset = DataLoader(test_dataset, batch_size=self.test_batch_size, shuffle=True)
+                if num_workers is None:
+                    self.test_dataset = DataLoader(test_dataset, batch_size=self.test_batch_size, shuffle=True)
+                else:
+                    self.test_dataset = DataLoader(test_dataset, batch_size=self.test_batch_size, shuffle=True, num_workers=num_workers, persistent_workers=True)
 
         # set model
         if existing_model_for_testing is None:
