@@ -23,12 +23,15 @@ def replace_bn_with_ln(model):
 
 
 class DatasetSetup:
-    def __init__(self, name, training_data, testing_data):
+    def __init__(self, name, training_data, testing_data, labels=None):
         self.training_data = training_data
         self.testing_data = testing_data
         self.dataset_name = name
 
-        self.labels = self._get_dataset_labels(self.testing_data)
+        if labels is None:
+            self.labels = self._get_dataset_labels(self.testing_data)
+        else:
+            self.labels = labels
         sample_data = self.testing_data[0][0]
         self.tensor_size = sample_data.shape
 
@@ -258,7 +261,7 @@ def dataset_imagenet1k(transforms_training=None, transforms_testing=None, enable
     else:
         imagenet_train = datasets.ImageNet(root=dataset_path, split='train', transform=final_transforms_train)
         imagenet_test = datasets.ImageNet(root=dataset_path, split='val', transform=final_transforms_test)
-    return DatasetSetup(dataset_name, imagenet_train, imagenet_test)
+    return DatasetSetup(dataset_name, imagenet_train, imagenet_test, labels=set(range(0, 1000)))
 
 def dataset_imagenet100(transforms_training=None, transforms_testing=None):
     dataset_path = '~/dataset/imagenet100'
@@ -287,7 +290,7 @@ def dataset_imagenet100(transforms_training=None, transforms_testing=None):
     imagenet_train = ImageDatasetWithCachedInputInSharedMem(os.path.join(dataset_path, "train"), "imagenet100_train", transform = final_transforms_train)
     imagenet_test = ImageDatasetWithCachedInputInSharedMem(os.path.join(dataset_path, "val"), "imagenet100_test", transform = final_transforms_test)
 
-    return DatasetSetup(dataset_name, imagenet_train, imagenet_test)
+    return DatasetSetup(dataset_name, imagenet_train, imagenet_test, labels=set(range(0, 100)))
 
 def dataset_imagenet10(transforms_training=None, transforms_testing=None):
     dataset_path = '~/dataset/imagenet10'
@@ -315,7 +318,7 @@ def dataset_imagenet10(transforms_training=None, transforms_testing=None):
     imagenet_train = ImageDatasetWithCachedInputInSharedMem(os.path.join(dataset_path, "train"), "imagenet10_train", transform = final_transforms_train)
     imagenet_test = ImageDatasetWithCachedInputInSharedMem(os.path.join(dataset_path, "val"), "imagenet10_test", transform = final_transforms_test)
 
-    return DatasetSetup(dataset_name, imagenet_train, imagenet_test)
+    return DatasetSetup(dataset_name, imagenet_train, imagenet_test, labels=set(range(0, 10)))
 
 """ MNIST + LeNet """
 def lenet4_mnist():
