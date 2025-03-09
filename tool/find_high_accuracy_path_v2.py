@@ -84,15 +84,28 @@ def find_layers_according_to_name_and_keyword(model_state_dict, layer_names, lay
             ignored_layers.append(l)
     return found_layers, ignored_layers
 
-def rebuild_norm_layer_function(model: torch.nn.Module, initial_model_state, rebuild_norm_optimizer: torch.optim.Optimizer,
+def rebuild_norm_layer_function(model: torch.nn.Module, initial_model_state, start_model_state, rebuild_norm_optimizer: torch.optim.Optimizer,
                                 training_optimizer_state, norm_layers, ml_setup: MlSetup,
                                 dataloader, parameter_rebuild_norm, runtime_parameter: RuntimeParameters, rebuild_on_device=None, logger=None):
     model_stat = model.state_dict()
 
     """reset the weights of norm layers"""
+    assert sum([int(i) for i in [parameter_rebuild_norm.rebuild_norm_use_initial_norm_weights,
+            parameter_rebuild_norm.rebuild_norm_use_start_model_norm_weights]]) <= 1, \
+        "only rebuild_norm_use_start_model_norm_weights or rebuild_norm_use_initial_norm_weights can be set to True"
+    rebuild_norm_layer_function.__reset_info_print = False
     for layer_name, layer_weights in model_stat.items():
         if layer_name in norm_layers:
-            model_stat[layer_name] = initial_model_state[layer_name]
+            if parameter_rebuild_norm.rebuild_norm_use_initial_norm_weights:
+                if not rebuild_norm_layer_function.__reset_info_print:
+                    logger.info(f"reset norm weights to initial model weights")
+                    rebuild_norm_layer_function.__reset_info_print = True
+                model_stat[layer_name] = initial_model_state[layer_name].detach().clone()
+            if parameter_rebuild_norm.rebuild_norm_use_start_model_norm_weights:
+                if not rebuild_norm_layer_function.__reset_info_print:
+                    logger.info(f"reset norm weights to starting model weights")
+                    rebuild_norm_layer_function.__reset_info_print = True
+                model_stat[layer_name] = start_model_state[layer_name].detach().clone()
 
     model.load_state_dict(model_stat)
 
@@ -195,14 +208,14 @@ def process_file_func(index, runtime_parameter: RuntimeParameters):
         current_ml_setup = ml_setup.get_ml_setup_from_config(start_model_name)
     child_logger.info(f"find model type is {start_model_name}")
 
+    initial_model_stat = {k: v.detach().clone() for k, v in current_ml_setup.model.state_dict().items()}
     target_model: torch.nn.Module = copy.deepcopy(current_ml_setup.model)
-    initial_model_stat = target_model.state_dict()
     target_model.load_state_dict(start_model_stat_dict)
     if runtime_parameter.work_mode == WorkMode.to_origin:
         end_model_stat_dict = {k: torch.zeros_like(v) for k, v in start_model_stat_dict.items()}
         child_logger.info(f"work mode: to_origin")
     elif runtime_parameter.work_mode == WorkMode.to_inf:
-        end_model_stat_dict = {k: v * 2 for k, v in start_model_stat_dict.items()}
+        end_model_stat_dict = {k: v.detach() * 2 for k, v in start_model_stat_dict.items()}
         child_logger.info(f"work mode: to_inf")
     elif runtime_parameter.work_mode == WorkMode.to_certain_model:
         end_model_stat_dict, end_model_name = util.load_model_state_file(end_point)
@@ -348,7 +361,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters):
             parameter_rebuild_norm = new_parameter_rebuild_norm
             # update norm layer list
             norm_layers, non_norm_layers = find_layers_according_to_name_and_keyword(start_model_stat_dict, parameter_rebuild_norm.rebuild_norm_layer, parameter_rebuild_norm.rebuild_norm_layer_keyword)
-            child_logger.info(f"updating norm layers at tick {runtime_parameter.current_tick}")
+            child_logger.info(f"updating norm layers list at tick {runtime_parameter.current_tick}")
             child_logger.info(f"totally {len(norm_layers)} layers to rebuild: {norm_layers}")
             child_logger.info(f"totally {len(non_norm_layers)} non-rebuild layers: {non_norm_layers}")
 
@@ -449,7 +462,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters):
                 if optimizer_for_rebuild_norm_new is not None:
                     optimizer_for_rebuild_norm = optimizer_for_rebuild_norm_new
                 training_optimizer_stat = optimizer.state_dict()
-                rebuild_norm_layer_function(target_model, initial_model_stat, optimizer_for_rebuild_norm, training_optimizer_stat,
+                rebuild_norm_layer_function(target_model, initial_model_stat, start_model_stat_dict, optimizer_for_rebuild_norm, training_optimizer_stat,
                                             norm_layers, current_ml_setup, dataloader, parameter_rebuild_norm, runtime_parameter, device, logger=child_logger)
 
         """variance correction"""

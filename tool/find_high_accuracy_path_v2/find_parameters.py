@@ -27,3 +27,6 @@ class ParameterRebuildNorm(Parameter):
     rebuild_norm_until_loss = None
     rebuild_norm_layer = None
     rebuild_norm_layer_keyword = None
+
+    rebuild_norm_use_initial_norm_weights = False
+    rebuild_norm_use_start_model_norm_weights = False
