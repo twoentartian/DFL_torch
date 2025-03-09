@@ -41,16 +41,38 @@ def set_logging(target_logger, task_name, log_file_path=None):
 
     del console, formatter
 
+def set_seed(seed: int, logger=None) -> None:
+    np.random.seed(seed)
+    random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    # When running on the CuDNN backend, two further options must be set
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    # Set a fixed value for the hash seed
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    if logger is not None:
+        logger.info(f"Random seed set as {seed}")
 
+def manually_define_optimizer(arg_ml_setup: ml_setup, model):
+    lr = 0.1
+    epochs = 50
+    optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=2e-4)
+    steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
+    lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, lr, steps_per_epoch=steps_per_epoch, epochs=epochs)
+    return optimizer, lr_scheduler, epochs
 
+    # return None, None, None
 
-
-def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_setup, arg_use_cpu: bool, arg_worker_count, arg_total_cpu_count, arg_save_format, arg_amp):
+def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_setup, arg_use_cpu: bool, random_seed, arg_worker_count, arg_total_cpu_count, arg_save_format, arg_amp):
     thread_per_process = arg_total_cpu_count // arg_worker_count
     torch.set_num_threads(thread_per_process)
 
     child_logger = logging.getLogger(f"find_high_accuracy_path.{index}")
     set_logging(child_logger, f"{index}")
+
+    if random_seed is not None:
+        set_seed(random_seed, child_logger)
 
     if arg_use_cpu:
         device = torch.device("cpu")
@@ -64,7 +86,10 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
     num_worker = 4 if thread_per_process > 4 else thread_per_process
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers=num_worker, persistent_workers=True)
     criterion = arg_ml_setup.criterion
-    optimizer, lr_scheduler, epochs = complete_ml_setup.FastTrainingSetup.get_optimizer_lr_scheduler_epoch(arg_ml_setup, model)
+
+    optimizer, lr_scheduler, epochs = manually_define_optimizer(arg_ml_setup, model)
+    if optimizer is None:
+        optimizer, lr_scheduler, epochs = complete_ml_setup.FastTrainingSetup.get_optimizer_lr_scheduler_epoch(arg_ml_setup, model)
 
     # services
     if arg_save_format != 'none':
@@ -146,6 +171,7 @@ if __name__ == "__main__":
     parser.add_argument("-o", "--output_folder_name", default=None, help='specify the output folder name')
     parser.add_argument("--save_format", type=str, default='none', choices=['none', 'file', 'lmdb'], help='which format to save the training states')
     parser.add_argument("--amp", action='store_true', help='enable auto mixed precision')
+    parser.add_argument("--random_seed", type=int, help='specify the random seed')
 
     args = parser.parse_args()
 
@@ -158,6 +184,7 @@ if __name__ == "__main__":
     output_folder_name = args.output_folder_name
     save_format = args.save_format
     amp = args.amp
+    random_seed = args.random_seed
 
     # logger
     set_logging(logger, "main")
@@ -188,7 +215,7 @@ if __name__ == "__main__":
     # training
     if worker_count > number_of_models:
         worker_count = number_of_models
-    args = [(output_folder_path, i, number_of_models, current_ml_setup, use_cpu, worker_count, total_cpu_cores, save_format, amp) for i in range(number_of_models)]
+    args = [(output_folder_path, i, number_of_models, current_ml_setup, use_cpu, random_seed, worker_count, total_cpu_cores, save_format, amp) for i in range(number_of_models)]
     with concurrent.futures.ProcessPoolExecutor(max_workers=worker_count) as executor:
         futures = [executor.submit(training_model, *arg) for arg in args]
         for future in concurrent.futures.as_completed(futures):
