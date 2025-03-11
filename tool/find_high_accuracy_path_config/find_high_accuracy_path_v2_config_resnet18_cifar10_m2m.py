@@ -15,6 +15,7 @@ def get_parameter_general(runtime_parameter: RuntimeParameters, ml_setup: MlSetu
     if ml_setup.model_name == model_name:
         output.max_tick = 35000
         output.dataloader_worker = 4
+        output.test_dataset_use_whole = True
     else:
         raise NotImplemented
     return output
@@ -23,7 +24,7 @@ def get_parameter_move(runtime_parameter: RuntimeParameters, ml_setup: MlSetup):
     output = ParameterMove()
     if ml_setup.model_name == model_name:
         if runtime_parameter.current_tick == 0:
-            output.step_size = 0.001
+            output.step_size = 0
             output.adoptive_step_size = 0.0005
             output.layer_skip_move = []
             output.layer_skip_move_keyword = ["num_batches_tracked", "running_mean", "running_var"]
@@ -69,16 +70,10 @@ def get_parameter_train(runtime_parameter: RuntimeParameters, ml_setup: MlSetup)
     output = ParameterTrain()
     if ml_setup.model_name == model_name:
         if runtime_parameter.current_tick == 0:
-            output.train_for_max_rounds = 1
-            output.train_for_min_rounds = 1
-            output.train_until_loss = 0
-            output.pretrain_optimizer = True
-            output.load_existing_optimizer = False
-        elif runtime_parameter.current_tick == 10000:
             output.train_for_max_rounds = 200
-            output.train_for_min_rounds = 5
-            output.train_until_loss = 0.05
-            output.pretrain_optimizer = False
+            output.train_for_min_rounds = 20
+            output.train_until_loss = 0.04
+            output.pretrain_optimizer = True
             output.load_existing_optimizer = False
         else:
             return None
@@ -100,12 +95,6 @@ def get_parameter_rebuild_norm(runtime_parameter: RuntimeParameters, ml_setup: M
     output = ParameterRebuildNorm()
     if ml_setup.model_name == model_name:
         if runtime_parameter.current_tick == 0:
-            output.rebuild_norm_for_max_rounds = 100
-            output.rebuild_norm_for_min_rounds = 100
-            output.rebuild_norm_until_loss = 0
-            output.rebuild_norm_layer = []
-            output.rebuild_norm_layer_keyword = ['bn']
-        elif runtime_parameter.current_tick == 10000:
             output.rebuild_norm_for_max_rounds = 0
             output.rebuild_norm_for_min_rounds = 0
             output.rebuild_norm_until_loss = 0
