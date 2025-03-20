@@ -136,16 +136,16 @@ if __name__ == "__main__":
     folders = sorted(folders)
     print(f"all folders: {folders}")
 
-    output_base_path = os.path.join(path, "temp_test_accuracy")
-    if not os.path.exists(output_base_path):
-        os.mkdir(output_base_path)
+    output_temp_path = os.path.join(path, "temp_test_accuracy")
+    if not os.path.exists(output_temp_path):
+        os.mkdir(output_temp_path)
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=worker) as executor:
         futures = []
         for folder in folders:
             task_name = folder
             db_path = os.path.join(path, folder, "model_stat.lmdb")
-            output_path = os.path.join(output_base_path, folder)
+            output_path = os.path.join(output_temp_path, folder)
             if not os.path.exists(output_path):
                 os.mkdir(output_path)
             futures.append(executor.submit(measure_model_in_lmdb, db_path, current_ml_setup, test_batch_size, data_loader_worker, output_path, task_name))
@@ -153,3 +153,24 @@ if __name__ == "__main__":
         for future in concurrent.futures.as_completed(futures):
             result = future.result()
     executor.shutdown(wait=True)
+
+    # merge all accuracies
+    all_accuracy = None
+    all_loss = None
+    for folder in folders:
+        accuracy_file_path = os.path.join(output_temp_path, folder, "full_test_accuracy.csv")
+        loss_file_path = os.path.join(output_temp_path, folder, "full_test_loss.csv")
+        accuracy_df = pandas.read_csv(accuracy_file_path)
+        loss_df = pandas.read_csv(loss_file_path)
+        if all_accuracy is None:
+            all_accuracy = accuracy_df
+        else:
+            all_accuracy = pandas.concat([all_accuracy, accuracy_df], axis=1)
+        if all_loss is None:
+            all_loss = loss_df
+        else:
+            all_loss = pandas.concat([all_loss, loss_df], axis=1)
+
+    all_accuracy.to_csv(os.path.join(path, "test_accuracy.csv"))
+    all_loss.to_csv(os.path.join(path, "test_loss.csv"))
+
