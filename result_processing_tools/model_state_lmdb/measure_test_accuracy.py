@@ -7,7 +7,7 @@ import os
 import lmdb
 import argparse
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from py_src import ml_setup
 
 def measure_model_in_lmdb(db_path, arg_ml_setup: ml_setup.MlSetup, arg_test_batch_size, arg_dataloader_worker, output_path):
