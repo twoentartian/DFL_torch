@@ -173,6 +173,6 @@ if __name__ == "__main__":
         else:
             all_loss = pandas.merge(all_loss, loss_df, on="tick", how="outer")
 
-    all_accuracy.to_csv(os.path.join(path, "test_accuracy.csv"))
-    all_loss.to_csv(os.path.join(path, "test_loss.csv"))
+    all_accuracy.to_csv(os.path.join(path, "test_accuracy.csv"), index=False)
+    all_loss.to_csv(os.path.join(path, "test_loss.csv"), index=False)
 
