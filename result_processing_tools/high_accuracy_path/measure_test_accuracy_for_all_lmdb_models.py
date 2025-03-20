@@ -162,7 +162,7 @@ if __name__ == "__main__":
         loss_file_path = os.path.join(output_temp_path, folder, "full_test_loss.csv")
         accuracy_df = pandas.read_csv(accuracy_file_path)
         loss_df = pandas.read_csv(loss_file_path)
-        accuracy_df.rename(columns={"0": folder}, inplace=True)
+        loss_df.rename(columns={"0": folder}, inplace=True)
         if all_accuracy is None:
             all_accuracy = accuracy_df
         else:
