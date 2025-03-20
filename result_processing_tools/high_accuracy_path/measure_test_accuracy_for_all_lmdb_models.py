@@ -117,7 +117,7 @@ if __name__ == "__main__":
     parser.add_argument("path", help="High accuracy trajectory folder path")
 
     parser.add_argument("-w", "--worker", type=int, default=1, help='specify how many models to train in parallel')
-    parser.add_argument("-m", "--model_type", type=str)
+    parser.add_argument("model_type", type=str)
     parser.add_argument("-d", "--dataset_type", type=str, default=None)
     parser.add_argument("--test_batch_size", type=int, default=100)
     parser.add_argument("--dataloader_worker", default=None)
