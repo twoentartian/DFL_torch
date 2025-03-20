@@ -162,14 +162,15 @@ if __name__ == "__main__":
         loss_file_path = os.path.join(output_temp_path, folder, "full_test_loss.csv")
         accuracy_df = pandas.read_csv(accuracy_file_path)
         loss_df = pandas.read_csv(loss_file_path)
+        accuracy_df.rename(columns={"0": folder}, inplace=True)
         if all_accuracy is None:
             all_accuracy = accuracy_df
         else:
-            all_accuracy = pandas.concat([all_accuracy, accuracy_df], axis=1)
+            all_accuracy = pandas.merge(all_accuracy, accuracy_df, on="tick", how="outer")
         if all_loss is None:
             all_loss = loss_df
         else:
-            all_loss = pandas.concat([all_loss, loss_df], axis=1)
+            all_loss = pandas.merge(all_loss, loss_df, on="tick", how="outer")
 
     all_accuracy.to_csv(os.path.join(path, "test_accuracy.csv"))
     all_loss.to_csv(os.path.join(path, "test_loss.csv"))
