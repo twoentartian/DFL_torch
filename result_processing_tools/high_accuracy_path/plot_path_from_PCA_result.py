@@ -72,11 +72,11 @@ def plot_pca_all_path(info_file_path, data_path, shrink_ratio=None):
 
     for d in all_dimensions:
         if d == 2:
-            fig, axs = plt.subplots(1, len(all_layers), figsize=(len(all_layers) * 15, 15), squeeze=False)
-            file_name = "pca_2d"
             for layer_index, layer in enumerate(all_layers):
+                file_name = f"pca_2d_{layer}"
+                fig, axs = plt.subplots(1, 1, figsize=(15, 15), squeeze=False)
                 print(f"processing layer {layer}")
-                ax = axs[0, layer_index]
+                ax = axs[0, 0]
                 ax.set_title(f'PCA Projection of layer {layer}')
                 for target_index, target in enumerate(all_targets):
                     csv_file_path = os.path.join(data_path, f"{target}_{layer}_{d}d.csv")
@@ -96,10 +96,10 @@ def plot_pca_all_path(info_file_path, data_path, shrink_ratio=None):
                                     c=df["tick"][index_final], cmap='viridis')
                     if target_index == 0:
                         plt.colorbar(sc, label='Model Index')
-            fig.tight_layout()
-            fig.savefig(f"{data_path}/{file_name}.pdf")
-            fig.savefig(f"{data_path}/{file_name}.jpg", dpi=400)
-            plt.close(fig)
+                fig.tight_layout()
+                fig.savefig(f"{data_path}/{file_name}.pdf")
+                fig.savefig(f"{data_path}/{file_name}.jpg", dpi=400)
+                plt.close(fig)
         if d == 3:
             pass
             # not implemented yet
