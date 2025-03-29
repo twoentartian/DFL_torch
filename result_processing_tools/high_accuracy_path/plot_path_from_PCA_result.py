@@ -54,7 +54,7 @@ def deduplicate_weights_dbscan(weights_trajectory, shrink_ratio: float | None = 
         print(f"De-duplicate extra sampling rate: {sample_rate}")
         return weights_trajectory_reduced[::sample_rate], index_reduced[::sample_rate]
 
-def plot_pca_all_path(info_file_path, data_path, shrink_ratio=None):
+def plot_pca_all_path(info_file_path, data_path, shrink_ratio=None, plot_color="index"):
     with open(info_file_path) as f:
         info_target = json.load(f)
     all_targets = []
@@ -78,9 +78,18 @@ def plot_pca_all_path(info_file_path, data_path, shrink_ratio=None):
                 print(f"processing layer {layer}")
                 ax = axs[0, 0]
                 ax.set_title(f'PCA Projection of layer {layer}')
+
                 for target_index, target in enumerate(all_targets):
                     csv_file_path = os.path.join(data_path, f"{target}_{layer}_{d}d.csv")
                     df = pd.read_csv(csv_file_path)
+
+                    test_accuracy_df, test_loss_df = None, None
+                    csv_folder_path = os.path.dirname(csv_file_path)
+                    if plot_color == "test_accuracy":
+                        test_accuracy_df = pd.read_csv(os.path.join(csv_folder_path, "test_accuracy.csv"))
+                    if plot_color == "test_loss":
+                        test_loss_df = pd.read_csv(os.path.join(csv_folder_path, "test_loss.csv"))
+
                     pattern = r'^PCA Dimension \d+$'
                     pca_dimensions = [col for col in df.columns if re.match(pattern, col)]
                     assert len(pca_dimensions) == d
@@ -92,8 +101,20 @@ def plot_pca_all_path(info_file_path, data_path, shrink_ratio=None):
                     else:
                         projected_2d_final = projected_2d
                         index_final = range(projected_2d.shape[0])
+
+                    # set color
+                    if plot_color == "test_accuracy":
+                        target_name = target.rsplit('/', 1)[-1]
+                        color = test_accuracy_df[f"{target_name}"]
+                    elif plot_color == "test_loss":
+                        target_name = target.rsplit('/', 1)[-1]
+                        color = test_loss_df[f"{target_name}"]
+                    elif plot_color == "index":
+                        color = df["tick"]
+                    else:
+                        raise NotImplemented
                     sc = ax.scatter(projected_2d_final[:, 0], projected_2d_final[:, 1], s=plot_size, alpha=plot_alpha,
-                                    c=df["tick"][index_final], cmap='viridis')
+                                    c=color[index_final], cmap='viridis')
                     if target_index == 0:
                         plt.colorbar(sc, label='Model Index')
                 fig.tight_layout()
@@ -110,6 +131,7 @@ if __name__ == '__main__':
     parser.add_argument("path", type=str, help="the folder containing info.json and PCA results")
     parser.add_argument("-i","--info", type=str, help="info file path, default: {PCA results path}/info.json")
     parser.add_argument("-s", "--shrink", type=float, default=0.1, help="shrink ratio, a value between 0 and 1 to reduce output image size")
+    parser.add_argument("-c", "--color", type=str, choices=["index", "test_accuracy", "test_loss"], default="index", help="specify which value to use for color")
 
     args = parser.parse_args()
 
@@ -119,4 +141,4 @@ if __name__ == '__main__':
         info_path = os.path.join(path, "info.json")
     else:
         info_path = Path(args.info)
-    plot_pca_all_path(info_path, path, shrink_ratio=shrink_ratio)
+    plot_pca_all_path(info_path, path, shrink_ratio=shrink_ratio, plot_color=args.color)
