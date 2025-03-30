@@ -127,7 +127,7 @@ if __name__ == "__main__":
     folders = sorted(folders)
     print(f"all folders: {folders}")
 
-    output_temp_path = os.path.join(path, "temp_test_accuracy")
+    output_temp_path = os.path.join(path, "temp_sharpness_loss")
     if not os.path.exists(output_temp_path):
         os.mkdir(output_temp_path)
 
