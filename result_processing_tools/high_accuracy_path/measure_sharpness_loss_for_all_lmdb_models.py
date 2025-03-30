@@ -32,13 +32,13 @@ def measure_model_in_lmdb(db_path, arg_ml_setup: ml_setup.MlSetup, arg_test_batc
         cursor = txn.cursor()
 
         model = arg_ml_setup.model
-        testing_dataset = current_ml_setup.testing_data
+        training_dataset = current_ml_setup.training_data
         criterion = current_ml_setup.criterion
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         if arg_dataloader_worker is None:
-            dataloader_test = DataLoader(testing_dataset, batch_size=arg_test_batch_size, shuffle=True)
+            dataloader_test = DataLoader(training_dataset, batch_size=arg_test_batch_size, shuffle=True)
         else:
-            dataloader_test = DataLoader(testing_dataset, batch_size=arg_test_batch_size, shuffle=True, num_workers=arg_dataloader_worker, persistent_workers=True)
+            dataloader_test = DataLoader(training_dataset, batch_size=arg_test_batch_size, shuffle=True, num_workers=arg_dataloader_worker, persistent_workers=True)
         model.eval()
         model.to(device)
         with torch.no_grad():
