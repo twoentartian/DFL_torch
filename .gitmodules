@@ -4,3 +4,6 @@
 [submodule "py_src/third_party/vit_pytorch"]
 	path = py_src/third_party/vit_pytorch
 	url = https://github.com/lucidrains/vit-pytorch.git
+[submodule "py_src/third_party/sam"]
+	path = py_src/third_party/sam
+	url = https://github.com/davda54/sam.git
