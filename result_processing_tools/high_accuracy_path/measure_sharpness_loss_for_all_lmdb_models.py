@@ -135,19 +135,28 @@ if __name__ == "__main__":
     if not os.path.exists(output_temp_path):
         os.mkdir(output_temp_path)
 
-    with concurrent.futures.ProcessPoolExecutor(max_workers=worker) as executor:
-        futures = []
+    if worker == 1:
         for folder in folders:
             task_name = folder
             db_path = os.path.join(path, folder, "model_stat.lmdb")
             output_path = os.path.join(output_temp_path, folder)
             if not os.path.exists(output_path):
                 os.mkdir(output_path)
-            futures.append(executor.submit(measure_model_in_lmdb, db_path, current_ml_setup, test_batch_size, data_loader_worker, output_path, task_name, args.cpu))
+            measure_model_in_lmdb(db_path, current_ml_setup, test_batch_size, data_loader_worker, output_path, task_name, args.cpu)
+    else:
+        with concurrent.futures.ProcessPoolExecutor(max_workers=worker) as executor:
+            futures = []
+            for folder in folders:
+                task_name = folder
+                db_path = os.path.join(path, folder, "model_stat.lmdb")
+                output_path = os.path.join(output_temp_path, folder)
+                if not os.path.exists(output_path):
+                    os.mkdir(output_path)
+                futures.append(executor.submit(measure_model_in_lmdb, db_path, current_ml_setup, test_batch_size, data_loader_worker, output_path, task_name, args.cpu))
 
-        for future in concurrent.futures.as_completed(futures):
-            result = future.result()
-    executor.shutdown(wait=True)
+            for future in concurrent.futures.as_completed(futures):
+                result = future.result()
+        executor.shutdown(wait=True)
 
     # merge all accuracies
     all_loss = None
