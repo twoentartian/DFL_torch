@@ -17,7 +17,7 @@ from py_src.third_party.sam.example.utility.bypass_bn import enable_running_stat
 
 logger = logging.getLogger("measure_test_accuracy")
 
-def measure_model_in_lmdb(db_path, arg_ml_setup: ml_setup.MlSetup, arg_test_batch_size, arg_dataloader_worker, output_path, task_name):
+def measure_model_in_lmdb(db_path, arg_ml_setup: ml_setup.MlSetup, arg_test_batch_size, arg_dataloader_worker, output_path, task_name, use_cpu):
     # logger
     child_logger = logging.getLogger(f"measure_test_accuracy.{task_name}")
     util.set_logging(child_logger, task_name)
@@ -34,7 +34,10 @@ def measure_model_in_lmdb(db_path, arg_ml_setup: ml_setup.MlSetup, arg_test_batc
         model = arg_ml_setup.model
         training_dataset = current_ml_setup.training_data
         criterion = current_ml_setup.criterion
-        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        if use_cpu:
+            device = torch.device("cpu")
+        else:
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         if arg_dataloader_worker is None:
             dataloader_test = DataLoader(training_dataset, batch_size=arg_test_batch_size, shuffle=True)
         else:
@@ -112,6 +115,7 @@ if __name__ == "__main__":
     parser.add_argument("-d", "--dataset_type", type=str, default=None)
     parser.add_argument("--test_batch_size", type=int, default=100)
     parser.add_argument("--dataloader_worker", default=None)
+    parser.add_argument("--cpu", action='store_true', default=False, help='use cpu')
     args = parser.parse_args()
 
     if args.dataset_type is None:
@@ -139,7 +143,7 @@ if __name__ == "__main__":
             output_path = os.path.join(output_temp_path, folder)
             if not os.path.exists(output_path):
                 os.mkdir(output_path)
-            futures.append(executor.submit(measure_model_in_lmdb, db_path, current_ml_setup, test_batch_size, data_loader_worker, output_path, task_name))
+            futures.append(executor.submit(measure_model_in_lmdb, db_path, current_ml_setup, test_batch_size, data_loader_worker, output_path, task_name, args.cpu))
 
         for future in concurrent.futures.as_completed(futures):
             result = future.result()
