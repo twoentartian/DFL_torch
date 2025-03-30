@@ -114,7 +114,7 @@ if __name__ == "__main__":
     parser.add_argument("model_type", type=str)
     parser.add_argument("-d", "--dataset_type", type=str, default=None)
     parser.add_argument("--test_batch_size", type=int, default=100)
-    parser.add_argument("--dataloader_worker", default=None)
+    parser.add_argument("--dataloader_worker", type=int, default=None)
     parser.add_argument("--cpu", action='store_true', default=False, help='use cpu')
     args = parser.parse_args()
 
