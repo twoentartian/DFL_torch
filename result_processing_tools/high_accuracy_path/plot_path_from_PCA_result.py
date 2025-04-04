@@ -73,7 +73,7 @@ def plot_pca_all_path(info_file_path, data_path, shrink_ratio=None, plot_color="
     for d in all_dimensions:
         if d == 2:
             for layer_index, layer in enumerate(all_layers):
-                file_name = f"pca_2d_{layer}"
+                file_name = f"pca_2d_{layer}_{plot_color}"
                 fig, axs = plt.subplots(1, 1, figsize=(15, 15), squeeze=False)
                 print(f"processing layer {layer}")
                 ax = axs[0, 0]
@@ -116,7 +116,12 @@ def plot_pca_all_path(info_file_path, data_path, shrink_ratio=None, plot_color="
                     sc = ax.scatter(projected_2d_final[:, 0], projected_2d_final[:, 1], s=plot_size, alpha=plot_alpha,
                                     c=color[index_final], cmap='viridis')
                     if target_index == 0:
-                        plt.colorbar(sc, label='Model Index')
+                        if plot_color == "index":
+                            plt.colorbar(sc, label='Model Index')
+                        if plot_color == "test_accuracy":
+                            plt.colorbar(sc, label='Test Accuracy')
+                        if plot_color == "test_loss":
+                            plt.colorbar(sc, label='Test Loss')
                 fig.tight_layout()
                 fig.savefig(f"{data_path}/{file_name}.pdf")
                 fig.savefig(f"{data_path}/{file_name}.jpg", dpi=400)
@@ -129,6 +134,7 @@ def plot_pca_all_path(info_file_path, data_path, shrink_ratio=None, plot_color="
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Plot high accuracy paths')
     parser.add_argument("path", type=str, help="the folder containing info.json and PCA results")
+    parser.add_argument("--raw", action='store_true', help="plot all data points in PCA results")
     parser.add_argument("-i","--info", type=str, help="info file path, default: {PCA results path}/info.json")
     parser.add_argument("-s", "--shrink", type=float, default=0.1, help="shrink ratio, a value between 0 and 1 to reduce output image size")
     parser.add_argument("-c", "--color", type=str, choices=["index", "test_accuracy", "test_loss"], default="index", help="specify which value to use for color")
@@ -141,4 +147,7 @@ if __name__ == '__main__':
         info_path = os.path.join(path, "info.json")
     else:
         info_path = Path(args.info)
-    plot_pca_all_path(info_path, path, shrink_ratio=shrink_ratio, plot_color=args.color)
+    if args.raw:
+        plot_pca_all_path(info_path, path, shrink_ratio=None, plot_color=args.color)
+    else:
+        plot_pca_all_path(info_path, path, shrink_ratio=shrink_ratio, plot_color=args.color)
