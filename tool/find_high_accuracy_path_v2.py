@@ -220,7 +220,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters):
     elif runtime_parameter.work_mode == WorkMode.to_certain_model:
         end_model_stat_dict, end_model_name = util.load_model_state_file(end_point)
         child_logger.info(f"work mode: to_certain_model at {end_point}")
-        assert end_model_name == start_model_name
+        assert end_model_name == start_model_name, f"start({start_model_name}) != end({end_model_name})"
     else:
         raise NotImplemented
 
