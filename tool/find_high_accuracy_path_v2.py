@@ -468,7 +468,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters):
         """variance correction"""
         if not runtime_parameter.debug_check_config_mode:
             if runtime_parameter.work_mode == WorkMode.to_certain_model:
-                child_logger.info(f"current tick: rescale variance")
+                child_logger.info(f"current tick: {runtime_parameter.current_tick}, rescale variance")
                 target_model_stat_dict = model_variance_correct.VarianceCorrector.scale_model_stat_to_variance(target_model.state_dict(), target_variance)
                 target_model.load_state_dict(target_model_stat_dict)
 
