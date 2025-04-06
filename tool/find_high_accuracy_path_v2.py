@@ -444,7 +444,8 @@ def process_file_func(index, runtime_parameter: RuntimeParameters):
                     if runtime_parameter.verbose:
                         if training_iter_counter % 10 == 0:
                             child_logger.info(f"current tick: {runtime_parameter.current_tick}, training {training_iter_counter} rounds, loss = {moving_average.get_average():.3f}")
-
+                    if runtime_parameter.current_tick == 0 and training_loss_val > parameter_train.train_until_loss:
+                        child_logger.warning(f"the loss for the first batch is larger than train_until_loss, ({training_loss_val}>{parameter_train.train_until_loss}). Check dataset selection !!!")
                     if training_iter_counter == parameter_train.train_for_max_rounds:
                         exit_training = True
                         break
