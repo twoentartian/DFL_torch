@@ -55,14 +55,14 @@ def set_seed(seed: int, logger=None) -> None:
         logger.info(f"Random seed set as {seed}")
 
 def manually_define_optimizer(arg_ml_setup: ml_setup, model):
-    lr = 0.1
-    epochs = 50
-    optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=2e-4)
-    steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
-    lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, lr, steps_per_epoch=steps_per_epoch, epochs=epochs)
-    return optimizer, lr_scheduler, epochs
+    # lr = 0.1
+    # epochs = 50
+    # optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=2e-4)
+    # steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
+    # lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, lr, steps_per_epoch=steps_per_epoch, epochs=epochs)
+    # return optimizer, lr_scheduler, epochs
 
-    # return None, None, None
+    return None, None, None
 
 def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_setup, arg_use_cpu: bool, random_seed, arg_worker_count, arg_total_cpu_count, arg_save_format, arg_amp):
     thread_per_process = arg_total_cpu_count // arg_worker_count
@@ -166,7 +166,7 @@ if __name__ == "__main__":
                         choices=['lenet4', 'lenet5', 'resnet18_bn', 'resnet18_gn', 'simplenet', 'cct7', 'vit', 'lenet5_large_fc',
                                  'vgg11_mnist', 'vgg11_cifar10', 'mobilenet_v3_small', 'mobilenet_v3_large', 'mobilenet_v2', 'efficient_net_v2'])
     parser.add_argument("-d", "--dataset_type", type=str, default='default',
-                        choices=['default', 'mnist', 'cifar10', 'cifar100', 'imagenet1k', 'imagenet100'])
+                        choices=['default', 'mnist', 'random_mnist', 'cifar10', 'cifar100', 'imagenet1k', 'imagenet100'])
     parser.add_argument("--cpu", action='store_true', help='force using CPU for training')
     parser.add_argument("-o", "--output_folder_name", default=None, help='specify the output folder name')
     parser.add_argument("--save_format", type=str, default='none', choices=['none', 'file', 'lmdb'], help='which format to save the training states')
@@ -220,3 +220,4 @@ if __name__ == "__main__":
         futures = [executor.submit(training_model, *arg) for arg in args]
         for future in concurrent.futures.as_completed(futures):
             result = future.result()
+        pass

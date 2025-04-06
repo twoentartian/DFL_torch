@@ -8,9 +8,23 @@ class FastTrainingSetup(object):
     @staticmethod
     def get_optimizer_lr_scheduler_epoch(arg_ml_setup: ml_setup, model):
         if arg_ml_setup.model_name == 'lenet5' or arg_ml_setup.model_name == 'lenet4':
-            epochs = 20
-            optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
-            return optimizer, None, epochs
+            if arg_ml_setup.dataset_name == 'mnist':
+                epochs = 20
+                optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
+                return optimizer, None, epochs
+            elif arg_ml_setup.dataset_name == 'random_mnist':
+                lr = 0.01
+                epochs = 100
+                optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=2e-4)
+                steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
+                lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, lr, steps_per_epoch=steps_per_epoch, epochs=epochs)
+                return optimizer, lr_scheduler, epochs
+                # epochs = 50
+                # optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
+                # return optimizer, None, epochs
+            else:
+                raise NotImplemented
+
         if arg_ml_setup.model_name == 'lenet5_large_fc':
             epochs = 20
             optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9)

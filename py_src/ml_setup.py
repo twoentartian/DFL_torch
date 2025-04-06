@@ -94,6 +94,25 @@ class MlSetup:
         else:
             model.apply(self.weights_init_func)
 
+def calculate_mean_std(dataset):
+    loader = DataLoader(dataset, batch_size=100, shuffle=False)
+
+    # Calculate mean and variance
+    mean = 0.
+    var = 0.
+    nb_samples = 0.
+
+    for images, _ in loader:
+        batch_samples = images.size(0)
+        images = images.view(batch_samples, images.size(1), -1)
+        mean += images.mean(2).sum(0)
+        var += images.var(2).sum(0)
+        nb_samples += batch_samples
+
+    mean /= nb_samples
+    var /= nb_samples
+    std = var ** 0.5
+    return mean, std
 
 """ MNIST """
 def dataset_mnist():
@@ -106,7 +125,7 @@ def dataset_mnist():
     transforms_mnist_test = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean=[mean], std=[std])])
     train_data = datasets.MNIST(root=dataset_path, train=True, download=False, transform=transforms_mnist_train)
     test_data = datasets.MNIST(root=dataset_path, train=False, download=False, transform=transforms_mnist_test)
-    return DatasetSetup(dataset_name, train_data, test_data)
+    return DatasetSetup(dataset_name, train_data, test_data, labels=set(range(10)))
 
 def dataset_mnist_224():
     dataset_path = '~/dataset/mnist'
@@ -125,7 +144,22 @@ def dataset_mnist_224():
          transforms.Normalize(mean=[mean], std=[std])])
     train_data = datasets.MNIST(root=dataset_path, train=True, download=False, transform=transforms_mnist_train)
     test_data = datasets.MNIST(root=dataset_path, train=False, download=False, transform=transforms_mnist_test)
-    return DatasetSetup(dataset_name, train_data, test_data)
+    return DatasetSetup(dataset_name, train_data, test_data, labels=set(range(10)))
+
+""" Random MNIST """
+def dataset_random_mnist():
+    dataset_path = '~/dataset/random_mnist'
+    dataset_name = "random_mnist"
+    mnist_train = datasets.ImageFolder(os.path.join(dataset_path, "train"), transform=transforms.Compose([transforms.ToTensor()]))
+    mean, std = calculate_mean_std(mnist_train)
+    mean, std = mean.mean().item(), std.mean().item()
+    transforms_mnist_train = transforms.Compose([transforms.Grayscale(), transforms.ToTensor(), transforms.Normalize(mean=mean, std=std)])
+    transforms_mnist_test = transforms.Compose([transforms.Grayscale(), transforms.ToTensor(), transforms.Normalize(mean=mean, std=std)])
+    mnist_train = datasets.ImageFolder(os.path.join(dataset_path, "train"), transform=transforms_mnist_train)
+    mnist_test = datasets.ImageFolder(os.path.join(dataset_path, "test"), transform=transforms_mnist_test)
+
+    return DatasetSetup(dataset_name, mnist_train, mnist_test, labels=set(range(10)))
+
 
 """ CIFAR10 """
 def dataset_cifar10_32(transforms_training=None, transforms_testing=None, mean_std = None):
@@ -337,6 +371,19 @@ def lenet4_mnist():
 def lenet5_mnist():
     output_ml_setup = MlSetup()
     dataset = dataset_mnist()
+
+    output_ml_setup.model = lenet.lenet5()
+    output_ml_setup.model_name = "lenet5"
+    output_ml_setup.get_info_from_dataset(dataset)
+    output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
+    output_ml_setup.training_batch_size = 64
+    output_ml_setup.weights_init_func = lenet.weights_init_xavier
+    output_ml_setup.has_normalization_layer = False
+    return output_ml_setup
+
+def lenet5_random_mnist():
+    output_ml_setup = MlSetup()
+    dataset = dataset_random_mnist()
 
     output_ml_setup.model = lenet.lenet5()
     output_ml_setup.model_name = "lenet5"
@@ -641,6 +688,7 @@ class ModelType(Enum):
 class DatasetType(Enum):
     default = auto()
     mnist = auto()
+    random_mnist = auto()
     cifar10 = auto()
     cifar100 = auto()
     imagenet100 = auto()
@@ -654,8 +702,12 @@ def get_ml_setup_from_config(model_type: str, dataset_type: str = 'default'):
 
 def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default):
     if model_name == ModelType.lenet5:
-        assert dataset_type in [dataset_type.default, dataset_type.mnist]
-        output_ml_setup = lenet5_mnist()
+        if dataset_type in [dataset_type.default, dataset_type.mnist]:
+            output_ml_setup = lenet5_mnist()
+        elif dataset_type in [dataset_type.random_mnist]:
+            output_ml_setup = lenet5_random_mnist()
+        else:
+            raise NotImplemented
     elif model_name == ModelType.lenet4:
         assert dataset_type in [dataset_type.default, dataset_type.mnist]
         output_ml_setup = lenet4_mnist()
