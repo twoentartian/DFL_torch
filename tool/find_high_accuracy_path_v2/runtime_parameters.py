@@ -30,6 +30,8 @@ class RuntimeParameters(object):
 
     debug_check_config_mode = None
     test_dataset_use_whole = None
+    service_test_accuracy_loss_interval = None
+    service_test_accuracy_loss_batch_size = None
 
     verbose = False
 

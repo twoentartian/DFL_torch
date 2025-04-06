@@ -299,7 +299,10 @@ def process_file_func(index, runtime_parameter: RuntimeParameters):
         record_model_service = None
     child_logger.info("setting service done: record_model_service")
 
-    record_test_accuracy_loss_service = record_test_accuracy_loss.ServiceTestAccuracyLossRecorder(1, 100, use_fixed_testing_dataset=True, test_whole_dataset=runtime_parameter.test_dataset_use_whole)
+    record_test_accuracy_loss_service = record_test_accuracy_loss.ServiceTestAccuracyLossRecorder(runtime_parameter.service_test_accuracy_loss_interval,
+                                                                                                  runtime_parameter.service_test_accuracy_loss_batch_size,
+                                                                                                  use_fixed_testing_dataset=True,
+                                                                                                  test_whole_dataset=runtime_parameter.test_dataset_use_whole)
     record_test_accuracy_loss_service.initialize_without_runtime_parameters(arg_output_folder_path, [0], target_model, criterion, current_ml_setup.testing_data,
                                                                             existing_model_for_testing=target_model, gpu=gpu, num_workers=general_parameter.dataloader_worker)
     child_logger.info("setting service done: record_test_accuracy_loss_service")
@@ -532,6 +535,9 @@ if __name__ == '__main__':
     parser.add_argument("-v", "--verbose", action='store_true', help='verbose mode')
     parser.add_argument("-o", "--output_folder_name", default=None, help='specify the output folder name')
 
+    parser.add_argument( "--test_interval", type=int, default=1, help='specify the interval of measuring model on the test dataset.')
+    parser.add_argument("--test_batch", type=int, default=100, help='specify the batch size of measuring model on the test dataset.')
+
     args = parser.parse_args()
 
     if args.config is None:
@@ -554,6 +560,8 @@ if __name__ == '__main__':
     runtime_parameter.dataset_name = args.dataset
     runtime_parameter.debug_check_config_mode = args.check_config
     runtime_parameter.verbose = args.verbose
+    runtime_parameter.service_test_accuracy_loss_interval = args.test_interval
+    runtime_parameter.service_test_accuracy_loss_batch_size = args.test_batch
 
     # find all paths to process
     start_folder = args.start_folder
