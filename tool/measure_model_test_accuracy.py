@@ -6,7 +6,7 @@ import json
 from torch.utils.data import DataLoader
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from py_src import ml_setup
+from py_src import ml_setup, util
 
 
 def testing_model(model, current_ml_setup):
@@ -62,20 +62,19 @@ if __name__ == "__main__":
     model_file_path = args.model_file
     model_type_from_cli = args.model_type
 
-    model_info = torch.load(model_file_path)
+    model_stat, model_name = util.load_model_state_file(model_file_path)
     if model_type_from_cli == "auto":
-        model_type = model_info["model_name"]
+        model_type = model_name
     else:
         model_type = model_type_from_cli
     assert model_type is not None, "model_type is None"
-    model_state = model_info["state_dict"]
 
     current_ml_setup = ml_setup.get_ml_setup_from_config(model_type, dataset_type=args.dataset_type)
 
     if not os.path.exists(model_file_path):
         print(f"file not found. {model_file_path}")
     model = current_ml_setup.model
-    model.load_state_dict(model_state)
+    model.load_state_dict(model_stat)
 
     test_loss, test_accuracy, train_loss, train_accuracy = testing_model(model, current_ml_setup)
     print(f"test loss={test_loss}, test acc={test_accuracy}")
