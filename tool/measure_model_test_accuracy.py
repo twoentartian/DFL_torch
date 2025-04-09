@@ -74,10 +74,7 @@ if __name__ == "__main__":
     if not os.path.exists(model_file_path):
         print(f"file not found. {model_file_path}")
     model = current_ml_setup.model
-    if "state" in model_stat:
-        model.load_state_dict(model_stat["state"])
-    else:
-        model.load_state_dict(model_stat)
+    model.load_state_dict(model_stat)
 
     test_loss, test_accuracy, train_loss, train_accuracy = testing_model(model, current_ml_setup)
     print(f"test loss={test_loss}, test acc={test_accuracy}")
