@@ -4,6 +4,8 @@ import argparse
 import io
 import lmdb
 import torch
+import logging
+import sys
 import pandas as pd
 from typing import Optional
 from datetime import datetime
@@ -11,10 +13,36 @@ from sklearn.decomposition import IncrementalPCA
 
 ignore_layers_with_keywords = ["running_mean", "running_var", "num_batches_tracked"]
 
+logger = logging.getLogger("ipca_all_path")
+
+def set_logging(target_logger, task_name, log_file_path=None):
+    class ExitOnExceptionHandler(logging.StreamHandler):
+        def emit(self, record):
+            if record.levelno == logging.CRITICAL:
+                raise SystemExit(-1)
+
+    formatter = logging.Formatter(f"[%(asctime)s] [%(levelname)8s] [{task_name}] --- %(message)s (%(filename)s:%(lineno)s)")
+
+    console = logging.StreamHandler(sys.stdout)
+    console.setLevel(logging.INFO)
+    console.setFormatter(formatter)
+
+    target_logger.setLevel(logging.DEBUG)
+    target_logger.addHandler(console)
+    target_logger.addHandler(ExitOnExceptionHandler())
+
+    if log_file_path is not None:
+        file = logging.FileHandler(log_file_path)
+        file.setLevel(logging.DEBUG)
+        file.setFormatter(formatter)
+        target_logger.addHandler(file)
+
+    del console, formatter
+
 def load_models_from_lmdb(lmdb_path, arg_node_name, desired_length:Optional[int]=None, lmdb_cache=None):
     if lmdb_cache is not None:
         if lmdb_path in lmdb_cache:
-            print(f"use cached lmdb {lmdb_path}")
+            logger.info(f"use cached lmdb {lmdb_path}")
             return lmdb_cache[lmdb_path]
 
     lmdb_env = lmdb.open(lmdb_path, readonly=True)
@@ -63,10 +91,10 @@ def incremental_pca_all_path(arg_path_folder, arg_output_folder, arg_node_name: 
     all_sub_folders = sorted(all_sub_folders)
 
     if enable_lmdb_cache:
-        print("enable lmdb cache")
+        logger.info("enable lmdb cache")
         lmdb_cache = {}
     else:
-        print("disable lmdb cache")
+        logger.info("disable lmdb cache")
         lmdb_cache = None
 
     layer_and_ipca = []
@@ -77,7 +105,7 @@ def incremental_pca_all_path(arg_path_folder, arg_output_folder, arg_node_name: 
 
     for single_sub_folder in all_sub_folders:
         lmdb_path = os.path.join(single_sub_folder, "model_stat.lmdb")
-        print(f"loading lmdb: {lmdb_path}")
+        logger.info(f"loading lmdb: {lmdb_path}")
         tick_and_models = load_models_from_lmdb(lmdb_path, arg_node_name, desired_length=sample_points, lmdb_cache=lmdb_cache)
         ticks_ordered = sorted(tick_and_models.keys())
         sample_model = tick_and_models[next(iter(tick_and_models))]
@@ -91,7 +119,7 @@ def incremental_pca_all_path(arg_path_folder, arg_output_folder, arg_node_name: 
                 continue
             if only_layers is not None and (layer_name not in only_layers):
                 continue
-            print(f"processing layer {layer_name}")
+            logger.info(f"processing layer {layer_name}")
             weights_list = [extract_weights(tick_and_models[tick], layer_name) for tick in ticks_ordered]
             for d in dimension:
                 current_dimension_ipca = layer_and_ipca[dimension_to_index[d]]
@@ -106,7 +134,7 @@ def incremental_pca_all_path(arg_path_folder, arg_output_folder, arg_node_name: 
         sub_folder_path = [f.path for f in os.scandir(folder) if f.is_dir()]
         for index, name in enumerate(sub_folders):
             lmdb_path = os.path.join(sub_folder_path[index], "model_stat.lmdb")
-            print(f"loading lmdb: {lmdb_path} for transformation")
+            logger.info(f"loading lmdb: {lmdb_path} for transformation")
             tick_and_models = load_models_from_lmdb(lmdb_path, arg_node_name, desired_length=sample_points, lmdb_cache=lmdb_cache)
             ticks_ordered = sorted(tick_and_models.keys())
             sample_model = tick_and_models[next(iter(tick_and_models))]
@@ -124,7 +152,7 @@ def incremental_pca_all_path(arg_path_folder, arg_output_folder, arg_node_name: 
                 weights_list = [extract_weights(tick_and_models[tick], layer_name) for tick in ticks_ordered]
                 for d in dimension:
                     output_file_path = os.path.join(arg_output_folder, folder, f"{name}_{layer_name}_{d}d.csv")
-                    print(f"processing output {output_file_path}")
+                    logger.info(f"processing output {output_file_path}")
                     ipca = layer_and_ipca[dimension_to_index[d]][layer_name]
                     result = ipca.transform(weights_list)
                     column_names = [f"PCA Dimension {i}" for i in range(d)]
@@ -139,6 +167,7 @@ def incremental_pca_all_path(arg_path_folder, arg_output_folder, arg_node_name: 
         json.dump(info_target, f, indent=4)
 
 if __name__ == '__main__':
+    set_logging(logger, "main")
     torch.multiprocessing.set_start_method('spawn')
 
     parser = argparse.ArgumentParser(description='Ues PCA to reduce dimension for high accuracy paths')
