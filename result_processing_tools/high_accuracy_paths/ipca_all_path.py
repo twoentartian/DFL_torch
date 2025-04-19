@@ -9,6 +9,7 @@ from typing import Optional
 from datetime import datetime
 from sklearn.decomposition import IncrementalPCA
 
+ignore_layers_with_keywords = ["running_mean", "running_var", "num_batches_tracked"]
 
 def load_models_from_lmdb(lmdb_path, arg_node_name, desired_length:Optional[int]=None, lmdb_cache=None):
     if lmdb_cache is not None:
@@ -81,6 +82,13 @@ def incremental_pca_all_path(arg_path_folder, arg_output_folder, arg_node_name: 
         ticks_ordered = sorted(tick_and_models.keys())
         sample_model = tick_and_models[next(iter(tick_and_models))]
         for layer_name in sample_model.keys():
+            ignore = False
+            for k in ignore_layers_with_keywords:
+                if k in layer_name:
+                    ignore = True
+                    break
+            if ignore:
+                continue
             if only_layers is not None and (layer_name not in only_layers):
                 continue
             print(f"processing layer {layer_name}")
@@ -103,6 +111,13 @@ def incremental_pca_all_path(arg_path_folder, arg_output_folder, arg_node_name: 
             ticks_ordered = sorted(tick_and_models.keys())
             sample_model = tick_and_models[next(iter(tick_and_models))]
             for layer_name in sample_model.keys():
+                ignore = False
+                for k in ignore_layers_with_keywords:
+                    if k in layer_name:
+                        ignore = True
+                        break
+                if ignore:
+                    continue
                 if only_layers is not None and (layer_name not in only_layers):
                     continue
                 generated_layer_names.add(layer_name)
