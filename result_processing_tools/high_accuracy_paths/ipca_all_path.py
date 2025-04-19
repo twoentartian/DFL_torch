@@ -167,7 +167,6 @@ def incremental_pca_all_path(arg_path_folder, arg_output_folder, arg_node_name: 
         json.dump(info_target, f, indent=4)
 
 if __name__ == '__main__':
-    set_logging(logger, "main")
     torch.multiprocessing.set_start_method('spawn')
 
     parser = argparse.ArgumentParser(description='Ues PCA to reduce dimension for high accuracy paths')
@@ -196,5 +195,6 @@ if __name__ == '__main__':
     # create output folder
     output_folder_path = os.path.join(os.curdir, f"{__file__}_{datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")}")
     os.mkdir(output_folder_path)
+    set_logging(logger, "main", log_file_path=os.path.join(output_folder_path, "log.txt"))
 
     info_file_path = incremental_pca_all_path(path_folder, output_folder_path, node_name, sample_points=points, only_layers=only_layers, dimension=plot_dimensions, enable_lmdb_cache=enable_lmdb_cache)
