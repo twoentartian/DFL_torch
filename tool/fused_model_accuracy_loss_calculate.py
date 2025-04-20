@@ -34,7 +34,7 @@ def process_file_func(model_states, task_list, ml_parameters, worker_info):
     result = {}
     worker_index, total_worker, cores = worker_info
     model_state_a, model_state_b = model_states
-    arg_ml_setup, test_batch_size, test_batch_count, test_dataset_type = ml_parameters
+    arg_ml_setup, test_batch_size, test_batch_count, test_dataset_type, use_whole_dataset = ml_parameters
 
     thread_per_process = cores // total_worker
     torch.set_num_threads(thread_per_process)
@@ -44,14 +44,20 @@ def process_file_func(model_states, task_list, ml_parameters, worker_info):
     criterion = arg_ml_setup.criterion
     if test_dataset_type == "train":
         whole_training_dataset = arg_ml_setup.training_data
-        indices = torch.randperm(len(whole_training_dataset))[:test_batch_size*test_batch_count]
-        sub_training_dataset = torch.utils.data.Subset(whole_training_dataset, indices.tolist())
-        dataloader = DataLoader(sub_training_dataset, batch_size=test_batch_size, shuffle=True)
+        if use_whole_dataset:
+            dataloader = DataLoader(whole_training_dataset, batch_size=test_batch_size, num_workers=thread_per_process, persistent_workers=True)
+        else:
+            indices = torch.randperm(len(whole_training_dataset))[:test_batch_size*test_batch_count]
+            sub_training_dataset = torch.utils.data.Subset(whole_training_dataset, indices.tolist())
+            dataloader = DataLoader(sub_training_dataset, batch_size=test_batch_size, num_workers=thread_per_process, persistent_workers=True)
     elif test_dataset_type == "test":
         whole_testing_dataset = arg_ml_setup.testing_data
-        indices = torch.randperm(len(whole_testing_dataset))[:test_batch_size*test_batch_count]
-        sub_testing_dataset = torch.utils.data.Subset(whole_testing_dataset, indices.tolist())
-        dataloader = DataLoader(sub_testing_dataset, batch_size=test_batch_size, shuffle=True)
+        if use_whole_dataset:
+            dataloader = DataLoader(whole_testing_dataset, batch_size=test_batch_size, num_workers=thread_per_process, persistent_workers=True)
+        else:
+            indices = torch.randperm(len(whole_testing_dataset))[:test_batch_size*test_batch_count]
+            sub_testing_dataset = torch.utils.data.Subset(whole_testing_dataset, indices.tolist())
+            dataloader = DataLoader(sub_testing_dataset, batch_size=test_batch_size, num_workers=thread_per_process, persistent_workers=True)
     else:
         raise NotImplementedError
 
@@ -98,6 +104,8 @@ if __name__ == "__main__":
     parser.add_argument("-c", '--core', type=int, default=os.cpu_count(), help='specify the number of CPU cores to use')
     parser.add_argument("-w", "--worker", type=int, default=1, help='specify how many workers to run in parallel')
     parser.add_argument("-t", "--test_dataset_type", type=str, default='test', choices=['test', 'train'])
+    parser.add_argument("--whole_dataset", action='store_true', help="use whole raw dataset to do the testing")
+    parser.add_argument("-d", "--dataset", type=str, default=None, help='specify the dataset name')
 
     args = parser.parse_args()
 
@@ -110,6 +118,7 @@ if __name__ == "__main__":
     test_batch_size = args.batch
     test_batch_count = args.batch_count
     test_dataset_type = args.test_dataset_type
+    use_whole_dataset = args.whole_dataset
     print(f"cores: {cores}    worker: {worker_count}")
 
     # output_path
@@ -125,7 +134,11 @@ if __name__ == "__main__":
     model_state_b, model_b_name = util.load_model_state_file(model_b_path)
     util.assert_if_both_not_none(model_a_name, model_b_name)
 
-    current_ml_setup = ml_setup.get_ml_setup_from_config(model_a_name)
+    if args.dataset is not None:
+        current_ml_setup = ml_setup.get_ml_setup_from_config(model_a_name, dataset_type=args.dataset)
+    else:
+        current_ml_setup = ml_setup.get_ml_setup_from_config(model_a_name)
+    print(f"model: {current_ml_setup.model_name}, dataset: {current_ml_setup.dataset_name}")
 
     todo_list = []
     for p0 in np.linspace(0, scale, num=precision, endpoint=True):
@@ -137,7 +150,7 @@ if __name__ == "__main__":
     if total_cpu_count > MAX_CPU_COUNT:
         total_cpu_count = MAX_CPU_COUNT
 
-    args = [((model_state_a, model_state_b), todo_list_for_each_worker[worker], (current_ml_setup, test_batch_size, test_batch_count, test_dataset_type), (worker, worker_count, cores)) for worker in range(0, worker_count)]
+    args = [((model_state_a, model_state_b), todo_list_for_each_worker[worker], (current_ml_setup, test_batch_size, test_batch_count, test_dataset_type, use_whole_dataset), (worker, worker_count, cores)) for worker in range(0, worker_count)]
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=worker_count) as executor:
         futures = [executor.submit(process_file_func, *arg) for arg in args]
