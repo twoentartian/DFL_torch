@@ -14,7 +14,7 @@ def get_parameter_general(runtime_parameter: RuntimeParameters, ml_setup: MlSetu
     output = ParameterGeneral()
     if ml_setup.model_name == model_name:
         output.max_tick = 30000
-        output.dataloader_worker = None
+        output.dataloader_worker = 8
         output.test_dataset_use_whole = True
     else:
         raise NotImplemented
