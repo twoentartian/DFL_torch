@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import sys
 import os
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from py_src import util
 
 def load_model_from_state_dict(model_path):
@@ -53,7 +53,7 @@ def plot_weights_and_calculate_stats(model, output_folder, model_file_name):
         data = param.detach().cpu().numpy()
         variance = data.var()
         mean = data.mean()
-        print(f"  {name}: var={variance:.6f}, mean={mean:.6f}")
+        print(f"  {name}: count={data.size} var={variance:.6f}, mean={mean:.6f}")
 
     # Print stats: variance & mean of biases (if they exist)
     if len(layer_biases) > 0:
@@ -62,7 +62,7 @@ def plot_weights_and_calculate_stats(model, output_folder, model_file_name):
             data = param.detach().cpu().numpy()
             variance = data.var()
             mean = data.mean()
-            print(f"  {name}: var={variance:.6f}, mean={mean:.6f}")
+            print(f"  {name}: count={data.size} var={variance:.6f}, mean={mean:.6f}")
 
 
 
