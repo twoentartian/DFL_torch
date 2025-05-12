@@ -544,7 +544,7 @@ def mobilenet_v2_cifar10():
     dataset = dataset_cifar10_32()
 
     output_ml_setup.model = mobilenet.MobileNetV2(10)
-    output_ml_setup.model_name = "mobilenet_v2_cifar10"
+    output_ml_setup.model_name = "mobilenet_v2"
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 128
