@@ -8,12 +8,12 @@ from find_high_accuracy_path_v2.runtime_parameters import RuntimeParameters
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from py_src.ml_setup import MlSetup
 
-model_name = 'resnet18_bn'
+model_name = 'cct7'
 
 def get_parameter_general(runtime_parameter: RuntimeParameters, ml_setup: MlSetup):
     output = ParameterGeneral()
     if ml_setup.model_name == model_name:
-        output.max_tick = 16000
+        output.max_tick = 1400
         output.dataloader_worker = 8
         output.test_dataset_use_whole = True
     else:
@@ -27,37 +27,7 @@ def get_parameter_move(runtime_parameter: RuntimeParameters, ml_setup: MlSetup):
             output.step_size = 0
             output.adoptive_step_size = 0.001
             output.layer_skip_move = []
-            output.layer_skip_move_keyword = ["layer1", "layer2", "layer3", "layer4", "num_batches_tracked", "running_mean", "running_var", "fc"]
-            output.merge_bias_with_weights = False
-        elif runtime_parameter.current_tick == 2000:
-            output.step_size = 0
-            output.adoptive_step_size = 0.001
-            output.layer_skip_move = []
-            output.layer_skip_move_keyword = ["layer2", "layer3", "layer4", "num_batches_tracked", "running_mean", "running_var", "fc"]
-            output.merge_bias_with_weights = False
-        elif runtime_parameter.current_tick == 4000:
-            output.step_size = 0
-            output.adoptive_step_size = 0.001
-            output.layer_skip_move = []
-            output.layer_skip_move_keyword = ["layer3", "layer4", "num_batches_tracked", "running_mean", "running_var", "fc"]
-            output.merge_bias_with_weights = False
-        elif runtime_parameter.current_tick == 6000:
-            output.step_size = 0
-            output.adoptive_step_size = 0.001
-            output.layer_skip_move = []
-            output.layer_skip_move_keyword = ["layer4", "num_batches_tracked", "running_mean", "running_var", "fc"]
-            output.merge_bias_with_weights = False
-        elif runtime_parameter.current_tick == 8000:
-            output.step_size = 0
-            output.adoptive_step_size = 0.001
-            output.layer_skip_move = []
-            output.layer_skip_move_keyword = ["num_batches_tracked", "running_mean", "running_var", "fc"]
-            output.merge_bias_with_weights = False
-        elif runtime_parameter.current_tick == 10000:
-            output.step_size = 0
-            output.adoptive_step_size = 0.001
-            output.layer_skip_move = []
-            output.layer_skip_move_keyword = ["num_batches_tracked", "running_mean", "running_var"]
+            output.layer_skip_move_keyword = ['norm']
             output.merge_bias_with_weights = False
         else:
             return None
@@ -70,9 +40,9 @@ def get_parameter_train(runtime_parameter: RuntimeParameters, ml_setup: MlSetup)
     output = ParameterTrain()
     if ml_setup.model_name == model_name:
         if runtime_parameter.current_tick == 0:
-            output.train_for_max_rounds = 20000
-            output.train_for_min_rounds = 20
-            output.train_until_loss = 0.005
+            output.train_for_max_rounds = 5000
+            output.train_for_min_rounds = 5
+            output.train_until_loss = 0.03
             output.pretrain_optimizer = True
             output.load_existing_optimizer = False
         else:
@@ -84,7 +54,11 @@ def get_parameter_train(runtime_parameter: RuntimeParameters, ml_setup: MlSetup)
 def get_optimizer_train(runtime_parameter: RuntimeParameters, ml_setup: MlSetup, model_parameter):
     if ml_setup.model_name == model_name:
         if runtime_parameter.current_tick == 0:
-            optimizer = torch.optim.SGD(model_parameter, lr=0.001)
+            # optimizer = torch.optim.SGD(model_parameter, lr=0.001)
+            base_lr = 0.001
+            optimizer = torch.optim.SGD(
+                [{'params': param, 'lr': base_lr} for param in model_parameter]
+            )
         else:
             return None
     else:
@@ -99,7 +73,7 @@ def get_parameter_rebuild_norm(runtime_parameter: RuntimeParameters, ml_setup: M
             output.rebuild_norm_for_min_rounds = 0
             output.rebuild_norm_until_loss = 0
             output.rebuild_norm_layer = []
-            output.rebuild_norm_layer_keyword = ['bn']
+            output.rebuild_norm_layer_keyword = []
         else:
             return None
     else:
@@ -109,7 +83,12 @@ def get_parameter_rebuild_norm(runtime_parameter: RuntimeParameters, ml_setup: M
 def get_optimizer_rebuild_norm(runtime_parameter: RuntimeParameters, ml_setup: MlSetup, model_parameter):
     if ml_setup.model_name == model_name:
         if runtime_parameter.current_tick == 0:
-            optimizer = torch.optim.SGD(model_parameter, lr=0.001, momentum=0.9, weight_decay=5e-4)
+            # optimizer = torch.optim.SGD(model_parameter, lr=0.001, momentum=0.9, weight_decay=5e-4)
+            base_lr = 0.001
+            optimizer = torch.optim.SGD(
+                [{'params': param, 'lr': base_lr} for param in model_parameter],
+                momentum=0.9, weight_decay=6e-2
+            )
         else:
             return None
     else:
