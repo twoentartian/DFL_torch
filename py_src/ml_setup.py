@@ -7,7 +7,7 @@ import random
 import numpy as np
 from enum import Enum, auto
 from torchvision import transforms, models, datasets
-from py_src.models import simplenet, lenet, vgg, mobilenet
+from py_src.models import simplenet, lenet, vgg, mobilenet, shufflenet
 from py_src.dataset import DatasetWithCachedOutputInSharedMem, DatasetWithCachedOutputInMem, ImageDatasetWithCachedInputInSharedMem
 import py_src.third_party.compact_transformers.src.cct as cct
 
@@ -633,7 +633,7 @@ def vit_b_16_imagenet100():
     return output_ml_setup
 
 """ EfficientNet + CIFAR100 """
-def efficient_net_cifar100():
+def efficientnet_cifar100():
     output_ml_setup = MlSetup()
     mean, std = [0.485, 0.456, 0.406], [0.229, 0.224, 0.225]
     img_size = 224
@@ -661,13 +661,39 @@ def efficient_net_cifar100():
     in_features = model_ft.classifier[-1].in_features
     model_ft.classifier[-1] = nn.Linear(in_features, 100)
 
-    output_ml_setup.model_name = "efficient_net_v2"
+    output_ml_setup.model_name = "efficientnet_v2"
     output_ml_setup.model = model_ft
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 32
     output_ml_setup.has_normalization_layer = True
     return output_ml_setup
+
+""" ShuffleNet + CIFAR10 """
+def shufflenet_v2_cifar10():
+    output_ml_setup = MlSetup()
+    mean, std = [0.4914, 0.4822, 0.4465], [0.247, 0.243, 0.261]
+    transform_train = transforms.Compose([
+        transforms.RandomCrop(32, padding = 4),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize(mean, std)])
+
+    transform_test = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize(mean, std)])
+
+    dataset = dataset_cifar10_32(transforms_training=transform_train, transforms_testing=transform_test)
+
+    model_ft = shufflenet.ShuffleNet(10, g=1, scale_factor=1)
+    output_ml_setup.model_name = "shufflenet_v2"
+    output_ml_setup.model = model_ft
+    output_ml_setup.get_info_from_dataset(dataset)
+    output_ml_setup.criterion = torch.nn.CrossEntropyLoss()
+    output_ml_setup.training_batch_size = 128
+    output_ml_setup.has_normalization_layer = True
+    return output_ml_setup
+
 
 """ Helper function """
 class ModelType(Enum):
@@ -683,7 +709,8 @@ class ModelType(Enum):
     mobilenet_v2 = auto()
     lenet4 = auto()
     vgg11_no_bn = auto()
-    efficient_net_v2 = auto()
+    efficientnet_v2 = auto()
+    shufflenet_v2 = auto()
 
 class DatasetType(Enum):
     default = auto()
@@ -759,9 +786,14 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default):
             output_ml_setup = vit_b_16_imagenet100()
         else:
             raise NotImplemented
-    elif model_name == ModelType.efficient_net_v2:
+    elif model_name == ModelType.efficientnet_v2:
         if dataset_type in [DatasetType.default, DatasetType.cifar100]:
-            output_ml_setup = efficient_net_cifar100()
+            output_ml_setup = efficientnet_cifar100()
+        else:
+            raise NotImplemented
+    elif model_name == ModelType.shufflenet_v2:
+        if dataset_type in [DatasetType.default, DatasetType.cifar10]:
+            output_ml_setup = shufflenet_v2_cifar10()
         else:
             raise NotImplemented
     else:

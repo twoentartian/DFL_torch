@@ -162,11 +162,8 @@ if __name__ == "__main__":
     parser.add_argument("-n", "--number_of_models", type=int, default=1)
     parser.add_argument("-c", '--core', type=int, default=os.cpu_count(), help='specify the number of CPU cores to use')
     parser.add_argument("-w", "--worker", type=int, default=1, help='specify how many models to train in parallel')
-    parser.add_argument("-m", "--model_type", type=str, default='lenet5',
-                        choices=['lenet4', 'lenet5', 'resnet18_bn', 'resnet18_gn', 'simplenet', 'cct7', 'vit', 'lenet5_large_fc',
-                                 'vgg11_mnist', 'vgg11_cifar10', 'mobilenet_v3_small', 'mobilenet_v3_large', 'mobilenet_v2', 'efficient_net_v2'])
-    parser.add_argument("-d", "--dataset_type", type=str, default='default',
-                        choices=['default', 'mnist', 'random_mnist', 'cifar10', 'cifar100', 'imagenet1k', 'imagenet100'])
+    parser.add_argument("-m", "--model_type", type=str, default='lenet5')
+    parser.add_argument("-d", "--dataset_type", type=str, default='default')
     parser.add_argument("--cpu", action='store_true', help='force using CPU for training')
     parser.add_argument("-o", "--output_folder_name", default=None, help='specify the output folder name')
     parser.add_argument("--save_format", type=str, default='none', choices=['none', 'file', 'lmdb'], help='which format to save the training states')
