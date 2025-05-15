@@ -80,6 +80,7 @@ def dataset_mnist():
     test_data = datasets.MNIST(root=dataset_path, train=False, download=False, transform=transforms_mnist_test)
     return DatasetSetup(dataset_name, train_data, test_data, labels=set(range(10)))
 
+
 def dataset_mnist_224():
     dataset_path = '~/dataset/mnist'
     dataset_name = "mnist_224"
@@ -100,8 +101,6 @@ def dataset_mnist_224():
     return DatasetSetup(dataset_name, train_data, test_data, labels=set(range(10)))
 
 
-
-
 """ Random MNIST """
 def dataset_random_mnist():
     dataset_path = '~/dataset/random_mnist'
@@ -113,11 +112,7 @@ def dataset_random_mnist():
     transforms_mnist_test = transforms.Compose([transforms.Grayscale(), transforms.ToTensor(), transforms.Normalize(mean=mean, std=std)])
     mnist_train = datasets.ImageFolder(os.path.join(dataset_path, "train"), transform=transforms_mnist_train)
     mnist_test = datasets.ImageFolder(os.path.join(dataset_path, "test"), transform=transforms_mnist_test)
-
     return DatasetSetup(dataset_name, mnist_train, mnist_test, labels=set(range(10)))
-
-
-
 
 
 """ CIFAR10 """
