@@ -1,6 +1,7 @@
 import os
 import torch
 from typing import List
+from glob import glob
 from py_src.service_base import Service
 from py_src.simulation_runtime_parameters import RuntimeParameters, SimulationPhase
 
@@ -35,6 +36,24 @@ class ServiceWeightsDifferenceRecorder(Service):
             for node_name, target_node in parameters.node_container.items():
                 model_stats.append(target_node.get_model_stat())
             self.trigger_without_runtime_parameters(parameters.current_tick, model_stats)
+
+    def continue_from_checkpoint(self, checkpoint_folder_path: str, restore_until_tick: int, *args, **kwargs):
+        infile_path = os.path.join(checkpoint_folder_path, self.l1_save_file_name)
+        with open(infile_path, 'r', newline='') as infile:
+            next(infile)
+            for line in infile:
+                row_tick = int(line.split(",", 1)[0])
+                if row_tick < restore_until_tick:
+                    self.l1_save_file.write(line)
+        self.l1_save_file.flush()
+        infile_path = os.path.join(checkpoint_folder_path, self.l2_save_file_name)
+        with open(infile_path, 'r', newline='') as infile:
+            next(infile)
+            for line in infile:
+                row_tick = int(line.split(",", 1)[0])
+                if row_tick < restore_until_tick:
+                    self.l2_save_file.write(line)
+        self.l2_save_file.flush()
 
     def get_last_distance(self):
         return self.last_l1_distance, self.last_l2_distance
@@ -142,6 +161,28 @@ class ServiceDistanceToOriginRecorder(Service):
             self.l1_save_file[node_name].flush()
             l2_row = ",".join([str(tick), *l2_distances])
             self.l2_save_file[node_name].write(l2_row + "\n")
+            self.l2_save_file[node_name].flush()
+
+    def continue_from_checkpoint(self, checkpoint_folder_path: str, restore_until_tick: int, *args, **kwargs):
+        files = glob(f"{checkpoint_folder_path}/*{self.l1_save_file_name}", recursive=False)
+        for file in files:
+            node_name = int(os.path.basename(file).split("__")[0])
+            with open(file, 'r', newline='') as infile:
+                next(infile)
+                for line in infile:
+                    row_tick = int(line.split(",", 1)[0])
+                    if row_tick < restore_until_tick:
+                        self.l1_save_file[node_name].write(line)
+            self.l1_save_file[node_name].flush()
+        files = glob(f"{checkpoint_folder_path}/*{self.l2_save_file_name}", recursive=False)
+        for file in files:
+            node_name = int(os.path.basename(file).split("__")[0])
+            with open(file, 'r', newline='') as infile:
+                next(infile)
+                for line in infile:
+                    row_tick = int(line.split(",", 1)[0])
+                    if row_tick < restore_until_tick:
+                        self.l2_save_file[node_name].write(line)
             self.l2_save_file[node_name].flush()
 
     def __del__(self):

@@ -207,6 +207,24 @@ class ServiceTestAccuracyLossRecorder(Service):
         # store_top_accuracy_model
         self._check_store_top_accuracy_model(final_accuracy, final_model, tick)
 
+    def continue_from_checkpoint(self, checkpoint_folder_path: str, restore_until_tick: int, *args, **kwargs):
+        infile_path = os.path.join(checkpoint_folder_path, self.accuracy_file_name)
+        with open(infile_path, 'r', newline='') as infile:
+            next(infile)
+            for line in infile:
+                row_tick = int(line.split(",", 1)[0])
+                if row_tick < restore_until_tick:
+                    self.accuracy_file.write(line)
+        self.accuracy_file.flush()
+        infile_path = os.path.join(checkpoint_folder_path, self.loss_file_name)
+        with open(infile_path, 'r', newline='') as infile:
+            next(infile)
+            for line in infile:
+                row_tick = int(line.split(",", 1)[0])
+                if row_tick < restore_until_tick:
+                    self.loss_file.write(line)
+        self.loss_file.flush()
+
     def _check_store_top_accuracy_model(self, final_accuracy, final_model, tick):
         for node_name in self.node_order:
             accuracy = final_accuracy[node_name]

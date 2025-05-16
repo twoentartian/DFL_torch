@@ -45,6 +45,16 @@ class ServiceTrainingLossRecorder(Service):
         self.save_file.write(row + "\n")
         self.save_file.flush()
 
+    def continue_from_checkpoint(self, checkpoint_folder_path: str, restore_until_tick: int, *args, **kwargs):
+        infile_path = os.path.join(checkpoint_folder_path, self.save_file_name)
+        with open(infile_path, 'r', newline='') as infile:
+            next(infile)
+            for line in infile:
+                row_tick = int(line.split(",", 1)[0])
+                if row_tick < restore_until_tick:
+                    self.save_file.write(line)
+        self.save_file.flush()
+
     def __del__(self):
         self.save_file.flush()
         self.save_file.close()

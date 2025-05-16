@@ -3,6 +3,8 @@ import argparse
 import logging
 import shutil
 import sys
+from typing import Optional
+
 import torch
 import concurrent.futures
 import copy
@@ -10,10 +12,9 @@ import time
 from datetime import datetime
 from torch.utils.data import DataLoader
 
-from find_high_accuracy_path_v2.runtime_parameters import RuntimeParameters, WorkMode
+from find_high_accuracy_path_v2.runtime_parameters import RuntimeParameters, WorkMode, Checkpoint
 from find_high_accuracy_path_v2.find_parameters import ParameterGeneral, ParameterMove, ParameterTrain, ParameterRebuildNorm
 from find_high_accuracy_path import set_logging, get_files_to_process
-
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from py_src import ml_setup, model_average, model_variance_correct, special_torch_layers, cuda, util, configuration_file
@@ -162,23 +163,30 @@ def rebuild_norm_layer_function(model: torch.nn.Module, initial_model_state, sta
             break
 
 
-def process_file_func(index, runtime_parameter: RuntimeParameters):
+def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_file_path=None):
     config_file = configuration_file.load_configuration(runtime_parameter.config_file_path)
-    start_point, end_point = runtime_parameter.start_and_end_point_for_paths[index]
-    start_file_name = os.path.basename(start_point).replace('.model.pt', '')
-    if end_point == "origin":
-        assert runtime_parameter.work_mode == WorkMode.to_origin
-        end_file_name = "origin"
-    elif end_point == "inf":
-        assert runtime_parameter.work_mode == WorkMode.to_inf
-        end_file_name = "inf"
+    checkpoint_content: Optional[Checkpoint] = None
+    if checkpoint_file_path is None:
+        # normal mode
+        start_point, end_point = runtime_parameter.start_and_end_point_for_paths[index]
+        start_file_name = os.path.basename(start_point).replace('.model.pt', '')
+        if end_point == "origin":
+            assert runtime_parameter.work_mode == WorkMode.to_origin
+            end_file_name = "origin"
+        elif end_point == "inf":
+            assert runtime_parameter.work_mode == WorkMode.to_inf
+            end_file_name = "inf"
+        else:
+            end_file_name = os.path.basename(end_point).replace('.model.pt', '')
+        """logger"""
+        runtime_parameter.task_name = f"{start_file_name}-{end_file_name}"
     else:
-        end_file_name = os.path.basename(end_point).replace('.model.pt', '')
+        logger.info(f"loading checkpoint from {checkpoint_file_path}")
+        checkpoint_content: Checkpoint = torch.load(checkpoint_file_path, weights_only=False)
+        runtime_parameter.task_name = checkpoint_content.current_runtime_parameter.task_name
 
-    """logger"""
-    task_name = f"{start_file_name}-{end_file_name}"
-    child_logger = logging.getLogger(f"find_high_accuracy_path.{task_name}")
-    set_logging(child_logger, task_name, log_file_path=os.path.join(runtime_parameter.output_folder_path, "info.log"))
+    child_logger = logging.getLogger(f"find_high_accuracy_path.{runtime_parameter.task_name}")
+    set_logging(child_logger, runtime_parameter.task_name, log_file_path=os.path.join(runtime_parameter.output_folder_path, "info.log"))
     child_logger.info("logging setup complete")
 
     if runtime_parameter.use_cpu:
@@ -192,7 +200,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters):
     torch.set_num_threads(thread_per_process)
 
     """output folders"""
-    arg_output_folder_path = os.path.join(runtime_parameter.output_folder_path, f"{start_file_name}-{end_file_name}")
+    arg_output_folder_path = os.path.join(runtime_parameter.output_folder_path, f"{runtime_parameter.task_name}")
     if os.path.exists(arg_output_folder_path):
         child_logger.warning(f"{arg_output_folder_path} already exists")
     else:
@@ -200,34 +208,59 @@ def process_file_func(index, runtime_parameter: RuntimeParameters):
 
     """load models"""
     cpu_device = torch.device("cpu")
-    start_model_stat_dict, start_model_name = util.load_model_state_file(start_point)
-    child_logger.info(f"loading start model at {start_point}")
-    if runtime_parameter.dataset_name is not None:
-        current_ml_setup = ml_setup.get_ml_setup_from_config(start_model_name, dataset_type=runtime_parameter.dataset_name)
-    else:
-        current_ml_setup = ml_setup.get_ml_setup_from_config(start_model_name)
-    child_logger.info(f"find model type is {start_model_name}")
+    if checkpoint_file_path is None:
+        # normal mode
+        start_model_stat_dict, start_model_name = util.load_model_state_file(start_point)
+        child_logger.info(f"loading start model at {start_point}")
+        if runtime_parameter.dataset_name is not None:
+            current_ml_setup = ml_setup.get_ml_setup_from_config(start_model_name, dataset_type=runtime_parameter.dataset_name)
+        else:
+            current_ml_setup = ml_setup.get_ml_setup_from_config(start_model_name)
+        runtime_parameter.model_name = current_ml_setup.model_name
+        runtime_parameter.dataset_name = current_ml_setup.dataset_name
+        child_logger.info(f"find model type is {start_model_name}")
 
-    initial_model_stat = {k: v.detach().clone() for k, v in current_ml_setup.model.state_dict().items()}
-    target_model: torch.nn.Module = copy.deepcopy(current_ml_setup.model)
-    target_model.load_state_dict(start_model_stat_dict)
-    if runtime_parameter.work_mode == WorkMode.to_origin:
-        end_model_stat_dict = {k: torch.zeros_like(v) for k, v in start_model_stat_dict.items()}
-        child_logger.info(f"work mode: to_origin")
-    elif runtime_parameter.work_mode == WorkMode.to_inf:
-        end_model_stat_dict = {k: v.detach() * 2 for k, v in start_model_stat_dict.items()}
-        child_logger.info(f"work mode: to_inf")
-    elif runtime_parameter.work_mode == WorkMode.to_certain_model:
-        end_model_stat_dict, end_model_name = util.load_model_state_file(end_point)
-        child_logger.info(f"work mode: to_certain_model at {end_point}")
-        assert end_model_name == start_model_name, f"start({start_model_name}) != end({end_model_name})"
+        initial_model_stat = {k: v.detach().clone() for k, v in current_ml_setup.model.state_dict().items()}
+        starting_point = {k: v.detach().clone() for k, v in start_model_stat_dict.items()}
+        target_model: torch.nn.Module = copy.deepcopy(current_ml_setup.model)
+        target_model.load_state_dict(start_model_stat_dict)
+        if runtime_parameter.work_mode == WorkMode.to_origin:
+            end_model_stat_dict = {k: torch.zeros_like(v) for k, v in start_model_stat_dict.items()}
+            child_logger.info(f"work mode: to_origin")
+        elif runtime_parameter.work_mode == WorkMode.to_inf:
+            end_model_stat_dict = {k: v.detach() * 2 for k, v in start_model_stat_dict.items()}
+            child_logger.info(f"work mode: to_inf")
+        elif runtime_parameter.work_mode == WorkMode.to_certain_model:
+            end_model_stat_dict, end_model_name = util.load_model_state_file(end_point)
+            child_logger.info(f"work mode: to_certain_model at {end_point}")
+            assert end_model_name == start_model_name, f"start({start_model_name}) != end({end_model_name})"
+        else:
+            raise NotImplemented
+        """assert start_model_state_dict != end_model_stat_dict"""
+        for key in start_model_stat_dict.keys():
+            assert not torch.equal(start_model_stat_dict[key], end_model_stat_dict[key]), f'starting model({start_point}) is same as ending model({end_point})'
+            break
     else:
-        raise NotImplemented
+        # load from checkpoint
+        assert checkpoint_content is not None
+        start_model_stat_dict = checkpoint_content.current_model_stat
+        initial_model_stat = checkpoint_content.init_model_stat
+        end_model_stat_dict = checkpoint_content.end_model_stat
+        start_model_name = checkpoint_content.current_runtime_parameter.model_name
+        dataset_name = checkpoint_content.current_runtime_parameter.dataset_name
 
-    """assert start_model_state_dict != end_model_stat_dict"""
-    for key in start_model_stat_dict.keys():
-        assert not torch.equal(start_model_stat_dict[key], end_model_stat_dict[key]), f'starting model({start_point}) is same as ending model({end_point})'
-        break
+        # update states
+        runtime_parameter.work_mode = checkpoint_content.current_runtime_parameter.work_mode
+        runtime_parameter.dataset_name = checkpoint_content.current_runtime_parameter.dataset_name
+        runtime_parameter.model_name = checkpoint_content.current_runtime_parameter.model_name
+        # update save states
+        runtime_parameter.save_format = checkpoint_content.current_runtime_parameter.save_format
+        runtime_parameter.save_interval = checkpoint_content.current_runtime_parameter.save_interval
+        runtime_parameter.save_ticks = checkpoint_content.current_runtime_parameter.save_ticks
+
+        current_ml_setup = ml_setup.get_ml_setup_from_config(start_model_name, dataset_type=dataset_name)
+        target_model : torch.nn.Module = copy.deepcopy(current_ml_setup.model)
+        target_model.load_state_dict(start_model_stat_dict)
 
     """begin finding path"""
     general_parameter: ParameterGeneral = config_file.get_parameter_general(runtime_parameter, current_ml_setup)
@@ -254,6 +287,8 @@ def process_file_func(index, runtime_parameter: RuntimeParameters):
     initial_optimizer_state_dict = copy.deepcopy(optimizer.state_dict())
     optimizer_for_rebuild_norm = None
     assert optimizer is not None
+    if checkpoint_file_path is not None:
+        optimizer.load_state_dict(checkpoint_content.current_optimizer_stat)
 
     """update parameters"""
     parameter_train: ParameterTrain = config_file.get_parameter_train(runtime_parameter, current_ml_setup)
@@ -318,6 +353,20 @@ def process_file_func(index, runtime_parameter: RuntimeParameters):
     variance_record.add_variance(target_model.state_dict())
     target_variance = variance_record.get_variance()
 
+    """load checkpoint file"""
+    if checkpoint_file_path is not None:
+        checkpoint_folder_path = os.path.dirname(checkpoint_file_path)
+        runtime_parameter.current_tick = checkpoint_content.current_runtime_parameter.current_tick
+
+        # restore service
+        weight_diff_service.continue_from_checkpoint(checkpoint_folder_path, runtime_parameter.current_tick)
+        weight_change_service.continue_from_checkpoint(checkpoint_folder_path, runtime_parameter.current_tick)
+        distance_to_origin_service.continue_from_checkpoint(checkpoint_folder_path, runtime_parameter.current_tick)
+        variance_service.continue_from_checkpoint(checkpoint_folder_path, runtime_parameter.current_tick)
+        record_model_service.continue_from_checkpoint(checkpoint_folder_path, runtime_parameter.current_tick)
+        record_test_accuracy_loss_service.continue_from_checkpoint(checkpoint_folder_path, runtime_parameter.current_tick)
+        record_training_loss_service.continue_from_checkpoint(checkpoint_folder_path, runtime_parameter.current_tick)
+
     """begin finding the path"""
     if runtime_parameter.use_amp:
         scaler = torch.cuda.amp.GradScaler()
@@ -325,9 +374,29 @@ def process_file_func(index, runtime_parameter: RuntimeParameters):
     norm_layers = None
     cuda.CudaEnv.model_state_dict_to(end_model_stat_dict, device)
     timer = time.time()
+
+    latest_check_point_file_path = None
     while runtime_parameter.current_tick < runtime_parameter.max_tick:
         parameter_updated = False
         child_logger.info(f"tick: {runtime_parameter.current_tick}")
+
+        if runtime_parameter.current_tick % runtime_parameter.checkpoint_interval == 0:
+            checkpoint_file_path = os.path.join(arg_output_folder_path, f"checkpoint_{runtime_parameter.current_tick}.checkpoint.pt")
+            if latest_check_point_file_path is not None:
+                os.remove(latest_check_point_file_path)
+            latest_check_point_file_path = checkpoint_file_path
+            child_logger.info(f"save checkpoint file to {checkpoint_file_path}")
+            check_point_file = Checkpoint()
+            check_point_file.current_model_stat = target_model.state_dict()
+            check_point_file.current_optimizer_stat = optimizer.state_dict()
+            check_point_file.current_runtime_parameter = runtime_parameter
+            check_point_file.current_general_parameter = general_parameter
+            check_point_file.current_move_parameter = parameter_move
+            check_point_file.current_train_parameter = parameter_train
+            check_point_file.current_rebuild_norm_parameter = parameter_rebuild_norm
+            check_point_file.end_model_stat = end_model_stat_dict
+            check_point_file.init_model_stat = initial_model_stat
+            torch.save(check_point_file, checkpoint_file_path)
 
         """update end_model_stat_dict if work_mode = to_inf"""
         if runtime_parameter.work_mode == WorkMode.to_inf:
@@ -518,9 +587,9 @@ if __name__ == '__main__':
     torch.multiprocessing.set_start_method('spawn')
 
     parser = argparse.ArgumentParser(description='Move the model towards certain direction and keep its accuracy')
-    parser.add_argument("start_folder", type=str, help="folder containing starting models")
+    parser.add_argument("start_folder", nargs='?', type=str, help="folder containing starting models")
 
-    parser.add_argument("end_folder", type=str, help="folder containing destination models, or 'inf', 'origin' ")
+    parser.add_argument("end_folder", nargs='?', type=str, help="folder containing destination models, or 'inf', 'origin' ")
     parser.add_argument("--config", type=str, help="the config file")
     parser.add_argument("--mapping_mode", type=str, default='auto', choices=['auto', 'all_to_all', 'each_to_each', 'one_to_all', 'all_to_one'])
 
@@ -537,6 +606,8 @@ if __name__ == '__main__':
     parser.add_argument("-v", "--verbose", action='store_true', help='verbose mode')
     parser.add_argument("-o", "--output_folder_name", default=None, help='specify the output folder name')
     parser.add_argument("--store_top_accuracy_model_count", type=int, default=0, help='save n highest test accuracy models')
+    parser.add_argument("--checkpoint_interval", type=int, default=100, help='save a checkpoint every n ticks')
+    parser.add_argument("--continue_from_checkpoint", type=str, help='continue from a checkpoint file')
 
     parser.add_argument( "--test_interval", type=int, default=1, help='specify the interval of measuring model on the test dataset.')
     parser.add_argument("--test_batch", type=int, default=100, help='specify the batch size of measuring model on the test dataset.')
@@ -566,25 +637,31 @@ if __name__ == '__main__':
     runtime_parameter.service_test_accuracy_loss_interval = args.test_interval
     runtime_parameter.service_test_accuracy_loss_batch_size = args.test_batch
     runtime_parameter.store_top_accuracy_model_count = args.store_top_accuracy_model_count
+    runtime_parameter.checkpoint_interval = args.checkpoint_interval
 
     # find all paths to process
-    start_folder = args.start_folder
-    if args.end_folder == "origin":
-        runtime_parameter.work_mode = WorkMode.to_origin
-        assert args.mapping_mode == "auto", "mapping mode has to be 'auto' for move to origin"
-        files_in_start_folder = sorted(set(temp_file for temp_file in os.listdir(start_folder) if temp_file.endswith('model.pt')))
-        paths_to_find = [(os.path.join(start_folder, i), "origin") for i in files_in_start_folder]
-    elif args.end_folder == "inf":
-        runtime_parameter.work_mode = WorkMode.to_inf
-        assert args.mapping_mode == "auto", "mapping mode has to be 'auto' for move to inf"
-        files_in_start_folder = sorted(set(temp_file for temp_file in os.listdir(start_folder) if temp_file.endswith('model.pt')))
-        paths_to_find = [(os.path.join(start_folder, i), "inf") for i in files_in_start_folder]
+    if args.start_folder is not None and args.end_folder is not None:
+        start_folder = args.start_folder
+        if args.end_folder == "origin":
+            runtime_parameter.work_mode = WorkMode.to_origin
+            assert args.mapping_mode == "auto", "mapping mode has to be 'auto' for move to origin"
+            files_in_start_folder = sorted(set(temp_file for temp_file in os.listdir(start_folder) if temp_file.endswith('model.pt')))
+            paths_to_find = [(os.path.join(start_folder, i), "origin") for i in files_in_start_folder]
+        elif args.end_folder == "inf":
+            runtime_parameter.work_mode = WorkMode.to_inf
+            assert args.mapping_mode == "auto", "mapping mode has to be 'auto' for move to inf"
+            files_in_start_folder = sorted(set(temp_file for temp_file in os.listdir(start_folder) if temp_file.endswith('model.pt')))
+            paths_to_find = [(os.path.join(start_folder, i), "inf") for i in files_in_start_folder]
+        else:
+            runtime_parameter.work_mode = WorkMode.to_certain_model
+            paths_to_find = get_files_to_process(args.start_folder, args.end_folder, args.mapping_mode)
+        paths_to_find_count = len(paths_to_find)
+        runtime_parameter.start_and_end_point_for_paths = paths_to_find
+        logger.info(f"totally {paths_to_find_count} paths to process: {paths_to_find}")
+    elif args.continue_from_checkpoint is not None:
+        logger.info(f"continue algorithm based on checkpoint file {args.continue_from_checkpoint}.")
     else:
-        runtime_parameter.work_mode = WorkMode.to_certain_model
-        paths_to_find = get_files_to_process(args.start_folder, args.end_folder, args.mapping_mode)
-    paths_to_find_count = len(paths_to_find)
-    runtime_parameter.start_and_end_point_for_paths = paths_to_find
-    logger.info(f"totally {paths_to_find_count} paths to process: {paths_to_find}")
+        logger.critical(f"this script can only be used with providing start/end folders or providing a checkpoint file.")
 
     # create output folder
     if args.output_folder_name is None:
@@ -603,20 +680,22 @@ if __name__ == '__main__':
     shutil.copyfile(config_file_path, os.path.join(output_folder_path, os.path.basename(config_file_path)))
     shutil.copyfile(__file__, os.path.join(output_folder_path, os.path.basename(__file__)))
 
+    logger.info(f"final runtime parameters: {runtime_parameter.print()}")
+
     # worker and cpu cores setting
     runtime_parameter.total_cpu_count = args.core
     runtime_parameter.worker_count = args.worker
-    if runtime_parameter.worker_count > paths_to_find_count:
-        runtime_parameter.worker_count = paths_to_find_count
-    logger.info(f"worker: {runtime_parameter.worker_count}")
-
-    logger.info(f"final runtime parameters: {runtime_parameter.print()}")
-
-    # start process
-    with concurrent.futures.ProcessPoolExecutor(max_workers=runtime_parameter.worker_count) as executor:
-        futures = [executor.submit(process_file_func, index, runtime_parameter) for index, path in enumerate(paths_to_find)]
-        for future in concurrent.futures.as_completed(futures):
-            result = future.result()
+    if args.continue_from_checkpoint is not None:
+        process_file_func(0, runtime_parameter, args.continue_from_checkpoint)
+    else:
+        # normal mode
+        if runtime_parameter.worker_count > paths_to_find_count:
+            runtime_parameter.worker_count = paths_to_find_count
+        logger.info(f"worker: {runtime_parameter.worker_count}")
+        with concurrent.futures.ProcessPoolExecutor(max_workers=runtime_parameter.worker_count) as executor:
+            futures = [executor.submit(process_file_func, index, runtime_parameter, None) for index, path in enumerate(paths_to_find)]
+            for future in concurrent.futures.as_completed(futures):
+                result = future.result()
 
 
 

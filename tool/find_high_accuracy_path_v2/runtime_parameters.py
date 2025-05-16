@@ -23,7 +23,10 @@ class RuntimeParameters(object):
 
     config_file_path = None
     dataset_name = None
+    model_name = None
     store_top_accuracy_model_count = None
+    checkpoint_interval = None
+    task_name = None
 
     """real-time values"""
     current_tick = None
@@ -43,3 +46,15 @@ class RuntimeParameters(object):
                 continue
             s.append("runtime_parameters.%s = %r" % (attr, getattr(self, attr)))
         return "\n".join(s)
+
+class Checkpoint(object):
+    current_model_stat = None
+    current_optimizer_stat = None
+    end_model_stat = None
+    init_model_stat = None
+
+    current_runtime_parameter = None
+    current_general_parameter = None
+    current_move_parameter = None
+    current_train_parameter = None
+    current_rebuild_norm_parameter = None

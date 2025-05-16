@@ -62,6 +62,18 @@ class ServiceVarianceRecorder(Service):
             file = self.save_files[node_name]
             self._write_row(tick, phase_str, model_stat, file, )
 
+    def continue_from_checkpoint(self, checkpoint_folder_path: str, restore_until_tick: int, *args, **kwargs):
+        for node_name in self.known_nodes_to_record:
+            infile_path = os.path.join(checkpoint_folder_path, "variance", f"{node_name}.csv")
+            with open(infile_path, 'r', newline='') as infile:
+                next(infile)
+                output_file = self.save_files[node_name]
+                for line in infile:
+                    row_tick = int(line.split(",", 1)[0])
+                    if row_tick < restore_until_tick:
+                        output_file.write(line)
+                output_file.flush()
+
     def _is_current_node_recorded(self, node_name) -> bool:
         record_current_node = True
         if (self.record_node is not None) and (node_name not in self.record_node):

@@ -1,6 +1,7 @@
 import os
 import torch
 import io
+import re
 import lmdb
 from typing import Optional, List
 from py_src import util
@@ -93,6 +94,25 @@ class ModelStatRecorder(Service):
                 model_stat = model_stats[index]
                 current_node_output_path = os.path.join(save_path_for_this_node, f"{tick}.model.pt")
                 util.save_model_state(current_node_output_path, model_stat)
+
+    def continue_from_checkpoint(self, checkpoint_folder_path: str, restore_until_tick: int, lmdb_db_name=None, *args, **kwargs):
+        if self.save_format is None:
+            return
+        elif self.save_format == "lmdb":
+            existing_lmdb_path = os.path.join(checkpoint_folder_path, f"{"model_stat" if lmdb_db_name is None else lmdb_db_name}.lmdb")
+            existing_lmdb = lmdb.open(existing_lmdb_path, readonly=True, lock=False)
+            with self.save_lmdb.begin(write=True) as write_txn:
+                with existing_lmdb.begin() as read_txn:
+                    cursor = read_txn.cursor()
+                    for key, value in cursor:
+                        match = re.match(rb"(\d+)/(\d+)\.model\.pt", key)
+                        tick = int(match.group(2))
+                        if tick < restore_until_tick:
+                            write_txn.put(key, value)
+        elif self.save_format == "file":
+            raise NotImplementedError
+        else:
+            raise NotImplementedError
 
     def _is_current_node_recorded(self, node_name) -> bool:
         record_current_node = True
