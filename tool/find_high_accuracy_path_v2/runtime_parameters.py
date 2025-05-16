@@ -23,6 +23,7 @@ class RuntimeParameters(object):
 
     config_file_path = None
     dataset_name = None
+    store_top_accuracy_model_count = None
 
     """real-time values"""
     current_tick = None
