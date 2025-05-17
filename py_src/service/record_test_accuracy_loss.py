@@ -69,9 +69,9 @@ class ServiceTestAccuracyLossRecorder(Service):
         # set testing dataset
         if self.test_whole_dataset:
             if num_workers is None:
-                self.test_dataset = DataLoader(test_dataset, batch_size=self.test_batch_size, shuffle=True)
+                self.test_dataset = DataLoader(test_dataset, batch_size=self.test_batch_size, shuffle=True, pin_memory=True)
             else:
-                self.test_dataset = DataLoader(test_dataset, batch_size=self.test_batch_size, shuffle=True, num_workers=num_workers, persistent_workers=True)
+                self.test_dataset = DataLoader(test_dataset, batch_size=self.test_batch_size, shuffle=True, pin_memory=True, num_workers=num_workers, persistent_workers=True)
         else:
             if self.use_fixed_testing_dataset:
                 """we should iterate whole dataset"""

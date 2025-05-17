@@ -276,9 +276,9 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
     """load training data"""
     training_dataset = current_ml_setup.training_data
     if general_parameter.dataloader_worker is not None:
-        dataloader = DataLoader(training_dataset, batch_size=current_ml_setup.training_batch_size, shuffle=True, num_workers=general_parameter.dataloader_worker, persistent_workers=True)
+        dataloader = DataLoader(training_dataset, batch_size=current_ml_setup.training_batch_size, shuffle=True, pin_memory=True, num_workers=general_parameter.dataloader_worker, persistent_workers=True)
     else:
-        dataloader = DataLoader(training_dataset, batch_size=current_ml_setup.training_batch_size, shuffle=True)
+        dataloader = DataLoader(training_dataset, batch_size=current_ml_setup.training_batch_size, shuffle=True, pin_memory=True)
     criterion = current_ml_setup.criterion
 
     """get optimizer"""
