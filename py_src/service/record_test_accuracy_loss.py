@@ -226,29 +226,30 @@ class ServiceTestAccuracyLossRecorder(Service):
         self.loss_file.flush()
 
     def _check_store_top_accuracy_model(self, final_accuracy, final_model, tick):
-        for node_name in self.node_order:
-            accuracy = final_accuracy[node_name]
-            model = final_model[node_name]
-            buffer = self.store_top_accuracy_model_buffer[node_name]
-            save_name = f"name_{node_name}_tick_{tick}_acc_{accuracy}.model.pt"
-            save_path = os.path.join(self.store_top_accuracy_model_path, save_name)
-            buffer_changed = False
-            if accuracy not in buffer:
-                if len(buffer) < self.store_top_accuracy_model_count:
-                    buffer[accuracy] = save_path
-                    util.save_model_state(save_path, model, model_name=self.model_name)
-                    buffer_changed = True
-                else:
-                    smallest_accuracy, smallest_accuracy_path = next(iter(buffer.items()))
-                    if smallest_accuracy < accuracy:
-                        # new top accuracy models
-                        buffer.pop(smallest_accuracy)
-                        os.remove(smallest_accuracy_path)
+        if self.store_top_accuracy_model:
+            for node_name in self.node_order:
+                accuracy = final_accuracy[node_name]
+                model = final_model[node_name]
+                buffer = self.store_top_accuracy_model_buffer[node_name]
+                save_name = f"name_{node_name}_tick_{tick}_acc_{accuracy}.model.pt"
+                save_path = os.path.join(self.store_top_accuracy_model_path, save_name)
+                buffer_changed = False
+                if accuracy not in buffer:
+                    if len(buffer) < self.store_top_accuracy_model_count:
                         buffer[accuracy] = save_path
                         util.save_model_state(save_path, model, model_name=self.model_name)
-            if buffer_changed:
-                buffer = OrderedDict(sorted(buffer.items()))
-                self.store_top_accuracy_model_buffer[node_name] = buffer
+                        buffer_changed = True
+                    else:
+                        smallest_accuracy, smallest_accuracy_path = next(iter(buffer.items()))
+                        if smallest_accuracy < accuracy:
+                            # new top accuracy models
+                            buffer.pop(smallest_accuracy)
+                            os.remove(smallest_accuracy_path)
+                            buffer[accuracy] = save_path
+                            util.save_model_state(save_path, model, model_name=self.model_name)
+                if buffer_changed:
+                    buffer = OrderedDict(sorted(buffer.items()))
+                    self.store_top_accuracy_model_buffer[node_name] = buffer
 
     def __del__(self):
         self.accuracy_file.flush()
