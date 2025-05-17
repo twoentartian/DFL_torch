@@ -498,7 +498,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
                 exit_training = False
                 for data, label in dataloader:
                     training_iter_counter += 1
-                    data, label = data.to(device), label.to(device)
+                    data, label = data.to(device, non_blocking=True), label.to(device, non_blocking=True)
                     optimizer.zero_grad(set_to_none=True)
                     if runtime_parameter.use_amp:
                         with torch.cuda.amp.autocast():
