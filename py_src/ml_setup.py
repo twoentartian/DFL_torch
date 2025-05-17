@@ -275,7 +275,7 @@ def mobilenet_v2_cifar10():
     return output_ml_setup
 
 """ ImageNet + MobileNet V3 large """
-def mobilenet_v3_large_imagenet():
+def mobilenet_v3_large_imagenet1k():
     output_ml_setup = MlSetup()
     dataset = ml_setup_dataset.dataset_imagenet1k()
 
@@ -492,7 +492,7 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default):
         output_ml_setup = mobilenet_v3_small_cifar10()
     elif model_name == ModelType.mobilenet_v3_large:
         assert dataset_type in [dataset_type.default, dataset_type.cifar10]
-        output_ml_setup = mobilenet_v3_large_imagenet()
+        output_ml_setup = mobilenet_v3_large_imagenet1k()
     elif model_name == ModelType.mobilenet_v2:
         if dataset_type in [DatasetType.default, DatasetType.cifar10]:
             output_ml_setup = mobilenet_v2_cifar10()
