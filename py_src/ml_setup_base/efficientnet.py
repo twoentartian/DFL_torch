@@ -34,7 +34,7 @@ def efficientnet_v2_l_imagenet1k():
     in_features = model_ft.classifier[-1].in_features
     model_ft.classifier[-1] = nn.Linear(in_features, 100)
 
-    output_ml_setup.model_name = str(ModelType.efficientnet_v2)
+    output_ml_setup.model_name = str(ModelType.efficientnet_v2.name)
     output_ml_setup.model = model_ft
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.criterion = nn.CrossEntropyLoss()

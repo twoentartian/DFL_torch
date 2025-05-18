@@ -12,7 +12,7 @@ def vit_b_16_imagenet100():
     dataset = ml_setup_dataset.dataset_imagenet100(2)
 
     vit_b_16 = models.vit_b_16(weights=None)
-    output_ml_setup.model_name = str(ModelType.vit_b_16)
+    output_ml_setup.model_name = str(ModelType.vit_b_16.name)
     output_ml_setup.model = vit_b_16
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.criterion = nn.CrossEntropyLoss()
@@ -25,7 +25,7 @@ def vit_b_16_imagenet1k():
     dataset = ml_setup_dataset.dataset_imagenet1k(2)
 
     vit_b_16 = models.vit_b_16(weights=None)
-    output_ml_setup.model_name = str(ModelType.vit_b_16)
+    output_ml_setup.model_name = str(ModelType.vit_b_16.name)
     output_ml_setup.model = vit_b_16
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.criterion = nn.CrossEntropyLoss()

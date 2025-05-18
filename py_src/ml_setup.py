@@ -96,7 +96,7 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default):
             raise NotImplemented
     elif model_name == ModelType.efficientnet_v2:
         if dataset_type in [DatasetType.default, DatasetType.imagenet1k]:
-            output_ml_setup = efficientnet_imagenet1k()
+            output_ml_setup = efficientnet_v2_l_imagenet1k()
         else:
             raise NotImplemented
     elif model_name == ModelType.shufflenet_v2:

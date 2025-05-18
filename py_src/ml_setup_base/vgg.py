@@ -10,7 +10,7 @@ def vgg11_mnist():
     dataset = ml_setup_dataset.dataset_mnist(rescale_to_224=True)
 
     vgg11 = vgg.VGG11_no_bn(in_channels=1, num_classes=10)
-    output_ml_setup.model_name = str(ModelType.vgg11_no_bn)
+    output_ml_setup.model_name = str(ModelType.vgg11_no_bn.name)
     output_ml_setup.model = vgg11
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.criterion = nn.CrossEntropyLoss()
@@ -24,7 +24,7 @@ def vgg11_cifar10():
     dataset = ml_setup_dataset.dataset_cifar10(rescale_to_224=True)
 
     vgg11 = vgg.VGG11_no_bn(in_channels=3, num_classes=10)
-    output_ml_setup.model_name = str(ModelType.vgg11_no_bn)
+    output_ml_setup.model_name = str(ModelType.vgg11_no_bn.name)
     output_ml_setup.model = vgg11
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.criterion = nn.CrossEntropyLoss()
@@ -38,7 +38,7 @@ def vgg11_bn_imagenet1k():
     dataset = ml_setup_dataset.dataset_imagenet1k(1)
 
     vgg11 = vgg11_bn(progress=False, weights=None, num_classes=1000)
-    output_ml_setup.model_name = str(ModelType.vgg11_no_bn)
+    output_ml_setup.model_name = str(ModelType.vgg11_no_bn.name)
     output_ml_setup.model = vgg11
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.criterion = nn.CrossEntropyLoss()

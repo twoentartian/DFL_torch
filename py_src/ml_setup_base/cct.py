@@ -11,7 +11,7 @@ def cct7_3x1_cifar10():
     dataset = ml_setup_dataset.dataset_cifar10()
 
     output_ml_setup.model = cct.cct_7_3x1_32()
-    output_ml_setup.model_name = str(ModelType.cct7)
+    output_ml_setup.model_name = str(ModelType.cct7.name)
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.criterion = nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 128
@@ -23,7 +23,7 @@ def cct7_7x2_imagenet1k():
     dataset = ml_setup_dataset.dataset_imagenet1k(1)
 
     output_ml_setup.model = cct.cct_7_7x2_224()
-    output_ml_setup.model_name = str(ModelType.cct7)
+    output_ml_setup.model_name = str(ModelType.cct7.name)
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.criterion = nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 64
@@ -35,7 +35,7 @@ def cct7_7x2_imagenet100():
     dataset = ml_setup_dataset.dataset_imagenet100(1)
 
     output_ml_setup.model = cct.cct_7_7x2_224()
-    output_ml_setup.model_name = str(ModelType.cct7)
+    output_ml_setup.model_name = str(ModelType.cct7.name)
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.criterion = nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 64
@@ -47,7 +47,7 @@ def cct7_7x2_imagenet10():
     dataset = ml_setup_dataset.dataset_imagenet10(1)
 
     output_ml_setup.model = cct.cct_7_7x2_224()
-    output_ml_setup.model_name = str(ModelType.cct7)
+    output_ml_setup.model_name = str(ModelType.cct7.name)
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.criterion = nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 64
