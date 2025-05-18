@@ -2,6 +2,7 @@ import torch
 import math
 
 from py_src import ml_setup
+from ml_setup_base.model import ModelType
 
 """ this class records the hyperparameters need for training a model in generate_high_accuracy_model.py """
 class FastTrainingSetup(object):
