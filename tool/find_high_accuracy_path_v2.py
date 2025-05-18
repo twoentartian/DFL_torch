@@ -279,9 +279,10 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
     train_collate_fn = default_collate if current_ml_setup.collate_fn is None else current_ml_setup.collate_fn
     dataloader_worker = 0 if general_parameter.dataloader_worker is None else general_parameter.dataloader_worker
     persistent_workers = False if dataloader_worker == 0 else True
+    sampler_fn = None if current_ml_setup.sampler_fn is None else current_ml_setup.sampler_fn(training_dataset)
     dataloader = DataLoader(training_dataset, batch_size=current_ml_setup.training_batch_size, shuffle=True, pin_memory=True,
                             num_workers=dataloader_worker.dataloader_worker, persistent_workers=persistent_workers,
-                            collate_fn=train_collate_fn,)
+                            collate_fn=train_collate_fn, sampler=sampler_fn)
     criterion = current_ml_setup.criterion
 
     """get optimizer"""
