@@ -35,7 +35,7 @@ class MlSetup:
         self.criterion = None
         self.mixup_fn = None
         self.model_ema = None
-        self.collect_fn = None
+        self.collate_fn = None
         self.training_batch_size = None
         self.dataset_label = None
         self.dataset_tensor_size = None

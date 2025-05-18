@@ -11,6 +11,7 @@ import copy
 import time
 from datetime import datetime
 from torch.utils.data import DataLoader
+from torch.utils.data.dataloader import default_collate
 
 from find_high_accuracy_path_v2.runtime_parameters import RuntimeParameters, WorkMode, Checkpoint
 from find_high_accuracy_path_v2.find_parameters import ParameterGeneral, ParameterMove, ParameterTrain, ParameterRebuildNorm
@@ -275,10 +276,12 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
 
     """load training data"""
     training_dataset = current_ml_setup.training_data
-    if general_parameter.dataloader_worker is not None:
-        dataloader = DataLoader(training_dataset, batch_size=current_ml_setup.training_batch_size, shuffle=True, pin_memory=True, num_workers=general_parameter.dataloader_worker, persistent_workers=True)
-    else:
-        dataloader = DataLoader(training_dataset, batch_size=current_ml_setup.training_batch_size, shuffle=True, pin_memory=True)
+    train_collate_fn = default_collate if current_ml_setup.collate_fn is None else current_ml_setup.collate_fn
+    dataloader_worker = 0 if general_parameter.dataloader_worker is None else general_parameter.dataloader_worker
+    persistent_workers = False if dataloader_worker == 0 else True
+    dataloader = DataLoader(training_dataset, batch_size=current_ml_setup.training_batch_size, shuffle=True, pin_memory=True,
+                            num_workers=dataloader_worker.dataloader_worker, persistent_workers=persistent_workers,
+                            collate_fn = train_collate_fn,)
     criterion = current_ml_setup.criterion
 
     """get optimizer"""

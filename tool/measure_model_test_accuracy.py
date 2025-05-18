@@ -2,8 +2,8 @@ import argparse
 import torch
 import os
 import sys
-import json
 from torch.utils.data import DataLoader
+
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from py_src import ml_setup, util
@@ -14,6 +14,7 @@ def testing_model(model, current_ml_setup):
     training_dataset = current_ml_setup.training_data
     criterion = current_ml_setup.criterion
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
     dataloader_test = DataLoader(testing_dataset, batch_size=100, shuffle=True, num_workers=4, persistent_workers=True)
     dataloader_train = DataLoader(training_dataset, batch_size=100, shuffle=True, num_workers=4, persistent_workers=True)
 
