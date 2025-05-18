@@ -56,6 +56,11 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default):
             output_ml_setup = resnet18_imagenet1k(enable_replace_bn_with_group_norm=enable_replace_bn_with_group_norm)
         else:
             raise NotImplemented
+    elif model_name == ModelType.resnet50:
+        if dataset_type in [dataset_type.default, dataset_type.imagenet1k]:
+            output_ml_setup = resnet50_imagenet1k()
+        else:
+            raise NotImplemented
     elif model_name == ModelType.simplenet:
         assert dataset_type in [dataset_type.default, dataset_type.cifar10]
         output_ml_setup = simplenet_cifar10()
