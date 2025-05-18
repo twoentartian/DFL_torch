@@ -2,9 +2,9 @@ from torch.utils.data import Sampler
 import random
 
 class RASampler(Sampler):
-    def __init__(self, dataset, num_repeats=4, shuffle=True):
+    def __init__(self, dataset, repetitions=4, shuffle=True):
         self.dataset = dataset
-        self.num_repeats = num_repeats
+        self.repetitions = repetitions
         self.shuffle = shuffle
         self.epoch = 0
 
@@ -18,8 +18,8 @@ class RASampler(Sampler):
             random.seed(self.epoch)
             random.shuffle(indices)
         # repeat each index num_repeats times
-        repeated = [idx for idx in indices for _ in range(self.num_repeats)]
+        repeated = [idx for idx in indices for _ in range(self.repetitions)]
         return iter(repeated)
 
     def __len__(self):
-        return len(self.dataset) * self.num_repeats
+        return len(self.dataset) * self.repetitions
