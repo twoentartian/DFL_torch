@@ -5,6 +5,7 @@ from py_src.ml_setup_base.dataset import DatasetType
 from py_src.ml_setup_base.base import MlSetup
 
 from py_src.ml_setup_base.mnist_models import lenet4_mnist, lenet5_mnist, lenet5_random_mnist, lenet5_large_fc_mnist
+from py_src.ml_setup_base.squeezenet import squeezenet1_1_imagenet1k
 from py_src.ml_setup_base.vgg import vgg11_mnist, vgg11_cifar10, vgg11_bn_imagenet1k
 from py_src.ml_setup_base.resnet import resnet18_cifar10, resnet18_cifar100, resnet18_imagenet100, resnet18_imagenet1k, resnet50_imagenet1k
 from py_src.ml_setup_base.simplenet import simplenet_cifar10, simplenet_cifar100
@@ -107,6 +108,11 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default):
     elif model_name == ModelType.shufflenet_v2:
         if dataset_type in [DatasetType.default, DatasetType.cifar10]:
             output_ml_setup = shufflenet_v2_cifar10()
+        else:
+            raise NotImplemented
+    elif model_name == ModelType.squeezenet1_1:
+        if dataset_type in [DatasetType.default, DatasetType.imagenet1k]:
+            output_ml_setup = squeezenet1_1_imagenet1k()
         else:
             raise NotImplemented
     else:
