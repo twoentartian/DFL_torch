@@ -38,6 +38,6 @@ def get_pytorch_training_imagenet(version=2):
         model_ema_steps = 32
         def sampler_fn(dataset):
             return RASampler(dataset, shuffle=True, repetitions=4)
-        return loss_fn, collate_fn, model_ema_decay, model_ema_steps, sampler_fn
+        return loss_fn, None, model_ema_decay, model_ema_steps, None
     else:
         raise NotImplementedError
