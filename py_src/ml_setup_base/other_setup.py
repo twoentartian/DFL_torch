@@ -1,14 +1,15 @@
 import torch.nn as nn
 from torch.utils.data.dataloader import default_collate
-from torchvision.transforms.v2 import MixUp, RandomChoice, CutMix
+from torchvision.transforms.v2 import RandomChoice
 from py_src.ml_setup_base.sampler import RASampler
+from py_src.ml_setup_base.transforms import RandomMixUp, RandomCutMix
 
 def get_mixup_cutmix(*, mixup_alpha, cutmix_alpha, num_classes):
     mixup_cutmix = []
     if mixup_alpha > 0:
-        mixup_cutmix.append(MixUp(alpha=mixup_alpha, num_classes=num_classes))
+        mixup_cutmix.append(RandomMixUp(alpha=mixup_alpha, num_classes=num_classes))
     if cutmix_alpha > 0:
-        mixup_cutmix.append(CutMix(alpha=cutmix_alpha, num_classes=num_classes))
+        mixup_cutmix.append(RandomCutMix(alpha=cutmix_alpha, num_classes=num_classes))
     if not mixup_cutmix:
         return None
     return RandomChoice(mixup_cutmix)
@@ -38,6 +39,6 @@ def get_pytorch_training_imagenet(version=2):
         model_ema_steps = 32
         def sampler_fn(dataset):
             return RASampler(dataset, shuffle=True, repetitions=4)
-        return loss_fn, None, model_ema_decay, model_ema_steps, None
+        return loss_fn, collate_fn, model_ema_decay, model_ema_steps, sampler_fn
     else:
         raise NotImplementedError
