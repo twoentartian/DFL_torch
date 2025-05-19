@@ -17,3 +17,4 @@ class ModelType(Enum):
     vgg11_no_bn = auto()
     efficientnet_v2 = auto()
     shufflenet_v2 = auto()
+    squeezenet1_1 = auto()

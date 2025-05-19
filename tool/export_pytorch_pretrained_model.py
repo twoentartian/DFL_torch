@@ -17,3 +17,6 @@ if __name__ == "__main__":
 
     resnet50 = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V2)
     util.save_model_state(os.path.join(output_path, "resnet50_imagenet1k.model.pt"), resnet50.state_dict(), model_name=str(ModelType.resnet50.name))
+
+    squeezenet1_1 = models.squeezenet1_1(weights=models.SqueezeNet1_1_Weights.IMAGENET1K_V1)
+    util.save_model_state(os.path.join(output_path, "squeezenet1_1.model.pt"), squeezenet1_1.state_dict(), model_name=str(ModelType.squeezenet1_1.name))
