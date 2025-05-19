@@ -22,5 +22,5 @@ if __name__ == "__main__":
     util.save_model_state(os.path.join(output_path, "squeezenet1_1.model.pt"), squeezenet1_1.state_dict(), model_name=str(ModelType.squeezenet1_1.name))
 
     shufflenet_v2_x2_0 = models.shufflenet_v2_x2_0(weights=models.ShuffleNet_V2_X2_0_Weights.IMAGENET1K_V1)
-    util.save_model_state(os.path.join(output_path, "shufflenet_v2_x2_0.model.pt"), squeezenet1_1.state_dict(), model_name=str(ModelType.shufflenet_v2_x2_0.name))
+    util.save_model_state(os.path.join(output_path, "shufflenet_v2_x2_0.model.pt"), shufflenet_v2_x2_0.state_dict(), model_name=str(ModelType.shufflenet_v2_x2_0.name))
 
