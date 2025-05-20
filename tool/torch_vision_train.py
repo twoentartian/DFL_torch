@@ -225,6 +225,10 @@ def main(args):
     if args.output_dir:
         utils.mkdir(args.output_dir)
 
+    # backup args
+    with open(os.path.join(args.output_dir, 'args.txt'), 'w') as f:
+        f.write(' '.join(sys.argv))
+
     utils.init_distributed_mode(args)
     print(args)
 
