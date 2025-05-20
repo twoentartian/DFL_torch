@@ -23,7 +23,7 @@ class collate_fn_inst():
         return self.target(*default_collate(batch))
 
 
-def get_pytorch_training_imagenet(version=2):
+def get_pytorch_training_imagenet(version=2, enable_collate_and_sampler=False):
     if version == 1:
         collate_fn = None
         loss_fn = nn.CrossEntropyLoss()
@@ -39,6 +39,12 @@ def get_pytorch_training_imagenet(version=2):
         model_ema_steps = 32
         def sampler_fn(dataset):
             return RASampler(dataset, shuffle=True, repetitions=4)
-        return loss_fn, collate_fn, model_ema_decay, model_ema_steps, sampler_fn
+        if enable_collate_and_sampler:
+            output_collate_fn = collate_fn
+            output_sampler_fn = sampler_fn
+        else:
+            output_collate_fn = None
+            output_sampler_fn = None
+        return loss_fn, output_collate_fn, model_ema_decay, model_ema_steps, output_sampler_fn
     else:
         raise NotImplementedError
