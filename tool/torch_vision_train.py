@@ -250,10 +250,10 @@ def main(args):
 
     print("Creating model")
     model = torchvision.models.get_model(args.model, weights=args.weights, num_classes=num_classes)
-    if args.load_existing is not None:
+    if args.load_existing_weights is not None:
         #load existing model from path
-        model_stat, model_name = dfl_util.load_model_state_file(args.load_existing)
-        print(f"loading existing model weights from {args.load_existing}")
+        model_stat, model_name = dfl_util.load_model_state_file(args.load_existing_weights)
+        print(f"loading existing model weights from {args.load_existing_weights}")
         model.load_state_dict(model_stat)
     model.to(device)
 
@@ -401,7 +401,8 @@ def main(args):
 
 def get_args_parser(add_help=True):
     import argparse
-
+    from datetime import datetime
+    time_now_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")
     parser = argparse.ArgumentParser(description="PyTorch Classification Training", add_help=add_help)
 
     parser.add_argument("--data-path", default="/datasets01/imagenet_full_size/061417/", type=str, help="dataset path")
@@ -459,7 +460,8 @@ def get_args_parser(add_help=True):
     parser.add_argument("--lr-gamma", default=0.1, type=float, help="decrease lr by a factor of lr-gamma")
     parser.add_argument("--lr-min", default=0.0, type=float, help="minimum lr of lr schedule (default: 0.0)")
     parser.add_argument("--print-freq", default=10, type=int, help="print frequency")
-    parser.add_argument("--output-dir", default=".", type=str, help="path to save outputs")
+    default_output_folder_path = os.path.join(os.curdir, f"{__file__}_{time_now_str}")
+    parser.add_argument("--output-dir", default=default_output_folder_path, type=str, help="path to save outputs")
     parser.add_argument("--resume", default="", type=str, help="path of checkpoint")
     parser.add_argument("--start-epoch", default=0, type=int, metavar="N", help="start epoch")
     parser.add_argument(
@@ -529,7 +531,7 @@ def get_args_parser(add_help=True):
     parser.add_argument("--weights", default=None, type=str, help="the weights enum name to load")
     parser.add_argument("--backend", default="PIL", type=str.lower, help="PIL or tensor - case insensitive")
     parser.add_argument("--use-v2", action="store_true", help="Use V2 transforms")
-    parser.add_argument("--load-existing", default=None, type=str, help="load existing model weights")
+    parser.add_argument("--load-existing-weights", default=None, type=str, help="load existing model weights from path")
     return parser
 
 
