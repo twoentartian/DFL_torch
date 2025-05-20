@@ -18,6 +18,7 @@ from torch_vision_train.transforms import get_mixup_cutmix
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from py_src import util as dfl_util
+from py_src import model_variance_correct
 
 
 def train_one_epoch(model, criterion, optimizer, data_loader, device, epoch, args, model_ema=None, scaler=None):
@@ -27,6 +28,16 @@ def train_one_epoch(model, criterion, optimizer, data_loader, device, epoch, arg
     metric_logger.add_meter("img/s", utils.SmoothedValue(window_size=10, fmt="{value}"))
 
     header = f"Epoch: [{epoch}]"
+
+    """record variance"""
+    variance_correction = args.variance_correction
+    print(f"variance correction is {variance_correction}.")
+    target_variance = None
+    if variance_correction:
+        variance_record = model_variance_correct.VarianceCorrector(model_variance_correct.VarianceCorrectionType.FollowOthers)
+        variance_record.add_variance(model.state_dict())
+        target_variance = variance_record.get_variance()
+
     for i, (image, target) in enumerate(metric_logger.log_every(data_loader, args.print_freq, header)):
         start_time = time.time()
         image, target = image.to(device), target.to(device)
@@ -48,6 +59,11 @@ def train_one_epoch(model, criterion, optimizer, data_loader, device, epoch, arg
             if args.clip_grad_norm is not None:
                 nn.utils.clip_grad_norm_(model.parameters(), args.clip_grad_norm)
             optimizer.step()
+
+        """variance correction"""
+        if variance_correction:
+            target_model_stat_dict = model_variance_correct.VarianceCorrector.scale_model_stat_to_variance(model.state_dict(), target_variance)
+            model.load_state_dict(target_model_stat_dict)
 
         if model_ema and i % args.model_ema_steps == 0:
             model_ema.update_parameters(model)
@@ -532,6 +548,7 @@ def get_args_parser(add_help=True):
     parser.add_argument("--backend", default="PIL", type=str.lower, help="PIL or tensor - case insensitive")
     parser.add_argument("--use-v2", action="store_true", help="Use V2 transforms")
     parser.add_argument("--load-existing-weights", default=None, type=str, help="load existing model weights from path")
+    parser.add_argument("--variance-correction", action="store_true", help="enable variance correction") #https://arxiv.org/abs/2404.04616
     return parser
 
 
