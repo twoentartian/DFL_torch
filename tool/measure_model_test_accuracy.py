@@ -15,8 +15,8 @@ def testing_model(model, current_ml_setup):
     criterion = current_ml_setup.criterion
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    dataloader_test = DataLoader(testing_dataset, batch_size=100, shuffle=True, num_workers=4, persistent_workers=True)
-    dataloader_train = DataLoader(training_dataset, batch_size=100, shuffle=True, num_workers=4, persistent_workers=True)
+    dataloader_test = DataLoader(testing_dataset, batch_size=100, shuffle=True, num_workers=8, persistent_workers=True)
+    dataloader_train = DataLoader(training_dataset, batch_size=100, shuffle=True, num_workers=8, persistent_workers=True)
 
     model.eval()
     model.to(device)
