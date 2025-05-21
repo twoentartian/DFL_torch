@@ -247,6 +247,7 @@ class ServiceTestAccuracyLossRecorder(Service):
                             os.remove(smallest_accuracy_path)
                             buffer[accuracy] = save_path
                             util.save_model_state(save_path, model, model_name=self.model_name)
+                            buffer_changed = True
                 if buffer_changed:
                     buffer = OrderedDict(sorted(buffer.items()))
                     self.store_top_accuracy_model_buffer[node_name] = buffer
@@ -256,3 +257,30 @@ class ServiceTestAccuracyLossRecorder(Service):
         self.accuracy_file.close()
         self.loss_file.flush()
         self.loss_file.close()
+
+import unittest
+class TestStoreTopAccuracyModel(unittest.TestCase):
+    def test_1(self):
+        service = ServiceTestAccuracyLossRecorder(10, 100, model_name="test", store_top_accuracy_model_count=5)
+        service.node_order = ["0"]
+        service.store_top_accuracy_model_path = "."
+        service.store_top_accuracy_model_buffer = {"0": OrderedDict()}
+        final_model = {"0": 1}
+        final_accuracy = {"0": 0.1}
+        service._check_store_top_accuracy_model(final_accuracy, final_model, 1)
+        final_accuracy = {"0": 0.9}
+        service._check_store_top_accuracy_model(final_accuracy, final_model, 1)
+        final_accuracy = {"0": 0.2}
+        service._check_store_top_accuracy_model(final_accuracy, final_model, 1)
+        final_accuracy = {"0": 0.8}
+        service._check_store_top_accuracy_model(final_accuracy, final_model, 1)
+        final_accuracy = {"0": 0.7}
+        service._check_store_top_accuracy_model(final_accuracy, final_model, 1)
+        final_accuracy = {"0": 0.3}
+        service._check_store_top_accuracy_model(final_accuracy, final_model, 1)
+        final_accuracy = {"0": 0.4}
+        service._check_store_top_accuracy_model(final_accuracy, final_model, 1)
+        final_accuracy = {"0": 0.5}
+        service._check_store_top_accuracy_model(final_accuracy, final_model, 1)
+
+
