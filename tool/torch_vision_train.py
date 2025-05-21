@@ -119,6 +119,9 @@ def evaluate(model, criterion, data_loader, device, print_freq=100, log_suffix="
     metric_logger.synchronize_between_processes()
 
     print(f"{header} Acc@1 {metric_logger.acc1.global_avg:.3f} Acc@5 {metric_logger.acc5.global_avg:.3f}")
+    test_info_path = os.path.join(args.output_dir, 'test.txt')
+    with open(test_info_path, 'a') as f:
+        f.write(f"{header} Acc@1 {metric_logger.acc1.global_avg:.3f} Acc@5 {metric_logger.acc5.global_avg:.3f}\n")
     return metric_logger.acc1.global_avg
 
 
@@ -433,7 +436,7 @@ def get_args_parser(add_help=True):
     )
     parser.add_argument("--epochs", default=90, type=int, metavar="N", help="number of total epochs to run")
     parser.add_argument(
-        "-j", "--workers", default=12, type=int, metavar="N", help="number of data loading workers (default: 16)"
+        "-j", "--workers", default=8, type=int, metavar="N", help="number of data loading workers (default: 16)"
     )
     parser.add_argument("--opt", default="sgd", type=str, help="optimizer")
     parser.add_argument("--lr", default=0.1, type=float, help="initial learning rate")
