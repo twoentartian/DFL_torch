@@ -5,6 +5,7 @@ class ModelType(Enum):
     lenet5 = auto()
     resnet18_bn = auto()
     resnet18_gn = auto()
+    resnet34 = auto()
     resnet50 = auto()
     simplenet = auto()
     cct7 = auto()
