@@ -232,7 +232,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             end_model_stat_dict = {k: v.detach() * 2 for k, v in start_model_stat_dict.items()}
             child_logger.info(f"work mode: to_inf")
         elif runtime_parameter.work_mode == WorkMode.to_mean:
-            end_model_stat_dict = {k: torch.full_like(v, v.mean()) for k, v in start_model_stat_dict.items()}
+            end_model_stat_dict = {k: torch.full_like(v, v.float().mean()) for k, v in start_model_stat_dict.items() }
             child_logger.info(f"work mode: to_mean")
         elif runtime_parameter.work_mode == WorkMode.to_certain_model:
             end_model_stat_dict, end_model_name = util.load_model_state_file(end_point)
