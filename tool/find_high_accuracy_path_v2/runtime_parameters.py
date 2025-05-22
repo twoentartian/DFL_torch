@@ -5,6 +5,7 @@ class WorkMode(Enum):
     to_origin = auto()
     to_inf = auto()
     to_certain_model = auto()
+    to_mean = auto()
 
 class RuntimeParameters(object):
     start_and_end_point_for_paths = None

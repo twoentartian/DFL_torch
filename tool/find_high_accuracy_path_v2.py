@@ -231,6 +231,9 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
         elif runtime_parameter.work_mode == WorkMode.to_inf:
             end_model_stat_dict = {k: v.detach() * 2 for k, v in start_model_stat_dict.items()}
             child_logger.info(f"work mode: to_inf")
+        elif runtime_parameter.work_mode == WorkMode.to_mean:
+            end_model_stat_dict = {k: torch.full_like(v, v.mean()) for k, v in start_model_stat_dict.items()}
+            child_logger.info(f"work mode: to_mean")
         elif runtime_parameter.work_mode == WorkMode.to_certain_model:
             end_model_stat_dict, end_model_name = util.load_model_state_file(end_point)
             child_logger.info(f"work mode: to_certain_model at {end_point}")
@@ -656,6 +659,11 @@ if __name__ == '__main__':
             assert args.mapping_mode == "auto", "mapping mode has to be 'auto' for move to inf"
             files_in_start_folder = sorted(set(temp_file for temp_file in os.listdir(start_folder) if temp_file.endswith('model.pt')))
             paths_to_find = [(os.path.join(start_folder, i), "inf") for i in files_in_start_folder]
+        elif args.end_folder == "mean":
+            runtime_parameter.work_mode = WorkMode.to_mean
+            assert args.mapping_mode == "auto", "mapping mode has to be 'auto' for move to mean"
+            files_in_start_folder = sorted(set(temp_file for temp_file in os.listdir(start_folder) if temp_file.endswith('model.pt')))
+            paths_to_find = [(os.path.join(start_folder, i), "mean") for i in files_in_start_folder]
         else:
             runtime_parameter.work_mode = WorkMode.to_certain_model
             paths_to_find = get_files_to_process(args.start_folder, args.end_folder, args.mapping_mode)
