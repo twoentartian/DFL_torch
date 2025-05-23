@@ -2,18 +2,19 @@ import torch
 import math
 
 from py_src import ml_setup
-from ml_setup_base.model import ModelType
+from py_src.ml_setup_base.model import ModelType
+from py_src.ml_setup_base.dataset import DatasetType
 
 """ this class records the hyperparameters need for training a model in generate_high_accuracy_model.py """
 class FastTrainingSetup(object):
     @staticmethod
     def get_optimizer_lr_scheduler_epoch(arg_ml_setup: ml_setup, model):
-        if arg_ml_setup.model_name == 'lenet5' or arg_ml_setup.model_name == 'lenet4':
-            if arg_ml_setup.dataset_name == 'mnist':
+        if arg_ml_setup.model_name == str(ModelType.lenet5.name) or arg_ml_setup.model_name == str(ModelType.lenet4.name):
+            if arg_ml_setup.dataset_name == str(DatasetType.mnist.name):
                 epochs = 20
                 optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
                 return optimizer, None, epochs
-            elif arg_ml_setup.dataset_name == 'random_mnist':
+            elif arg_ml_setup.dataset_name == str(DatasetType.random_mnist.name):
                 lr = 0.01
                 epochs = 100
                 optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=2e-4)
@@ -26,24 +27,24 @@ class FastTrainingSetup(object):
             else:
                 raise NotImplemented
 
-        if arg_ml_setup.model_name == 'lenet5_large_fc':
+        if arg_ml_setup.model_name == str(ModelType.lenet5_large_fc.name):
             epochs = 20
             optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
             return optimizer, None, epochs
-        elif arg_ml_setup.model_name == 'resnet18_bn' or arg_ml_setup.model_name == 'resnet18_gn':
+        elif arg_ml_setup.model_name == str(ModelType.resnet18_bn.name) or arg_ml_setup.model_name == str(ModelType.resnet18_gn.name):
             if "imagenet" in arg_ml_setup.dataset_name:
                 lr = 0.1
                 epochs = 60
                 optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=5e-4)
                 steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
                 lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, lr, steps_per_epoch=steps_per_epoch, epochs=epochs)
-            elif "cifar10_32" == arg_ml_setup.dataset_name:
+            elif str(DatasetType.cifar10.name) == arg_ml_setup.dataset_name:
                 lr = 0.1
                 epochs = 30
                 optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=5e-4)
                 steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
                 lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, lr, steps_per_epoch=steps_per_epoch, epochs=epochs)
-            elif "cifar100_32" == arg_ml_setup.dataset_name:
+            elif str(DatasetType.cifar100.name) == arg_ml_setup.dataset_name:
                 lr = 0.1
                 epochs = 50
                 optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=5e-4)
@@ -52,7 +53,7 @@ class FastTrainingSetup(object):
             else:
                 raise NotImplemented
             return optimizer, lr_scheduler, epochs
-        elif arg_ml_setup.model_name == 'simplenet':
+        elif arg_ml_setup.model_name == str(ModelType.simplenet.name):
             lr = 0.1
             epochs = 150
             optimizer = torch.optim.Adadelta(model.parameters(), lr=lr, rho=0.9, eps=1e-3, weight_decay=0.001)
