@@ -3,8 +3,6 @@ import torch
 import sys
 import os
 
-from tool.find_high_accuracy_path_config.with_rebuild_norm.find_high_accuracy_path_v2_config_resnet18_cifar100_to_origin import model_name
-
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from py_src import ml_setup, util
 
