@@ -12,7 +12,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(prog='torch_vision_pth_to_model_pt', description='Convert torch vision .pth file to .model.pt file')
     parser.add_argument('pth_path', type=str, help='path to .pth file')
     parser.add_argument('model_type', type=str, help='model type in .model.pt format')
-    parser.add_argument('--dataset_type', type=str, default='default', help='the dataset type can used to train the model')
+    parser.add_argument('-d', '--dataset_type', type=str, default='default', help='the dataset type can used to train the model')
     parser.add_argument("--ema", help='extract the ema model')
 
 
