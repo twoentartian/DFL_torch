@@ -49,8 +49,8 @@ if __name__ == "__main__":
     dataset = copy.deepcopy(value_ml_setup.training_data)
 
     batch_size = value_ml_setup.training_batch_size
-    num_worker = 4
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers=num_worker, persistent_workers=True)
+    num_worker = 8
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers=num_worker, persistent_workers=True)
     criterion = value_ml_setup.criterion
 
     time_now_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")
@@ -104,6 +104,9 @@ if __name__ == "__main__":
             record_model_service = None
 
         for epoch in range(epochs):
+            if record_model_service is not None:
+                model_stat = model.state_dict()
+                record_model_service.trigger_without_runtime_parameters(epoch, [0], [model_stat])
             train_loss = 0
             count = 0
             for data, label in dataloader:
@@ -131,9 +134,10 @@ if __name__ == "__main__":
             logger.info(f"epoch[{epoch}] loss={train_loss / count} lrs={lrs}")
             log_file.write(f"{epoch},{train_loss / count},{lrs}" + "\n")
             log_file.flush()
-            if record_model_service is not None:
-                model_stat = model.state_dict()
-                record_model_service.trigger_without_runtime_parameters(epoch, [0], [model_stat])
+        if record_model_service is not None:
+            model_stat = model.state_dict()
+            record_model_service.trigger_without_runtime_parameters(epochs, [0], [model_stat])
+
         logger.info(f"finish training")
         log_file.flush()
         log_file.close()
