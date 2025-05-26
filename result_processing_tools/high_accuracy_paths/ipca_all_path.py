@@ -12,6 +12,7 @@ from datetime import datetime
 from sklearn.decomposition import IncrementalPCA
 
 ignore_layers_with_keywords = ["running_mean", "running_var", "num_batches_tracked"]
+lmdb_folder_names = ["0.lmdb", "model_stat.lmdb"]
 
 logger = logging.getLogger("ipca_all_path")
 
@@ -104,28 +105,29 @@ def incremental_pca_all_path(arg_path_folder, arg_output_folder, arg_node_name: 
         dimension_to_index[d] = index
 
     for single_sub_folder in all_sub_folders:
-        lmdb_path = os.path.join(single_sub_folder, "model_stat.lmdb")
-        logger.info(f"loading lmdb: {lmdb_path}")
-        tick_and_models = load_models_from_lmdb(lmdb_path, arg_node_name, desired_length=sample_points, lmdb_cache=lmdb_cache)
-        ticks_ordered = sorted(tick_and_models.keys())
-        sample_model = tick_and_models[next(iter(tick_and_models))]
-        for layer_name in sample_model.keys():
-            ignore = False
-            for k in ignore_layers_with_keywords:
-                if k in layer_name:
-                    ignore = True
-                    break
-            if ignore:
-                continue
-            if only_layers is not None and (layer_name not in only_layers):
-                continue
-            logger.info(f"processing layer {layer_name}")
-            weights_list = [extract_weights(tick_and_models[tick], layer_name) for tick in ticks_ordered]
-            for d in dimension:
-                current_dimension_ipca = layer_and_ipca[dimension_to_index[d]]
-                if layer_name not in current_dimension_ipca:
-                    current_dimension_ipca[layer_name] = IncrementalPCA(n_components=d)
-                current_dimension_ipca[layer_name].partial_fit(weights_list)
+        for lmdb_folder_name in lmdb_folder_names:
+            lmdb_path = os.path.join(single_sub_folder, lmdb_folder_name)
+            logger.info(f"loading lmdb: {lmdb_path}")
+            tick_and_models = load_models_from_lmdb(lmdb_path, arg_node_name, desired_length=sample_points, lmdb_cache=lmdb_cache)
+            ticks_ordered = sorted(tick_and_models.keys())
+            sample_model = tick_and_models[next(iter(tick_and_models))]
+            for layer_name in sample_model.keys():
+                ignore = False
+                for k in ignore_layers_with_keywords:
+                    if k in layer_name:
+                        ignore = True
+                        break
+                if ignore:
+                    continue
+                if only_layers is not None and (layer_name not in only_layers):
+                    continue
+                logger.info(f"processing layer {layer_name}")
+                weights_list = [extract_weights(tick_and_models[tick], layer_name) for tick in ticks_ordered]
+                for d in dimension:
+                    current_dimension_ipca = layer_and_ipca[dimension_to_index[d]]
+                    if layer_name not in current_dimension_ipca:
+                        current_dimension_ipca[layer_name] = IncrementalPCA(n_components=d)
+                    current_dimension_ipca[layer_name].partial_fit(weights_list)
 
     generated_layer_names = set()
     for folder in arg_path_folder:
