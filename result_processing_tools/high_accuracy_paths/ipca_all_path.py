@@ -137,32 +137,35 @@ def incremental_pca_all_path(arg_path_folder, arg_output_folder, arg_node_name: 
         sub_folders = [f.name for f in os.scandir(folder) if f.is_dir()]
         sub_folder_path = [f.path for f in os.scandir(folder) if f.is_dir()]
         for index, name in enumerate(sub_folders):
-            lmdb_path = os.path.join(sub_folder_path[index], "model_stat.lmdb")
-            logger.info(f"loading lmdb: {lmdb_path} for transformation")
-            tick_and_models = load_models_from_lmdb(lmdb_path, arg_node_name, desired_length=sample_points, lmdb_cache=lmdb_cache)
-            ticks_ordered = sorted(tick_and_models.keys())
-            sample_model = tick_and_models[next(iter(tick_and_models))]
-            for layer_name in sample_model.keys():
-                ignore = False
-                for k in ignore_layers_with_keywords:
-                    if k in layer_name:
-                        ignore = True
-                        break
-                if ignore:
+            for lmdb_folder_name in lmdb_folder_names:
+                lmdb_path = os.path.join(sub_folder_path[index], lmdb_folder_name)
+                if not os.path.exists(lmdb_path):
                     continue
-                if only_layers is not None and (layer_name not in only_layers):
-                    continue
-                generated_layer_names.add(layer_name)
-                weights_list = [extract_weights(tick_and_models[tick], layer_name) for tick in ticks_ordered]
-                for d in dimension:
-                    output_file_path = os.path.join(arg_output_folder, folder, f"{name}_{layer_name}_{d}d.csv")
-                    logger.info(f"processing output {output_file_path}")
-                    ipca = layer_and_ipca[dimension_to_index[d]][layer_name]
-                    result = ipca.transform(weights_list)
-                    column_names = [f"PCA Dimension {i}" for i in range(d)]
-                    df = pd.DataFrame(result, columns=[column_names])
-                    df.insert(0, "tick", pd.Series(ticks_ordered))
-                    df.to_csv(output_file_path)
+                logger.info(f"loading lmdb: {lmdb_path} for transformation")
+                tick_and_models = load_models_from_lmdb(lmdb_path, arg_node_name, desired_length=sample_points, lmdb_cache=lmdb_cache)
+                ticks_ordered = sorted(tick_and_models.keys())
+                sample_model = tick_and_models[next(iter(tick_and_models))]
+                for layer_name in sample_model.keys():
+                    ignore = False
+                    for k in ignore_layers_with_keywords:
+                        if k in layer_name:
+                            ignore = True
+                            break
+                    if ignore:
+                        continue
+                    if only_layers is not None and (layer_name not in only_layers):
+                        continue
+                    generated_layer_names.add(layer_name)
+                    weights_list = [extract_weights(tick_and_models[tick], layer_name) for tick in ticks_ordered]
+                    for d in dimension:
+                        output_file_path = os.path.join(arg_output_folder, folder, f"{name}_{layer_name}_{d}d.csv")
+                        logger.info(f"processing output {output_file_path}")
+                        ipca = layer_and_ipca[dimension_to_index[d]][layer_name]
+                        result = ipca.transform(weights_list)
+                        column_names = [f"PCA Dimension {i}" for i in range(d)]
+                        df = pd.DataFrame(result, columns=[column_names])
+                        df.insert(0, "tick", pd.Series(ticks_ordered))
+                        df.to_csv(output_file_path)
 
     info_file = "info.json"
     info_file_path = os.path.join(arg_output_folder, info_file)
