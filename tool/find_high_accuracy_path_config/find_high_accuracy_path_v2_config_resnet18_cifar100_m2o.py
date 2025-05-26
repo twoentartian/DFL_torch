@@ -13,8 +13,8 @@ model_name = 'resnet18_bn'
 def get_parameter_general(runtime_parameter: RuntimeParameters, ml_setup: MlSetup):
     output = ParameterGeneral()
     if ml_setup.model_name == model_name:
-        output.max_tick = 35000
-        output.dataloader_worker = 4
+        output.max_tick = 1000
+        output.dataloader_worker = 8
         output.test_dataset_use_whole = True
     else:
         raise NotImplemented
@@ -42,7 +42,7 @@ def get_parameter_train(runtime_parameter: RuntimeParameters, ml_setup: MlSetup)
         if runtime_parameter.current_tick == 0:
             output.train_for_max_rounds = 5000
             output.train_for_min_rounds = 5
-            output.train_until_loss = 0.02
+            output.train_until_loss = 0.01
             output.pretrain_optimizer = True
             output.load_existing_optimizer = False
         else:
