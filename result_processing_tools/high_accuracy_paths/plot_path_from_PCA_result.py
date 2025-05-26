@@ -54,7 +54,7 @@ def deduplicate_weights_dbscan(weights_trajectory, shrink_ratio: float | None = 
         print(f"De-duplicate extra sampling rate: {sample_rate}")
         return weights_trajectory_reduced[::sample_rate], index_reduced[::sample_rate]
 
-def plot_pca_all_path(info_file_path, data_path, shrink_ratio=None, plot_color="index"):
+def plot_pca_all_path(info_file_path, data_path, shrink_ratio=None, plot_color="index", plot_line=False):
     with open(info_file_path) as f:
         info_target = json.load(f)
     all_targets = []
@@ -113,15 +113,18 @@ def plot_pca_all_path(info_file_path, data_path, shrink_ratio=None, plot_color="
                         color = df["tick"]
                     else:
                         raise NotImplemented
-                    sc = ax.scatter(projected_2d_final[:, 0], projected_2d_final[:, 1], s=plot_size, alpha=plot_alpha,
-                                    c=color[index_final], cmap='viridis')
-                    if target_index == 0:
-                        if plot_color == "index":
-                            plt.colorbar(sc, label='Model Index')
-                        if plot_color == "test_accuracy":
-                            plt.colorbar(sc, label='Test Accuracy')
-                        if plot_color == "test_loss":
-                            plt.colorbar(sc, label='Test Loss')
+                    if plot_line:
+                        ax.plot(projected_2d_final[:, 0],  projected_2d_final[:, 1])
+                    else:
+                        sc = ax.scatter(projected_2d_final[:, 0], projected_2d_final[:, 1], s=plot_size, alpha=plot_alpha,
+                                        c=color[index_final], cmap='viridis')
+                        if target_index == 0:
+                            if plot_color == "index":
+                                plt.colorbar(sc, label='Model Index')
+                            if plot_color == "test_accuracy":
+                                plt.colorbar(sc, label='Test Accuracy')
+                            if plot_color == "test_loss":
+                                plt.colorbar(sc, label='Test Loss')
                 fig.tight_layout()
                 fig.savefig(f"{data_path}/{file_name}.pdf")
                 fig.savefig(f"{data_path}/{file_name}.jpg", dpi=400)
@@ -138,16 +141,16 @@ if __name__ == '__main__':
     parser.add_argument("-i","--info", type=str, help="info file path, default: {PCA results path}/info.json")
     parser.add_argument("-s", "--shrink", type=float, default=0.1, help="shrink ratio, a value between 0 and 1 to reduce output image size")
     parser.add_argument("-c", "--color", type=str, choices=["index", "test_accuracy", "test_loss"], default="index", help="specify which value to use for color")
+    parser.add_argument("-l", "--line", action='store_true', help="plot all data points with lines")
 
     args = parser.parse_args()
 
     path = Path(args.path)
     shrink_ratio = args.shrink
+    plot_line = True if args.line else False
     if args.info is None:
         info_path = os.path.join(path, "info.json")
     else:
         info_path = Path(args.info)
-    if args.raw:
-        plot_pca_all_path(info_path, path, shrink_ratio=None, plot_color=args.color)
-    else:
-        plot_pca_all_path(info_path, path, shrink_ratio=shrink_ratio, plot_color=args.color)
+    shrink_ratio = None if args.raw else shrink_ratio
+    plot_pca_all_path(info_path, path, shrink_ratio=shrink_ratio, plot_color=args.color, plot_line=plot_line)
