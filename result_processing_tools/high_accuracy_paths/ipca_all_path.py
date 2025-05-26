@@ -107,6 +107,8 @@ def incremental_pca_all_path(arg_path_folder, arg_output_folder, arg_node_name: 
     for single_sub_folder in all_sub_folders:
         for lmdb_folder_name in lmdb_folder_names:
             lmdb_path = os.path.join(single_sub_folder, lmdb_folder_name)
+            if not os.path.exists(lmdb_path):
+                continue
             logger.info(f"loading lmdb: {lmdb_path}")
             tick_and_models = load_models_from_lmdb(lmdb_path, arg_node_name, desired_length=sample_points, lmdb_cache=lmdb_cache)
             ticks_ordered = sorted(tick_and_models.keys())
