@@ -90,7 +90,6 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default):
             output_ml_setup = mobilenet_v3_large_imagenet1k()
         else:
             raise NotImplemented
-        raise NotImplemented
     elif model_name == ModelType.mobilenet_v2:
         if dataset_type in [DatasetType.default, DatasetType.cifar10]:
             output_ml_setup = mobilenet_v2_cifar10()
