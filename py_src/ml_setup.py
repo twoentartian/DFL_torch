@@ -10,7 +10,7 @@ from py_src.ml_setup_base.vgg import vgg11_mnist, vgg11_cifar10, vgg11_bn_imagen
 from py_src.ml_setup_base.resnet import resnet18_cifar10, resnet18_cifar100, resnet18_imagenet100, resnet18_imagenet1k, \
     resnet50_imagenet1k, resnet34_imagenet1k
 from py_src.ml_setup_base.simplenet import simplenet_cifar10, simplenet_cifar100
-from py_src.ml_setup_base.mobilenet import mobilenet_v2_cifar10
+from py_src.ml_setup_base.mobilenet import mobilenet_v2_cifar10, mobilenet_v3_large_imagenet1k
 from py_src.ml_setup_base.cct import cct7_3x1_cifar10, cct7_7x2_imagenet10, cct7_7x2_imagenet100, cct7_7x2_imagenet1k
 from py_src.ml_setup_base.shufflenet import shufflenet_v2_cifar10, shufflenet_v2_x2_0_imagenet1k
 from py_src.ml_setup_base.efficientnet import efficientnet_v2_l_imagenet1k
@@ -19,7 +19,7 @@ __all__ = [ 'MlSetup',
             'vgg11_mnist', 'vgg11_cifar10', 'vgg11_bn_imagenet1k',
             'resnet18_cifar10', 'resnet18_cifar100', 'resnet18_imagenet100', 'resnet18_imagenet1k', 'resnet50_imagenet1k',
             'simplenet_cifar10', 'simplenet_cifar100',
-            'mobilenet_v2_cifar10',
+            'mobilenet_v2_cifar10', 'mobilenet_v3_large_imagenet1k',
             'cct7_3x1_cifar10', 'cct7_7x2_imagenet10', 'cct7_7x2_imagenet100', 'cct7_7x2_imagenet1k',
             'shufflenet_v2_cifar10',
             'efficientnet_v2_l_imagenet1k',
@@ -86,6 +86,10 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default):
     elif model_name == ModelType.mobilenet_v3_small:
         raise NotImplemented
     elif model_name == ModelType.mobilenet_v3_large:
+        if dataset_type in [DatasetType.default, DatasetType.imagenet1k]:
+            output_ml_setup = mobilenet_v3_large_imagenet1k()
+        else:
+            raise NotImplemented
         raise NotImplemented
     elif model_name == ModelType.mobilenet_v2:
         if dataset_type in [DatasetType.default, DatasetType.cifar10]:
