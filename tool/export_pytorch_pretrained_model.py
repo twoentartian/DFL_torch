@@ -29,3 +29,6 @@ if __name__ == "__main__":
 
     mobilenet_v3_large = models.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.IMAGENET1K_V2)
     util.save_model_state(os.path.join(output_path, "mobilenet_v3_large.model.pt"), mobilenet_v3_large.state_dict(), model_name=str(ModelType.mobilenet_v3_large.name))
+
+    efficientnet_v2_s = models.efficientnet_v2_s(weights=models.EfficientNet_V2_S_Weights.IMAGENET1K_V1)
+    util.save_model_state(os.path.join(output_path, "efficientnet_v2_s.model.pt"), efficientnet_v2_s.state_dict(), model_name=str(ModelType.efficientnet_v2_s.name))
