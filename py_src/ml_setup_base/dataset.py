@@ -183,25 +183,31 @@ def dataset_cifar100(rescale_to_224=False, transforms_training=None, transforms_
 """ ImageNet """
 
 """get pytorch preprocessing transforms, version can be 1 or 2"""
-def get_pytorch_preprocessing(version=2):
+def get_pytorch_preprocessing(version=2, train_crop_size=None, val_resize_size=None, val_crop_size=None):
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     if version == 1:
+        train_crop_size = 224 if train_crop_size is None else train_crop_size
+        val_resize_size = 256 if val_resize_size is None else val_resize_size
+        val_crop_size = 224 if val_crop_size is None else val_crop_size
         transforms_train = transforms.Compose([
-            transforms.RandomResizedCrop(224, interpolation=transforms.InterpolationMode.BILINEAR),
+            transforms.RandomResizedCrop(train_crop_size, interpolation=transforms.InterpolationMode.BILINEAR),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             normalize
         ])
         transforms_test = transforms.Compose([
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
+            transforms.Resize(val_resize_size),
+            transforms.CenterCrop(val_crop_size),
             transforms.ToTensor(),
             normalize,
         ])
         return transforms_train, transforms_test
     elif version == 2:
+        train_crop_size = 176 if train_crop_size is None else train_crop_size
+        val_resize_size = 232 if val_resize_size is None else val_resize_size
+        val_crop_size = 224 if val_crop_size is None else val_crop_size
         transforms_train = transforms.Compose([
-            transforms.RandomResizedCrop(176),
+            transforms.RandomResizedCrop(train_crop_size),
             transforms.RandomHorizontalFlip(),
             TrivialAugmentWide(),  # Equivalent to --auto-augment ta_wide
             RandAugment(num_ops=2, magnitude=9),  # roughly aligns with --randaugment 0.1
@@ -210,8 +216,8 @@ def get_pytorch_preprocessing(version=2):
             normalize,
         ])
         transforms_test = transforms.Compose([
-            transforms.Resize(232),  # Resize shorter side to 232
-            transforms.CenterCrop(224),  # Usually center crop to 224x224
+            transforms.Resize(val_resize_size),  # Resize shorter side to 232
+            transforms.CenterCrop(val_crop_size),  # Usually center crop to 224x224
             transforms.ToTensor(),
             normalize,
         ])
@@ -220,12 +226,14 @@ def get_pytorch_preprocessing(version=2):
         raise NotImplementedError
 
 
-def dataset_imagenet1k(pytorch_preset_version: int, transforms_training=None, transforms_testing=None, enable_memory_cache=False):
+def dataset_imagenet1k(pytorch_preset_version: int, transforms_training=None, transforms_testing=None,
+                       train_crop_size=None, val_resize_size=None, val_crop_size=None, enable_memory_cache=False):
     dataset_path = '~/dataset/imagenet1k' if imagenet1k_path is None else imagenet1k_path
     dataset_name = str(DatasetType.imagenet1k)
 
     if transforms_testing is None and transforms_training is None:
-        transforms_train, transforms_test = get_pytorch_preprocessing(version=pytorch_preset_version)
+        transforms_train, transforms_test = get_pytorch_preprocessing(version=pytorch_preset_version, train_crop_size=train_crop_size,
+                                                                      val_resize_size=val_resize_size, val_crop_size=val_crop_size)
     else:
         transforms_train, transforms_test = transforms_training, transforms_testing
 
@@ -237,12 +245,14 @@ def dataset_imagenet1k(pytorch_preset_version: int, transforms_training=None, tr
         imagenet_test = datasets.ImageNet(root=dataset_path, split='val', transform=transforms_test)
     return DatasetSetup(dataset_name, imagenet_train, imagenet_test, labels=set(range(0, 1000)))
 
-def dataset_imagenet100(pytorch_preset_version: int, transforms_training=None, transforms_testing=None, enable_memory_cache=False):
+def dataset_imagenet100(pytorch_preset_version: int, transforms_training=None, transforms_testing=None,
+                        train_crop_size=None, val_resize_size=None, val_crop_size=None, enable_memory_cache=False):
     dataset_path = '~/dataset/imagenet100' if imagenet100_path is None else imagenet100_path
     dataset_name = str(DatasetType.imagenet100)
 
     if transforms_testing is None and transforms_training is None:
-        transforms_train, transforms_test = get_pytorch_preprocessing(version=pytorch_preset_version)
+        transforms_train, transforms_test = get_pytorch_preprocessing(version=pytorch_preset_version, train_crop_size=train_crop_size,
+                                                                      val_resize_size=val_resize_size, val_crop_size=val_crop_size)
     else:
         transforms_train, transforms_test = transforms_training, transforms_testing
 
@@ -255,12 +265,14 @@ def dataset_imagenet100(pytorch_preset_version: int, transforms_training=None, t
 
     return DatasetSetup(dataset_name, imagenet_train, imagenet_test, labels=set(range(0, 100)))
 
-def dataset_imagenet10(pytorch_preset_version: int, transforms_training=None, transforms_testing=None, enable_memory_cache=False):
+def dataset_imagenet10(pytorch_preset_version: int, transforms_training=None, transforms_testing=None,
+                       train_crop_size=None, val_resize_size=None, val_crop_size=None, enable_memory_cache=False):
     dataset_path = '~/dataset/imagenet10' if imagenet10_path is None else imagenet10_path
     dataset_name = str(DatasetType.imagenet10)
 
     if transforms_testing is None and transforms_training is None:
-        transforms_train, transforms_test = get_pytorch_preprocessing(version=pytorch_preset_version)
+        transforms_train, transforms_test = get_pytorch_preprocessing(version=pytorch_preset_version, train_crop_size=train_crop_size,
+                                                                      val_resize_size=val_resize_size, val_crop_size=val_crop_size)
     else:
         transforms_train, transforms_test = transforms_training, transforms_testing
 

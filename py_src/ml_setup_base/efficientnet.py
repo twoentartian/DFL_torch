@@ -9,7 +9,7 @@ from py_src.ml_setup_base.other_setup import get_pytorch_training_imagenet
 
 def efficientnet_v2_s_imagenet1k(pytorch_preset_version=2):
     output_ml_setup = MlSetup()
-    dataset = ml_setup_dataset.dataset_imagenet1k(pytorch_preset_version)
+    dataset = ml_setup_dataset.dataset_imagenet1k(pytorch_preset_version, train_crop_size=300, val_resize_size=384, val_crop_size=384 )
 
     output_ml_setup.model = models.efficientnet_v2_s(progress=False)
     output_ml_setup.model_name = str(ModelType.efficientnet_v2_s.name)
