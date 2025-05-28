@@ -14,7 +14,7 @@ def efficientnet_v2_s_imagenet1k(pytorch_preset_version=2):
     output_ml_setup.model = models.efficientnet_v2_s(progress=False)
     output_ml_setup.model_name = str(ModelType.efficientnet_v2_s.name)
     output_ml_setup.get_info_from_dataset(dataset)
-    output_ml_setup.training_batch_size = 256
+    output_ml_setup.training_batch_size = 128
     output_ml_setup.has_normalization_layer = True
     loss_fn, collate_fn, model_ema_decay, model_ema_steps, sampler_fn = get_pytorch_training_imagenet(pytorch_preset_version)
     output_ml_setup.criterion = loss_fn
