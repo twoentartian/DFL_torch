@@ -26,7 +26,7 @@ def hash_model_state_dict(model):
     return hasher.hexdigest()
 
 if __name__ == "__main__":
-    values_wd = [2e-4, 3e-4, 4e-4, 5e-4, 6e-4, 7e-4, 8e-4, 9e-4]
+    values_wd = [10e-4, 11e-4, 12e-4, 13e-4, 14e-4, 15e-4,16e-4,17e-4,18e-4,19e-4]
     value_ml_setup = ml_setup.resnet18_cifar100()
     random_seed = 42
 
