@@ -13,7 +13,8 @@ from py_src.ml_setup_base.simplenet import simplenet_cifar10, simplenet_cifar100
 from py_src.ml_setup_base.mobilenet import mobilenet_v2_cifar10, mobilenet_v3_large_imagenet1k
 from py_src.ml_setup_base.cct import cct7_3x1_cifar10, cct7_7x2_imagenet10, cct7_7x2_imagenet100, cct7_7x2_imagenet1k
 from py_src.ml_setup_base.shufflenet import shufflenet_v2_cifar10, shufflenet_v2_x2_0_imagenet1k
-from py_src.ml_setup_base.efficientnet import efficientnet_v2_s_imagenet1k
+from py_src.ml_setup_base.efficientnet import efficientnet_v2_s_imagenet1k, efficientnet_b1_imagenet1k
+
 __all__ = [ 'MlSetup',
             'lenet4_mnist', 'lenet5_mnist', 'lenet5_random_mnist', 'lenet5_large_fc_mnist',
             'vgg11_mnist', 'vgg11_cifar10', 'vgg11_bn_imagenet1k',
@@ -22,20 +23,20 @@ __all__ = [ 'MlSetup',
             'mobilenet_v2_cifar10', 'mobilenet_v3_large_imagenet1k',
             'cct7_3x1_cifar10', 'cct7_7x2_imagenet10', 'cct7_7x2_imagenet100', 'cct7_7x2_imagenet1k',
             'shufflenet_v2_cifar10',
-            'efficientnet_v2_s_imagenet1k',
+            'efficientnet_v2_s_imagenet1k', 'efficientnet_b1_imagenet1k'
            ]
 
 from py_src.ml_setup_base.vit import vit_b_16_imagenet100, vit_b_16_imagenet1k
 
 
 """ Helper function """
-def get_ml_setup_from_config(model_type: str, dataset_type: str = 'default'):
+def get_ml_setup_from_config(model_type: str, dataset_type: str = 'default', pytorch_preset_version=None):
     model_type = ModelType[model_type]
     dataset_type_enum = DatasetType[dataset_type]
-    output_ml_setup = get_ml_setup_from_model_type(model_type, dataset_type=dataset_type_enum)
+    output_ml_setup = get_ml_setup_from_model_type(model_type, dataset_type=dataset_type_enum, pytorch_preset_version=pytorch_preset_version)
     return output_ml_setup
 
-def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default):
+def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default, pytorch_preset_version=None):
     if model_name == ModelType.lenet5:
         if dataset_type in [dataset_type.default, dataset_type.mnist]:
             output_ml_setup = lenet5_mnist()
@@ -65,7 +66,8 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default):
             raise NotImplemented
     elif model_name == ModelType.resnet50:
         if dataset_type in [dataset_type.default, dataset_type.imagenet1k]:
-            output_ml_setup = resnet50_imagenet1k()
+            assert pytorch_preset_version is not None
+            output_ml_setup = resnet50_imagenet1k(pytorch_preset_version)
         else:
             raise NotImplemented
     elif model_name == ModelType.simplenet:
@@ -112,6 +114,12 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default):
     elif model_name == ModelType.efficientnet_v2_s:
         if dataset_type in [DatasetType.default, DatasetType.imagenet1k]:
             output_ml_setup = efficientnet_v2_s_imagenet1k()
+        else:
+            raise NotImplemented
+    elif model_name == ModelType.efficientnet_b1:
+        if dataset_type in [DatasetType.default, DatasetType.imagenet1k]:
+            assert pytorch_preset_version is not None
+            output_ml_setup = efficientnet_b1_imagenet1k(pytorch_preset_version)
         else:
             raise NotImplemented
     elif model_name == ModelType.shufflenet_v2:

@@ -25,6 +25,7 @@ class RuntimeParameters(object):
     config_file_path = None
     dataset_name = None
     model_name = None
+    pytorch_preset_version = None
     store_top_accuracy_model_count = None
     checkpoint_interval = None
     task_name = None

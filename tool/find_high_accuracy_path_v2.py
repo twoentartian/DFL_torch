@@ -214,9 +214,9 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
         start_model_stat_dict, start_model_name = util.load_model_state_file(start_point)
         child_logger.info(f"loading start model at {start_point}")
         if runtime_parameter.dataset_name is not None:
-            current_ml_setup = ml_setup.get_ml_setup_from_config(start_model_name, dataset_type=runtime_parameter.dataset_name)
+            current_ml_setup = ml_setup.get_ml_setup_from_config(start_model_name, dataset_type=runtime_parameter.dataset_name, pytorch_preset_version=runtime_parameter.pytorch_preset_version)
         else:
-            current_ml_setup = ml_setup.get_ml_setup_from_config(start_model_name)
+            current_ml_setup = ml_setup.get_ml_setup_from_config(start_model_name, pytorch_preset_version=runtime_parameter.pytorch_preset_version)
         runtime_parameter.model_name = current_ml_setup.model_name
         runtime_parameter.dataset_name = current_ml_setup.dataset_name
         child_logger.info(f"find model type is {start_model_name}")
@@ -618,6 +618,7 @@ if __name__ == '__main__':
 
     parser.add_argument( "--test_interval", type=int, default=1, help='specify the interval of measuring model on the test dataset.')
     parser.add_argument("--test_batch", type=int, default=100, help='specify the batch size of measuring model on the test dataset.')
+    parser.add_argument("-P", "--torch_preset_version", type=int, default=None, help='specify the pytorch data training preset version')
 
     args = parser.parse_args()
 
@@ -645,6 +646,7 @@ if __name__ == '__main__':
     runtime_parameter.service_test_accuracy_loss_batch_size = args.test_batch
     runtime_parameter.store_top_accuracy_model_count = args.store_top_accuracy_model_count
     runtime_parameter.checkpoint_interval = args.checkpoint_interval
+    runtime_parameter.pytorch_preset_version = args.torch_preset_version
 
     # find all paths to process
     if args.start_folder is not None and args.end_folder is not None:
