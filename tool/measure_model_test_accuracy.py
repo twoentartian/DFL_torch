@@ -64,6 +64,7 @@ if __name__ == "__main__":
     parser.add_argument("-m", "--model_type", type=str, default="auto")
     parser.add_argument("-d", "--dataset_type", type=str, default="default")
     parser.add_argument("-t", "--training", action="store_true")
+    parser.add_argument("-P", "--torch_preset_version", type=int, default=None, help='specify the pytorch data training preset version')
 
     args = parser.parse_args()
 
@@ -77,7 +78,7 @@ if __name__ == "__main__":
         model_type = model_type_from_cli
     assert model_type is not None, "model_type is None"
 
-    current_ml_setup = ml_setup.get_ml_setup_from_config(model_type, dataset_type=args.dataset_type)
+    current_ml_setup = ml_setup.get_ml_setup_from_config(model_type, dataset_type=args.dataset_type, pytorch_preset_version=args.torch_preset_version)
 
     if not os.path.exists(model_file_path):
         print(f"file not found. {model_file_path}")
