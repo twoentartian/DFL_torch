@@ -4,10 +4,9 @@ from torchvision import transforms, datasets
 from torch.utils.data import DataLoader
 from py_src.dataset import DatasetWithCachedOutputInSharedMem, DatasetWithCachedOutputInMem, ImageDatasetWithCachedInputInSharedMem
 from py_src.ml_setup_base.base import DatasetSetup
+from py_src.torch_vision_train import presets
 from torchvision.transforms.autoaugment import TrivialAugmentWide
 from torchvision.transforms.v2 import RandAugment
-
-
 
 """ Load env override file """
 imagenet1k_path = None
@@ -183,18 +182,19 @@ def dataset_cifar100(rescale_to_224=False, transforms_training=None, transforms_
 """ ImageNet """
 
 """get pytorch preprocessing transforms, version can be 1 or 2"""
-def get_pytorch_preprocessing(version=2, train_crop_size=None, val_resize_size=None, val_crop_size=None):
+def get_pytorch_preprocessing(version=2, train_crop_size=None, val_resize_size=None, val_crop_size=None, random_erasing=None):
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
     if version == 1:
         train_crop_size = 224 if train_crop_size is None else train_crop_size
         val_resize_size = 256 if val_resize_size is None else val_resize_size
         val_crop_size = 224 if val_crop_size is None else val_crop_size
-        transforms_train = transforms.Compose([
-            transforms.RandomResizedCrop(train_crop_size, interpolation=transforms.InterpolationMode.BILINEAR),
+        transforms_train = [transforms.RandomResizedCrop(train_crop_size, interpolation=transforms.InterpolationMode.BILINEAR),
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
-            normalize
-        ])
+            normalize]
+        if random_erasing is not None:
+            transforms_train.append(transforms.RandomErasing(random_erasing))
+        transforms_train = transforms.Compose(transforms_train)
         transforms_test = transforms.Compose([
             transforms.Resize(val_resize_size),
             transforms.CenterCrop(val_crop_size),
@@ -212,7 +212,7 @@ def get_pytorch_preprocessing(version=2, train_crop_size=None, val_resize_size=N
             TrivialAugmentWide(),  # Equivalent to --auto-augment ta_wide
             RandAugment(num_ops=2, magnitude=9),  # roughly aligns with --randaugment 0.1
             transforms.ToTensor(),
-            transforms.RandomErasing(p=0.1),
+            transforms.RandomErasing(p=0.1 if random_erasing is None else random_erasing),
             normalize,
         ])
         transforms_test = transforms.Compose([
@@ -227,13 +227,15 @@ def get_pytorch_preprocessing(version=2, train_crop_size=None, val_resize_size=N
 
 
 def dataset_imagenet1k(pytorch_preset_version: int, transforms_training=None, transforms_testing=None,
-                       train_crop_size=None, val_resize_size=None, val_crop_size=None, enable_memory_cache=False):
+                       train_crop_size=None, val_resize_size=None, val_crop_size=None,
+                       random_erasing=None, enable_memory_cache=False):
     dataset_path = '~/dataset/imagenet1k' if imagenet1k_path is None else imagenet1k_path
     dataset_name = str(DatasetType.imagenet1k)
 
     if transforms_testing is None and transforms_training is None:
         transforms_train, transforms_test = get_pytorch_preprocessing(version=pytorch_preset_version, train_crop_size=train_crop_size,
-                                                                      val_resize_size=val_resize_size, val_crop_size=val_crop_size)
+                                                                      val_resize_size=val_resize_size, val_crop_size=val_crop_size,
+                                                                      random_erasing=random_erasing)
     else:
         transforms_train, transforms_test = transforms_training, transforms_testing
 
@@ -246,13 +248,14 @@ def dataset_imagenet1k(pytorch_preset_version: int, transforms_training=None, tr
     return DatasetSetup(dataset_name, imagenet_train, imagenet_test, labels=set(range(0, 1000)))
 
 def dataset_imagenet100(pytorch_preset_version: int, transforms_training=None, transforms_testing=None,
-                        train_crop_size=None, val_resize_size=None, val_crop_size=None, enable_memory_cache=False):
+                        train_crop_size=None, val_resize_size=None, val_crop_size=None, random_erasing=None, enable_memory_cache=False):
     dataset_path = '~/dataset/imagenet100' if imagenet100_path is None else imagenet100_path
     dataset_name = str(DatasetType.imagenet100)
 
     if transforms_testing is None and transforms_training is None:
         transforms_train, transforms_test = get_pytorch_preprocessing(version=pytorch_preset_version, train_crop_size=train_crop_size,
-                                                                      val_resize_size=val_resize_size, val_crop_size=val_crop_size)
+                                                                      val_resize_size=val_resize_size, val_crop_size=val_crop_size,
+                                                                      random_erasing=random_erasing)
     else:
         transforms_train, transforms_test = transforms_training, transforms_testing
 
@@ -266,13 +269,14 @@ def dataset_imagenet100(pytorch_preset_version: int, transforms_training=None, t
     return DatasetSetup(dataset_name, imagenet_train, imagenet_test, labels=set(range(0, 100)))
 
 def dataset_imagenet10(pytorch_preset_version: int, transforms_training=None, transforms_testing=None,
-                       train_crop_size=None, val_resize_size=None, val_crop_size=None, enable_memory_cache=False):
+                       train_crop_size=None, val_resize_size=None, val_crop_size=None, random_erasing=None, enable_memory_cache=False):
     dataset_path = '~/dataset/imagenet10' if imagenet10_path is None else imagenet10_path
     dataset_name = str(DatasetType.imagenet10)
 
     if transforms_testing is None and transforms_training is None:
         transforms_train, transforms_test = get_pytorch_preprocessing(version=pytorch_preset_version, train_crop_size=train_crop_size,
-                                                                      val_resize_size=val_resize_size, val_crop_size=val_crop_size)
+                                                                      val_resize_size=val_resize_size, val_crop_size=val_crop_size,
+                                                                      random_erasing=random_erasing)
     else:
         transforms_train, transforms_test = transforms_training, transforms_testing
 
@@ -284,3 +288,32 @@ def dataset_imagenet10(pytorch_preset_version: int, transforms_training=None, tr
         imagenet_test = datasets.ImageFolder(os.path.join(dataset_path, "val"), transform = transforms_test)
 
     return DatasetSetup(dataset_name, imagenet_train, imagenet_test, labels=set(range(0, 10)))
+
+def dataset_imagenet1k_custom(train_crop_size=224, val_resize_size=256, val_crop_size=224,
+                              interpolation='bilinear', auto_augment_policy=None,
+                              random_erase_prob=0.0, ra_magnitude=9, augmix_severity=3,
+                              backend='pil', use_v2=False):
+    dataset_name = str(DatasetType.imagenet1k)
+    dataset_path = '~/dataset/imagenet1k/train' if imagenet1k_path is None else f"{imagenet1k_path}/train"
+    dataset_train = datasets.ImageFolder(
+        dataset_path,
+        presets.ClassificationPresetTrain(
+            crop_size=train_crop_size,
+            interpolation=interpolation,
+            auto_augment_policy=auto_augment_policy,
+            random_erase_prob=random_erase_prob,
+            ra_magnitude=ra_magnitude,
+            augmix_severity=augmix_severity,
+            backend=backend,
+            use_v2=use_v2,
+        ),
+    )
+    dataset_path = '~/dataset/imagenet1k/val' if imagenet1k_path is None else f"{imagenet1k_path}/val"
+    transforms_test = transforms.Compose([
+        transforms.Resize(val_resize_size),
+        transforms.CenterCrop(val_crop_size),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
+    dataset_test = datasets.ImageFolder(dataset_path, transforms_test)
+    return DatasetSetup(dataset_name, dataset_train, dataset_test, labels=set(range(0, 1000)))

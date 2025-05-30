@@ -23,7 +23,8 @@ class collate_fn_inst():
         return self.target(*default_collate(batch))
 
 
-def get_pytorch_training_imagenet(version=2, enable_collate_and_sampler=False):
+def get_pytorch_training_imagenet(version, enable_collate_and_sampler=False, mixup_alpha=0.2, cutmix_alpha=1.0, label_smoothing=0.1):
+    """this function disables collate and sampler by default"""
     if version == 1:
         collate_fn = None
         loss_fn = nn.CrossEntropyLoss()
@@ -32,9 +33,9 @@ def get_pytorch_training_imagenet(version=2, enable_collate_and_sampler=False):
         sampler_fn = None
         return loss_fn, collate_fn, model_ema_decay, model_ema_steps, sampler_fn
     elif version == 2:
-        mixup_cutmix = get_mixup_cutmix(mixup_alpha=0.2, cutmix_alpha=1.0, num_classes=1000)
+        mixup_cutmix = get_mixup_cutmix(mixup_alpha=mixup_alpha, cutmix_alpha=cutmix_alpha, num_classes=1000)
         collate_fn = collate_fn_inst(mixup_cutmix)
-        loss_fn = nn.CrossEntropyLoss(label_smoothing=0.1)
+        loss_fn = nn.CrossEntropyLoss(label_smoothing=label_smoothing)
         model_ema_decay = 0.99998
         model_ema_steps = 32
         def sampler_fn(dataset):

@@ -1,5 +1,6 @@
 import torch.nn as nn
 import torchvision.models as models
+import torchvision.datasets as datasets
 from py_src.models import mobilenet
 import py_src.ml_setup_base.dataset as ml_setup_dataset
 from py_src.ml_setup_base.base import MlSetup
@@ -20,8 +21,12 @@ def mobilenet_v2_cifar10():
 
 def mobilenet_v3_large_imagenet1k(pytorch_preset_version=2):
     output_ml_setup = MlSetup()
-    dataset = ml_setup_dataset.dataset_imagenet1k(pytorch_preset_version)
-
+    if pytorch_preset_version == 1:
+        dataset = ml_setup_dataset.dataset_imagenet1k_custom(auto_augment_policy='imagenet', random_erase_prob=0.2)
+    elif pytorch_preset_version == 2:
+        dataset = ml_setup_dataset.dataset_imagenet1k(pytorch_preset_version)
+    else:
+        raise NotImplementedError
     output_ml_setup.model = models.mobilenet_v3_large(progress=False)
     output_ml_setup.model_name = str(ModelType.mobilenet_v3_large.name)
     output_ml_setup.get_info_from_dataset(dataset)

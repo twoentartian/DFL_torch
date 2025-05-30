@@ -26,9 +26,13 @@ def efficientnet_v2_s_imagenet1k(pytorch_preset_version=2):
 def efficientnet_b1_imagenet1k(pytorch_preset_version=2):
     output_ml_setup = MlSetup()
     if pytorch_preset_version == 1:
-        dataset = ml_setup_dataset.dataset_imagenet1k(pytorch_preset_version)
+        raise NotImplementedError("training recipe not found from pytorch pretrained models")
+        # dataset = ml_setup_dataset.dataset_imagenet1k(1)
     elif pytorch_preset_version == 2:
-        dataset = ml_setup_dataset.dataset_imagenet1k(pytorch_preset_version, train_crop_size=208, val_resize_size=255, val_crop_size=240)
+        # dataset = ml_setup_dataset.dataset_imagenet1k(2, train_crop_size=208, val_resize_size=255, val_crop_size=240)
+        """https://github.com/pytorch/vision/issues/3995#new-recipe-with-lr-wd-crop-tuning"""
+        dataset = ml_setup_dataset.dataset_imagenet1k_custom(train_crop_size=208, val_crop_size=240, val_resize_size=255,
+                                                             auto_augment_policy='ta_wide', random_erase_prob=0.1)
     else:
         raise NotImplementedError
     output_ml_setup.model = models.efficientnet_b1(progress=False)
