@@ -32,6 +32,9 @@ if __name__ == "__main__":
     model = models.shufflenet_v2_x2_0(weights=models.ShuffleNet_V2_X2_0_Weights.IMAGENET1K_V1)
     util.save_model_state(os.path.join(output_path, "shufflenet_v2_x2_0.model.pt"), model.state_dict(), model_name=str(ModelType.shufflenet_v2_x2_0.name))
 
+    model = models.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.IMAGENET1K_V1)
+    util.save_model_state(os.path.join(output_path, "mobilenet_v3_large_imagenet_v1.model.pt"), model.state_dict(), model_name=str(ModelType.mobilenet_v3_large.name))
+
     model = models.mobilenet_v3_large(weights=models.MobileNet_V3_Large_Weights.IMAGENET1K_V2)
     util.save_model_state(os.path.join(output_path, "mobilenet_v3_large_imagenet_v2.model.pt"), model.state_dict(), model_name=str(ModelType.mobilenet_v3_large.name))
 
