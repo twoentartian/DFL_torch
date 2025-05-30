@@ -88,6 +88,7 @@ if __name__ == "__main__":
     test_loss, test_accuracy, train_loss, train_accuracy = testing_model(model, current_ml_setup, args.training)
     print(f"test loss={test_loss}, test acc={test_accuracy}")
     print(f"train loss={train_loss}, train acc={train_accuracy}")
-    with open(f"{model_file_path}.txt", "w") as f:
-        f.write(f"test loss={test_loss}, test acc={test_accuracy}\n")
-        f.write(f"train loss={train_loss}, train acc={train_accuracy}\n")
+    if test_accuracy * train_accuracy >0.001:
+        with open(f"{model_file_path}.txt", "w") as f:
+            f.write(f"test loss={test_loss}, test acc={test_accuracy}\n")
+            f.write(f"train loss={train_loss}, train acc={train_accuracy}\n")
