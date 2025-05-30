@@ -535,6 +535,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
                         break
                 if exit_training:
                     child_logger.info(f"current tick: {runtime_parameter.current_tick}, training {training_iter_counter} rounds(final), loss = {moving_average.get_average():.3f}")
+                    training_loss_val = moving_average.get_average()
                     break
 
         """rebuilding normalization"""
