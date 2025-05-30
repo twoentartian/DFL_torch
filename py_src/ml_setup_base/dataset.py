@@ -290,7 +290,7 @@ def dataset_imagenet10(pytorch_preset_version: int, transforms_training=None, tr
     return DatasetSetup(dataset_name, imagenet_train, imagenet_test, labels=set(range(0, 10)))
 
 def dataset_imagenet1k_custom(train_crop_size=224, val_resize_size=256, val_crop_size=224,
-                              interpolation='bilinear', auto_augment_policy=None,
+                              interpolation=transforms.InterpolationMode.BILINEAR, auto_augment_policy=None,
                               random_erase_prob=0.0, ra_magnitude=9, augmix_severity=3,
                               backend='pil', use_v2=False):
     dataset_name = str(DatasetType.imagenet1k)
