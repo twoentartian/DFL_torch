@@ -46,3 +46,8 @@ if __name__ == "__main__":
 
     model = models.efficientnet_b1(weights=models.EfficientNet_B1_Weights.IMAGENET1K_V2)
     util.save_model_state(os.path.join(output_path, "efficientnet_b1_imagenet_v2.model.pt"), model.state_dict(), model_name=str(ModelType.efficientnet_b1.name))
+
+    model = models.mnasnet1_0(weights=models.MNASNet1_0_Weights.IMAGENET1K_V1)
+    util.save_model_state(os.path.join(output_path, "mnasnet1_0_imagenet_v1.model.pt"), model.state_dict(), model_name=str(ModelType.mnasnet1_0.name))
+
+

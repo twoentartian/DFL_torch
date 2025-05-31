@@ -14,6 +14,7 @@ from py_src.ml_setup_base.mobilenet import mobilenet_v2_cifar10, mobilenet_v3_la
 from py_src.ml_setup_base.cct import cct7_3x1_cifar10, cct7_7x2_imagenet10, cct7_7x2_imagenet100, cct7_7x2_imagenet1k
 from py_src.ml_setup_base.shufflenet import shufflenet_v2_cifar10, shufflenet_v2_x2_0_imagenet1k
 from py_src.ml_setup_base.efficientnet import efficientnet_v2_s_imagenet1k, efficientnet_b1_imagenet1k
+from py_src.ml_setup_base.mnasnet import mnasnet1_0_imagenet1k
 
 __all__ = [ 'MlSetup',
             'lenet4_mnist', 'lenet5_mnist', 'lenet5_random_mnist', 'lenet5_large_fc_mnist',
@@ -23,7 +24,8 @@ __all__ = [ 'MlSetup',
             'mobilenet_v2_cifar10', 'mobilenet_v3_large_imagenet1k',
             'cct7_3x1_cifar10', 'cct7_7x2_imagenet10', 'cct7_7x2_imagenet100', 'cct7_7x2_imagenet1k',
             'shufflenet_v2_cifar10',
-            'efficientnet_v2_s_imagenet1k', 'efficientnet_b1_imagenet1k'
+            'efficientnet_v2_s_imagenet1k', 'efficientnet_b1_imagenet1k',
+            'mnasnet1_0_imagenet1k'
            ]
 
 from py_src.ml_setup_base.vit import vit_b_16_imagenet100, vit_b_16_imagenet1k
@@ -43,7 +45,7 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default, p
         elif dataset_type in [dataset_type.random_mnist]:
             output_ml_setup = lenet5_random_mnist()
         else:
-            raise NotImplemented
+            raise NotImplementedError
     elif model_name == ModelType.lenet4:
         assert dataset_type in [dataset_type.default, dataset_type.mnist]
         output_ml_setup = lenet4_mnist()
@@ -58,18 +60,18 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default, p
         elif dataset_type in [dataset_type.imagenet1k]:
             output_ml_setup = resnet18_imagenet1k(enable_replace_bn_with_group_norm=enable_replace_bn_with_group_norm)
         else:
-            raise NotImplemented
+            raise NotImplementedError
     elif model_name == ModelType.resnet34:
         if dataset_type in [dataset_type.default, dataset_type.imagenet1k]:
             output_ml_setup = resnet34_imagenet1k()
         else:
-            raise NotImplemented
+            raise NotImplementedError
     elif model_name == ModelType.resnet50:
         if dataset_type in [dataset_type.default, dataset_type.imagenet1k]:
             assert pytorch_preset_version is not None
             output_ml_setup = resnet50_imagenet1k(pytorch_preset_version)
         else:
-            raise NotImplemented
+            raise NotImplementedError
     elif model_name == ModelType.simplenet:
         assert dataset_type in [dataset_type.default, dataset_type.cifar10]
         output_ml_setup = simplenet_cifar10()
@@ -81,62 +83,67 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default, p
         elif dataset_type in [dataset_type.imagenet1k]:
             output_ml_setup = cct7_7x2_imagenet1k()
         else:
-            raise NotImplemented
+            raise NotImplementedError
     elif model_name == ModelType.lenet5_large_fc:
         assert dataset_type in [dataset_type.default, dataset_type.mnist]
         output_ml_setup = lenet5_large_fc_mnist()
     elif model_name == ModelType.mobilenet_v3_small:
-        raise NotImplemented
+        raise NotImplementedError
     elif model_name == ModelType.mobilenet_v3_large:
         if dataset_type in [DatasetType.default, DatasetType.imagenet1k]:
             output_ml_setup = mobilenet_v3_large_imagenet1k()
         else:
-            raise NotImplemented
+            raise NotImplementedError
     elif model_name == ModelType.mobilenet_v2:
         if dataset_type in [DatasetType.default, DatasetType.cifar10]:
             output_ml_setup = mobilenet_v2_cifar10()
         else:
-            raise NotImplemented
+            raise NotImplementedError
     elif model_name == ModelType.vgg11_no_bn:
         if dataset_type in [DatasetType.default, DatasetType.mnist]:
             output_ml_setup = vgg11_mnist()
         elif dataset_type in [DatasetType.cifar10]:
             output_ml_setup = vgg11_cifar10()
         else:
-            raise NotImplemented
+            raise NotImplementedError
     elif model_name == ModelType.vit_b_16:
         if dataset_type in [DatasetType.default, DatasetType.imagenet1k]:
             output_ml_setup = vit_b_16_imagenet1k()
         elif dataset_type in [DatasetType.imagenet100]:
             output_ml_setup = vit_b_16_imagenet100()
         else:
-            raise NotImplemented
+            raise NotImplementedError
     elif model_name == ModelType.efficientnet_v2_s:
         if dataset_type in [DatasetType.default, DatasetType.imagenet1k]:
             output_ml_setup = efficientnet_v2_s_imagenet1k()
         else:
-            raise NotImplemented
+            raise NotImplementedError
     elif model_name == ModelType.efficientnet_b1:
         if dataset_type in [DatasetType.default, DatasetType.imagenet1k]:
             assert pytorch_preset_version is not None
             output_ml_setup = efficientnet_b1_imagenet1k(pytorch_preset_version)
         else:
-            raise NotImplemented
+            raise NotImplementedError
     elif model_name == ModelType.shufflenet_v2:
         if dataset_type in [DatasetType.default, DatasetType.cifar10]:
             output_ml_setup = shufflenet_v2_cifar10()
         else:
-            raise NotImplemented
+            raise NotImplementedError
     elif model_name == ModelType.shufflenet_v2_x2_0:
         if dataset_type in [DatasetType.default, DatasetType.imagenet1k]:
             output_ml_setup = shufflenet_v2_x2_0_imagenet1k()
         else:
-            raise NotImplemented
+            raise NotImplementedError
     elif model_name == ModelType.squeezenet1_1:
         if dataset_type in [DatasetType.default, DatasetType.imagenet1k]:
             output_ml_setup = squeezenet1_1_imagenet1k()
         else:
-            raise NotImplemented
+            raise NotImplementedError
+    elif model_name == ModelType.mnasnet1_0:
+        if dataset_type in [DatasetType.default, DatasetType.imagenet1k]:
+            output_ml_setup = mnasnet1_0_imagenet1k()
+        else:
+            raise NotImplementedError
     else:
         raise ValueError(f'Invalid model type: {model_name}')
     return output_ml_setup
