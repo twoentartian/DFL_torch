@@ -50,4 +50,6 @@ if __name__ == "__main__":
     model = models.mnasnet1_0(weights=models.MNASNet1_0_Weights.IMAGENET1K_V1)
     util.save_model_state(os.path.join(output_path, "mnasnet1_0_imagenet_v1.model.pt"), model.state_dict(), model_name=str(ModelType.mnasnet1_0.name))
 
+    model = models.mnasnet0_5(weights=models.MNASNet0_5_Weights.IMAGENET1K_V1)
+    util.save_model_state(os.path.join(output_path, "mnasnet0_5_imagenet_v1.model.pt"), model.state_dict(), model_name=str(ModelType.mnasnet0_5.name))
 

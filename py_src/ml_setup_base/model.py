@@ -21,4 +21,5 @@ class ModelType(Enum):
     shufflenet_v2 = auto()
     shufflenet_v2_x2_0 = auto()
     squeezenet1_1 = auto()
+    mnasnet0_5 = auto()
     mnasnet1_0 = auto()
