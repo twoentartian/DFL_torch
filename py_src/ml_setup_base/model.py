@@ -16,6 +16,7 @@ class ModelType(Enum):
     mobilenet_v2 = auto()
     lenet4 = auto()
     vgg11_no_bn = auto()
+    vgg11_bn = auto()
     efficientnet_b1 = auto()
     efficientnet_v2_s = auto()
     shufflenet_v2 = auto()

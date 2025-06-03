@@ -106,6 +106,11 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default, p
             output_ml_setup = vgg11_cifar10()
         else:
             raise NotImplementedError
+    elif model_name == ModelType.vgg11_bn:
+        if dataset_type in [DatasetType.default, DatasetType.imagenet1k]:
+            output_ml_setup = vgg11_bn_imagenet1k()
+        else:
+            raise NotImplementedError
     elif model_name == ModelType.vit_b_16:
         if dataset_type in [DatasetType.default, DatasetType.imagenet1k]:
             output_ml_setup = vit_b_16_imagenet1k()
