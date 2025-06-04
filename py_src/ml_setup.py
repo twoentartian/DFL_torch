@@ -15,6 +15,7 @@ from py_src.ml_setup_base.cct import cct7_3x1_cifar10, cct7_7x2_imagenet10, cct7
 from py_src.ml_setup_base.shufflenet import shufflenet_v2_cifar10, shufflenet_v2_x2_0_imagenet1k
 from py_src.ml_setup_base.efficientnet import efficientnet_v2_s_imagenet1k, efficientnet_b1_imagenet1k
 from py_src.ml_setup_base.mnasnet import mnasnet1_0_imagenet1k, mnasnet0_5_imagenet1k
+from py_src.ml_setup_base.densenet import densenet121_imagenet1k
 
 __all__ = [ 'MlSetup',
             'lenet4_mnist', 'lenet5_mnist', 'lenet5_random_mnist', 'lenet5_large_fc_mnist',
@@ -25,7 +26,8 @@ __all__ = [ 'MlSetup',
             'cct7_3x1_cifar10', 'cct7_7x2_imagenet10', 'cct7_7x2_imagenet100', 'cct7_7x2_imagenet1k',
             'shufflenet_v2_cifar10',
             'efficientnet_v2_s_imagenet1k', 'efficientnet_b1_imagenet1k',
-            'mnasnet1_0_imagenet1k', 'mnasnet0_5_imagenet1k'
+            'mnasnet1_0_imagenet1k', 'mnasnet0_5_imagenet1k',
+            'densenet121_imagenet1k'
            ]
 
 from py_src.ml_setup_base.vit import vit_b_16_imagenet100, vit_b_16_imagenet1k
@@ -152,6 +154,11 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default, p
     elif model_name == ModelType.mnasnet0_5:
         if dataset_type in [DatasetType.default, DatasetType.imagenet1k]:
             output_ml_setup = mnasnet0_5_imagenet1k()
+        else:
+            raise NotImplementedError
+    elif model_name == ModelType.densenet121:
+        if dataset_type in [DatasetType.default, DatasetType.imagenet1k]:
+            output_ml_setup = densenet121_imagenet1k()
         else:
             raise NotImplementedError
     else:

@@ -24,3 +24,4 @@ class ModelType(Enum):
     squeezenet1_1 = auto()
     mnasnet0_5 = auto()
     mnasnet1_0 = auto()
+    densenet121 = auto()
