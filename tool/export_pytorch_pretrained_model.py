@@ -56,3 +56,6 @@ if __name__ == "__main__":
     model = models.mnasnet0_5(weights=models.MNASNet0_5_Weights.IMAGENET1K_V1)
     util.save_model_state(os.path.join(output_path, "mnasnet0_5_imagenet_v1.model.pt"), model.state_dict(), model_name=str(ModelType.mnasnet0_5.name))
 
+    model = models.densenet121(weights=models.DenseNet121_Weights.IMAGENET1K_V1)
+    util.save_model_state(os.path.join(output_path, "densenet121_imagenet_v1.model.pt"), model.state_dict(), model_name=str(ModelType.densenet121.name))
+
