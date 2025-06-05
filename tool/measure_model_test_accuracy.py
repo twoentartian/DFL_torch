@@ -9,15 +9,15 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from py_src import ml_setup, util
 
 
-def testing_model(model, current_ml_setup, test_training):
+def testing_model(model, current_ml_setup, test_training, batch_size):
     testing_dataset = current_ml_setup.testing_data
     training_dataset = current_ml_setup.training_data
     criterion = current_ml_setup.criterion
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    dataloader_test = DataLoader(testing_dataset, batch_size=100, shuffle=True, num_workers=8, persistent_workers=True)
+    dataloader_test = DataLoader(testing_dataset, batch_size=batch_size, shuffle=True, num_workers=8, persistent_workers=True)
     if test_training:
-        dataloader_train = DataLoader(training_dataset, batch_size=100, shuffle=True, num_workers=8, persistent_workers=True)
+        dataloader_train = DataLoader(training_dataset, batch_size=batch_size, shuffle=True, num_workers=8, persistent_workers=True)
     else:
         dataloader_train = None
 
@@ -65,6 +65,7 @@ if __name__ == "__main__":
     parser.add_argument("-d", "--dataset_type", type=str, default="default")
     parser.add_argument("-t", "--training", action="store_true")
     parser.add_argument("-P", "--torch_preset_version", type=int, default=None, help='specify the pytorch data training preset version')
+    parser.add_argument("-b", "--batch_size", type=int, default=100, help='batch size')
 
     args = parser.parse_args()
 
@@ -85,7 +86,7 @@ if __name__ == "__main__":
     model = current_ml_setup.model
     model.load_state_dict(model_stat)
 
-    test_loss, test_accuracy, train_loss, train_accuracy = testing_model(model, current_ml_setup, args.training)
+    test_loss, test_accuracy, train_loss, train_accuracy = testing_model(model, current_ml_setup, args.training, args.batch_size)
     print(f"test loss={test_loss}, test acc={test_accuracy}")
     print(f"train loss={train_loss}, train acc={train_accuracy}")
     if test_accuracy * train_accuracy >0.001:
