@@ -657,6 +657,11 @@ if __name__ == '__main__':
     runtime_parameter.pytorch_preset_version = args.torch_preset_version
     runtime_parameter.across_vs_lr_policy = args.across_vs_lr_policy
 
+    # sanity check
+    if runtime_parameter.across_vs_lr_policy == 'std':
+        if args.end_folder not in ['origin', 'inf', 'mean']:
+            raise RuntimeError('setting across_vs_lr_policy is not allowed for moving model towards origin/mean/inf')
+
     # find all paths to process
     if args.start_folder is not None and args.end_folder is not None:
         start_folder = args.start_folder
