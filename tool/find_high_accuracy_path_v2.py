@@ -5,6 +5,7 @@ import shutil
 import sys
 from typing import Optional
 
+import numpy
 import torch
 import concurrent.futures
 import copy
@@ -488,7 +489,12 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
                         continue  # skip norm layers
                     if 'weight' in name and param.requires_grad:  # Only adjust weights, not biases
                         current_layer_variance = torch.var(param.data).item()
-                        new_lr = initial_optimizer_state['lr'] / target_variance[name] * current_layer_variance
+                        if runtime_parameter.across_vs_lr_policy == 'var':
+                            new_lr = initial_optimizer_state['lr'] * current_layer_variance / target_variance[name]
+                        elif runtime_parameter.across_vs_lr_policy == 'std':
+                            new_lr = initial_optimizer_state['lr'] * numpy.sqrt(current_layer_variance / target_variance[name])
+                        else:
+                            raise NotImplementedError
                         child_logger.info(f"tick {runtime_parameter.current_tick}: update lr for layer {name} to {new_lr:.3E}")
                         param_group['lr'] = new_lr
 
@@ -616,6 +622,7 @@ if __name__ == '__main__':
     parser.add_argument("--store_top_accuracy_model_count", type=int, default=5, help='save n highest test accuracy models')
     parser.add_argument("--checkpoint_interval", type=int, default=10, help='save a checkpoint every n ticks')
     parser.add_argument("--continue_from_checkpoint", type=str, help='continue from a checkpoint file')
+    parser.add_argument("-A", "--across_vs_lr_policy", type=str, choices=['std', 'var'], default='var', help='set the lr to follow variance or standard derivation of variance sphere')
 
     parser.add_argument( "--test_interval", type=int, default=1, help='specify the interval of measuring model on the test dataset.')
     parser.add_argument("--test_batch", type=int, default=100, help='specify the batch size of measuring model on the test dataset.')
@@ -648,6 +655,7 @@ if __name__ == '__main__':
     runtime_parameter.store_top_accuracy_model_count = args.store_top_accuracy_model_count
     runtime_parameter.checkpoint_interval = args.checkpoint_interval
     runtime_parameter.pytorch_preset_version = args.torch_preset_version
+    runtime_parameter.across_vs_lr_policy = args.across_vs_lr_policy
 
     # find all paths to process
     if args.start_folder is not None and args.end_folder is not None:

@@ -29,6 +29,7 @@ class RuntimeParameters(object):
     store_top_accuracy_model_count = None
     checkpoint_interval = None
     task_name = None
+    across_vs_lr_policy = None
 
     """real-time values"""
     current_tick = None
