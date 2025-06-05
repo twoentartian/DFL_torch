@@ -59,3 +59,8 @@ if __name__ == "__main__":
     model = models.densenet121(weights=models.DenseNet121_Weights.IMAGENET1K_V1)
     util.save_model_state(os.path.join(output_path, "densenet121_imagenet_v1.model.pt"), model.state_dict(), model_name=str(ModelType.densenet121.name))
 
+    model = models.regnet_y_400mf(weights=models.RegNet_Y_400MF_Weights.IMAGENET1K_V1)
+    util.save_model_state(os.path.join(output_path, "regnet_y_400_mf_imagenet_v1.model.pt"), model.state_dict(), model_name=str(ModelType.regnet_y_400mf.name))
+
+    model = models.regnet_y_400mf(weights=models.RegNet_Y_400MF_Weights.IMAGENET1K_V2)
+    util.save_model_state(os.path.join(output_path, "regnet_y_400_mf_imagenet_v2.model.pt"), model.state_dict(), model_name=str(ModelType.regnet_y_400mf.name))
