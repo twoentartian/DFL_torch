@@ -29,6 +29,7 @@ class RuntimeParameters(object):
     store_top_accuracy_model_count = None
     checkpoint_interval = None
     task_name = None
+    silence_mode = None
     across_vs_lr_policy = None
 
     """real-time values"""
@@ -53,6 +54,7 @@ class RuntimeParameters(object):
 class Checkpoint(object):
     current_model_stat = None
     current_optimizer_stat = None
+    start_model_stat = None
     end_model_stat = None
     init_model_stat = None
 

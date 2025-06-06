@@ -7,6 +7,7 @@ from typing import Optional
 
 import numpy
 import torch
+import torch.nn as nn
 import concurrent.futures
 import copy
 import time
@@ -26,6 +27,7 @@ from py_src.ml_setup import MlSetup
 logger = logging.getLogger("find_high_accuracy_path_v2")
 
 REPORT_FINISH_TIME_PER_TICK = 100
+ENABLE_REBUILD_NORM = False
 
 def load_existing_optimizer_stat(optimizer, optimizer_stat_dict_path, logger=None):
     assert os.path.exists(optimizer_stat_dict_path), f'starting optimizer {optimizer_stat_dict_path} is missing'
@@ -86,6 +88,27 @@ def find_layers_according_to_name_and_keyword(model_state_dict, layer_names, lay
         if l not in found_layers:
             ignored_layers.append(l)
     return found_layers, ignored_layers
+
+
+def find_normalization_layers(model):
+    def is_normalization_layer(layer):
+        normalization_layers = (
+            nn.BatchNorm1d,
+            nn.BatchNorm2d,
+            nn.BatchNorm3d,
+            nn.LayerNorm,
+            nn.GroupNorm,
+            nn.InstanceNorm1d,
+            nn.InstanceNorm2d,
+            nn.InstanceNorm3d,
+        )
+        return isinstance(layer, normalization_layers)
+    output = []
+    for name, module in model.named_modules():
+        if is_normalization_layer(module):
+            output.append(name)
+    return output
+
 
 def rebuild_norm_layer_function(model: torch.nn.Module, initial_model_state, start_model_state, rebuild_norm_optimizer: torch.optim.Optimizer,
                                 training_optimizer_state, norm_layers, ml_setup: MlSetup,
@@ -250,6 +273,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
         assert checkpoint_content is not None
         start_model_stat_dict = checkpoint_content.current_model_stat
         initial_model_stat = checkpoint_content.init_model_stat
+        starting_point = checkpoint_content.start_model_stat
         end_model_stat_dict = checkpoint_content.end_model_stat
         start_model_name = checkpoint_content.current_runtime_parameter.model_name
         dataset_name = checkpoint_content.current_runtime_parameter.dataset_name
@@ -388,6 +412,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
         parameter_updated = False
         child_logger.info(f"tick: {runtime_parameter.current_tick}")
 
+        """save checkpoint file"""
         if runtime_parameter.current_tick % runtime_parameter.checkpoint_interval == 0:
             checkpoint_file_path = os.path.join(arg_output_folder_path, f"checkpoint_{runtime_parameter.current_tick}.checkpoint.pt")
             if latest_check_point_file_path is not None:
@@ -402,6 +427,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             check_point_file.current_move_parameter = parameter_move
             check_point_file.current_train_parameter = parameter_train
             check_point_file.current_rebuild_norm_parameter = parameter_rebuild_norm
+            check_point_file.start_model_stat = starting_point
             check_point_file.end_model_stat = end_model_stat_dict
             check_point_file.init_model_stat = initial_model_stat
             torch.save(check_point_file, checkpoint_file_path)
@@ -434,10 +460,16 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             # update layers to move
             ignore_move_layers, moved_layers = find_layers_according_to_name_and_keyword(start_model_stat_dict, parameter_move.layer_skip_move, parameter_move.layer_skip_move_keyword)
             child_logger.info(f"updating layers to move at tick {runtime_parameter.current_tick}")
+            if runtime_parameter.work_mode in [WorkMode.to_inf, WorkMode.to_mean, WorkMode.to_origin]:
+                norm_layers = find_normalization_layers(target_model)
+                child_logger.info(f"norm layers added to ignore moving layer list (found by built-in norm layer detector): {norm_layers}")
+                ignore_move_layers = ignore_move_layers.extend(norm_layers)
             child_logger.info(f"ignore moving {len(ignore_move_layers)} layers: {ignore_move_layers}")
             child_logger.info(f"plan to move {len(moved_layers)} layers: {moved_layers}")
+            if not runtime_parameter.silence_mode:
+                input("Please check above information and press Enter to continue, or press Ctrl+C to quit")
         new_parameter_rebuild_norm: ParameterRebuildNorm = config_file.get_parameter_rebuild_norm(runtime_parameter, current_ml_setup)
-        if new_parameter_rebuild_norm is not None:
+        if (new_parameter_rebuild_norm is not None) and ENABLE_REBUILD_NORM:
             parameter_updated = True
             child_logger.info(f"update parameter (rebuild_norm) at tick {runtime_parameter.current_tick}")
             parameter_rebuild_norm = new_parameter_rebuild_norm
@@ -446,6 +478,8 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             child_logger.info(f"updating norm layers list at tick {runtime_parameter.current_tick}")
             child_logger.info(f"totally {len(norm_layers)} layers to rebuild: {norm_layers}")
             child_logger.info(f"totally {len(non_norm_layers)} non-rebuild layers: {non_norm_layers}")
+            if not runtime_parameter.silence_mode:
+                input("Please check above information and press Enter to continue, or press Ctrl+C to quit")
 
         """if this is the first tick"""
         if runtime_parameter.current_tick == 0:
@@ -546,7 +580,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
 
         """rebuilding normalization"""
         if not runtime_parameter.debug_check_config_mode:
-            if parameter_rebuild_norm.rebuild_norm_for_max_rounds != 0:
+            if ENABLE_REBUILD_NORM and (parameter_rebuild_norm.rebuild_norm_for_max_rounds != 0):
                 optimizer_for_rebuild_norm_new = config_file.get_optimizer_rebuild_norm(runtime_parameter, current_ml_setup, target_model.parameters())
                 if optimizer_for_rebuild_norm_new is not None:
                     optimizer_for_rebuild_norm = optimizer_for_rebuild_norm_new
@@ -627,6 +661,7 @@ if __name__ == '__main__':
     parser.add_argument( "--test_interval", type=int, default=1, help='specify the interval of measuring model on the test dataset.')
     parser.add_argument("--test_batch", type=int, default=100, help='specify the batch size of measuring model on the test dataset.')
     parser.add_argument("-P", "--torch_preset_version", type=int, default=None, help='specify the pytorch data training preset version')
+    parser.add_argument("-S", "--silence", action='store_true', help='enable silence mode, do not interact with users, all checks will be bypassed')
 
     args = parser.parse_args()
 
