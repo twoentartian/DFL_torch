@@ -758,10 +758,14 @@ if __name__ == '__main__':
         if runtime_parameter.worker_count > paths_to_find_count:
             runtime_parameter.worker_count = paths_to_find_count
         logger.info(f"worker: {runtime_parameter.worker_count}")
-        with concurrent.futures.ProcessPoolExecutor(max_workers=runtime_parameter.worker_count) as executor:
-            futures = [executor.submit(process_file_func, index, runtime_parameter, None) for index, path in enumerate(paths_to_find)]
-            for future in concurrent.futures.as_completed(futures):
-                result = future.result()
+        if runtime_parameter.worker_count == 1:
+            process_file_func(0, runtime_parameter, None)
+        else:
+            assert runtime_parameter.silence_mode, "silence_mode must be set for multiple workers"
+            with concurrent.futures.ProcessPoolExecutor(max_workers=runtime_parameter.worker_count) as executor:
+                futures = [executor.submit(process_file_func, index, runtime_parameter, None) for index, path in enumerate(paths_to_find)]
+                for future in concurrent.futures.as_completed(futures):
+                    result = future.result()
 
 
 
