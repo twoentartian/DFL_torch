@@ -458,7 +458,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             child_logger.info(f"update parameter (move) at tick {runtime_parameter.current_tick}")
             parameter_move = new_parameter_move
             # update layers to move
-            ignore_move_layers, moved_layers = find_layers_according_to_name_and_keyword(start_model_stat_dict, parameter_move.layer_skip_move, parameter_move.layer_skip_move_keyword)
+            ignore_move_layers, _ = find_layers_according_to_name_and_keyword(start_model_stat_dict, parameter_move.layer_skip_move, parameter_move.layer_skip_move_keyword)
             child_logger.info(f"updating layers to move at tick {runtime_parameter.current_tick}")
             if runtime_parameter.work_mode in [WorkMode.to_inf, WorkMode.to_mean, WorkMode.to_origin]:
                 norm_layers = find_normalization_layers(target_model)
@@ -467,6 +467,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
                 ignore_move_layers.extend(norm_layer_names)
                 ignore_move_layers = list(set(ignore_move_layers))
             child_logger.info(f"ignore moving {len(ignore_move_layers)} layers: {ignore_move_layers}")
+            moved_layers = list(set(start_model_stat_dict.keys()) - set(ignore_move_layers))
             child_logger.info(f"plan to move {len(moved_layers)} layers: {moved_layers}")
             if not runtime_parameter.silence_mode:
                 input("Please check above information and press Enter to continue, or press Ctrl+C to quit")
