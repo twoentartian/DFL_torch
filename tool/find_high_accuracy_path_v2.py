@@ -462,9 +462,10 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             child_logger.info(f"updating layers to move at tick {runtime_parameter.current_tick}")
             if runtime_parameter.work_mode in [WorkMode.to_inf, WorkMode.to_mean, WorkMode.to_origin]:
                 norm_layers = find_normalization_layers(target_model)
-                child_logger.info(f"norm layers added to ignore moving layer list (found by built-in norm layer detector): {norm_layers}")
                 norm_layer_names, _ = find_layers_according_to_name_and_keyword(start_model_stat_dict, [], norm_layers)
-                ignore_move_layers = ignore_move_layers.extend(norm_layer_names)
+                child_logger.info(f"norm layers added to ignore moving layer list (found by built-in norm layer detector): {norm_layer_names}")
+                ignore_move_layers.extend(norm_layer_names)
+                ignore_move_layers = list(set(ignore_move_layers))
             child_logger.info(f"ignore moving {len(ignore_move_layers)} layers: {ignore_move_layers}")
             child_logger.info(f"plan to move {len(moved_layers)} layers: {moved_layers}")
             if not runtime_parameter.silence_mode:
