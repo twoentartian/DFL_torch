@@ -453,6 +453,9 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             child_logger.info(f"update parameter (train) at tick {runtime_parameter.current_tick}")
             parameter_train = new_parameter_train
         new_parameter_move: ParameterMove = config_file.get_parameter_move(runtime_parameter, current_ml_setup)
+
+        norm_layers = find_normalization_layers(target_model)
+        norm_layer_names, _ = find_layers_according_to_name_and_keyword(start_model_stat_dict, [], norm_layers)
         if new_parameter_move is not None:
             parameter_updated = True
             child_logger.info(f"update parameter (move) at tick {runtime_parameter.current_tick}")
@@ -461,8 +464,6 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             ignore_move_layers, _ = find_layers_according_to_name_and_keyword(start_model_stat_dict, parameter_move.layer_skip_move, parameter_move.layer_skip_move_keyword)
             child_logger.info(f"updating layers to move at tick {runtime_parameter.current_tick}")
             if runtime_parameter.work_mode in [WorkMode.to_inf, WorkMode.to_mean, WorkMode.to_origin]:
-                norm_layers = find_normalization_layers(target_model)
-                norm_layer_names, _ = find_layers_according_to_name_and_keyword(start_model_stat_dict, [], norm_layers)
                 child_logger.info(f"norm layers added to ignore moving layer list (found by built-in norm layer detector): {norm_layer_names}")
                 ignore_move_layers.extend(norm_layer_names)
                 ignore_move_layers = list(set(ignore_move_layers))
@@ -472,15 +473,18 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             if not runtime_parameter.silence_mode:
                 input("Please check above information and press Enter to continue, or press Ctrl+C to quit")
         new_parameter_rebuild_norm: ParameterRebuildNorm = config_file.get_parameter_rebuild_norm(runtime_parameter, current_ml_setup)
-        if (new_parameter_rebuild_norm is not None) and ENABLE_REBUILD_NORM:
+        if (new_parameter_rebuild_norm is not None):
             parameter_updated = True
             child_logger.info(f"update parameter (rebuild_norm) at tick {runtime_parameter.current_tick}")
             parameter_rebuild_norm = new_parameter_rebuild_norm
             # update norm layer list
-            norm_layers, non_norm_layers = find_layers_according_to_name_and_keyword(start_model_stat_dict, parameter_rebuild_norm.rebuild_norm_layer, parameter_rebuild_norm.rebuild_norm_layer_keyword)
             child_logger.info(f"updating norm layers list at tick {runtime_parameter.current_tick}")
-            child_logger.info(f"totally {len(norm_layers)} layers to rebuild: {norm_layers}")
-            child_logger.info(f"totally {len(non_norm_layers)} non-rebuild layers: {non_norm_layers}")
+            if ENABLE_REBUILD_NORM:
+                extra_norm_layers, _ = find_layers_according_to_name_and_keyword(start_model_stat_dict, parameter_rebuild_norm.rebuild_norm_layer, parameter_rebuild_norm.rebuild_norm_layer_keyword)
+                norm_layer_names.extend(extra_norm_layers)
+                norm_layer_names = list(set(norm_layer_names))
+            non_norm_layers = list(set(start_model_stat_dict.keys()) - set(norm_layer_names))
+            child_logger.info(f"totally {len(norm_layer_names)} layers to rebuild: {norm_layer_names}")
             if not runtime_parameter.silence_mode:
                 input("Please check above information and press Enter to continue, or press Ctrl+C to quit")
 
@@ -522,7 +526,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
         if not runtime_parameter.debug_check_config_mode:
             if runtime_parameter.work_mode == WorkMode.to_inf or runtime_parameter.work_mode == WorkMode.to_origin:
                 for param_group, initial_optimizer_state, (name, param) in zip(optimizer.param_groups, initial_optimizer_state_dict['param_groups'], target_model.named_parameters()):
-                    if special_torch_layers.is_keyword_in_layer_name(name, parameter_rebuild_norm.rebuild_norm_layer_keyword):
+                    if name in norm_layer_names:
                         continue  # skip norm layers
                     if 'weight' in name and param.requires_grad:  # Only adjust weights, not biases
                         current_layer_variance = torch.var(param.data).item()
@@ -589,7 +593,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
                     optimizer_for_rebuild_norm = optimizer_for_rebuild_norm_new
                 training_optimizer_stat = optimizer.state_dict()
                 rebuild_norm_layer_function(target_model, initial_model_stat, start_model_stat_dict, optimizer_for_rebuild_norm, training_optimizer_stat,
-                                            norm_layers, current_ml_setup, dataloader, parameter_rebuild_norm, runtime_parameter, device, logger=child_logger)
+                                            norm_layer_names, current_ml_setup, dataloader, parameter_rebuild_norm, runtime_parameter, device, logger=child_logger)
 
         """variance correction"""
         if not runtime_parameter.debug_check_config_mode:
