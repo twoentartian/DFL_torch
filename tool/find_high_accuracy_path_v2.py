@@ -479,14 +479,14 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             parameter_rebuild_norm = new_parameter_rebuild_norm
             # update norm layer list
             child_logger.info(f"updating norm layers list at tick {runtime_parameter.current_tick}")
-            if ENABLE_REBUILD_NORM:
+            if ENABLE_REBUILD_NORM and parameter_rebuild_norm.rebuild_norm_for_max_rounds != 0:
                 extra_norm_layers, _ = find_layers_according_to_name_and_keyword(start_model_stat_dict, parameter_rebuild_norm.rebuild_norm_layer, parameter_rebuild_norm.rebuild_norm_layer_keyword)
                 norm_layer_names.extend(extra_norm_layers)
                 norm_layer_names = list(set(norm_layer_names))
                 non_norm_layers = list(set(start_model_stat_dict.keys()) - set(norm_layer_names))
                 child_logger.info(f"totally {len(norm_layer_names)} layers to rebuild: {norm_layer_names}")
-            if not runtime_parameter.silence_mode:
-                input("Please check above information and press Enter to continue, or press Ctrl+C to quit")
+                if not runtime_parameter.silence_mode:
+                    input("Please check above information and press Enter to continue, or press Ctrl+C to quit")
 
         """if this is the first tick"""
         if runtime_parameter.current_tick == 0:
