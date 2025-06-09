@@ -70,7 +70,7 @@ def train_one_epoch(model, criterion, optimizer, data_loader, device, epoch, arg
 
         """variance correction"""
         if variance_correction:
-            target_model_stat_dict = model_variance_correct.VarianceCorrector.scale_model_stat_to_variance(model.state_dict(), target_variance, ignore_layer_list=norm_layer_names)
+            target_model_stat_dict = model_variance_correct.VarianceCorrector.scale_model_stat_to_variance(model.state_dict(), target_variance)
             model.load_state_dict(target_model_stat_dict)
 
         if model_ema and i % args.model_ema_steps == 0:
