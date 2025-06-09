@@ -69,22 +69,25 @@ class VarianceCorrector:
 
     @staticmethod
     def scale_tensor_to_variance(layer_tensor, target_variance):
-        epsilon = 0.0001
-        if layer_tensor.numel() == 1:
-            assert target_variance == 0.0, f"var {target_variance} != 0.0"
-            rescaled_tensor = layer_tensor
-        else:
-            current_mean = torch.mean(layer_tensor)
-            current_variance = torch.var(layer_tensor)
-            scaling_factor = torch.sqrt( (target_variance + epsilon) / (current_variance + epsilon) )
-            rescaled_tensor = (layer_tensor - current_mean) * scaling_factor + current_mean
+        with torch.no_grad():
+            epsilon = 0.0001
+            if layer_tensor.numel() == 1:
+                assert target_variance == 0.0, f"var {target_variance} != 0.0"
+                rescaled_tensor = layer_tensor
+            else:
+                current_mean = torch.mean(layer_tensor)
+                current_variance = torch.var(layer_tensor)
+                scaling_factor = torch.sqrt( (target_variance + epsilon) / (current_variance + epsilon) )
+                rescaled_tensor = (layer_tensor - current_mean) * scaling_factor + current_mean
         return rescaled_tensor
 
     @staticmethod
-    def scale_model_stat_to_variance(model_stat, target_variance):
+    def scale_model_stat_to_variance(model_stat, target_variance, ignore_layer_list=None):
         output_model_stat = copy.deepcopy(model_stat)
         for layer_name, single_layer_variance in target_variance.items():
             if special_torch_layers.is_ignored_layer_variance_correction(layer_name):
+                continue
+            if layer_name in [ignore_layer_list]:
                 continue
             output_model_stat[layer_name] = VarianceCorrector.scale_tensor_to_variance(model_stat[layer_name], single_layer_variance)
         return output_model_stat

@@ -1,3 +1,5 @@
+import torch.nn as nn
+
 def is_keyword_in_layer_name(layer_name, keywords):
     output = False
     for i in keywords:
@@ -30,4 +32,48 @@ def is_normalization_layer(model_name, layer_name):
         if i in layer_name:
             output = True
             break
+    return output
+
+
+
+
+def find_layers_according_to_name_and_keyword(model_state_dict, layer_names, layer_name_keywords):
+    found_layers = []
+    ignored_layers = []
+    if layer_names is None:
+        _layer_names = []
+    else:
+        _layer_names = layer_names
+    if layer_name_keywords is None:
+        _layer_name_keywords = []
+    else:
+        _layer_name_keywords = layer_name_keywords
+    for l in model_state_dict.keys():
+        if l in _layer_names:
+            found_layers.append(l)
+        if is_keyword_in_layer_name(l, _layer_name_keywords):
+            found_layers.append(l)
+    for l in model_state_dict.keys():
+        if l not in found_layers:
+            ignored_layers.append(l)
+    return found_layers, ignored_layers
+
+
+def find_normalization_layers(model):
+    def is_normalization_layer(layer):
+        normalization_layers = (
+            nn.BatchNorm1d,
+            nn.BatchNorm2d,
+            nn.BatchNorm3d,
+            nn.LayerNorm,
+            nn.GroupNorm,
+            nn.InstanceNorm1d,
+            nn.InstanceNorm2d,
+            nn.InstanceNorm3d,
+        )
+        return isinstance(layer, normalization_layers)
+    output = []
+    for name, module in model.named_modules():
+        if is_normalization_layer(module):
+            output.append(name)
     return output

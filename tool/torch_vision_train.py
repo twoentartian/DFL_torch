@@ -19,6 +19,7 @@ from py_src.torch_vision_train import get_mixup_cutmix
 import py_src.torch_vision_train.presets as presets
 import py_src.torch_vision_train.utils as utils
 from py_src.torch_vision_train.sampler import RASampler
+from py_src import special_torch_layers
 
 
 def train_one_epoch(model, criterion, optimizer, data_loader, device, epoch, args, model_ema=None, scaler=None):
@@ -32,6 +33,13 @@ def train_one_epoch(model, criterion, optimizer, data_loader, device, epoch, arg
     """record variance"""
     variance_correction = args.variance_correction
     print(f"variance correction is {variance_correction}.")
+    norm_layer_names = []
+    if variance_correction:
+        norm_layers = special_torch_layers.find_normalization_layers(model)
+        norm_layer_names, _ = special_torch_layers.find_layers_according_to_name_and_keyword(model.state_dict(), [], norm_layers)
+        print(f"totally {len(norm_layer_names)} normalization layers: {norm_layer_names}. These layers are excluded from variance correction")
+        input("Please check above information and press Enter to continue, or press Ctrl+C to quit")
+
     target_variance = None
     if variance_correction:
         variance_record = model_variance_correct.VarianceCorrector(model_variance_correct.VarianceCorrectionType.FollowOthers)
@@ -62,7 +70,7 @@ def train_one_epoch(model, criterion, optimizer, data_loader, device, epoch, arg
 
         """variance correction"""
         if variance_correction:
-            target_model_stat_dict = model_variance_correct.VarianceCorrector.scale_model_stat_to_variance(model.state_dict(), target_variance)
+            target_model_stat_dict = model_variance_correct.VarianceCorrector.scale_model_stat_to_variance(model.state_dict(), target_variance, ignore_layer_list=norm_layer_names)
             model.load_state_dict(target_model_stat_dict)
 
         if model_ema and i % args.model_ema_steps == 0:

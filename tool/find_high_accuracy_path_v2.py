@@ -68,47 +68,6 @@ def pre_train(model, optimizer, criterion, dataloader, device, cpu_device, logge
     if logger is not None:
         logger.info(f"pre training finished")
 
-def find_layers_according_to_name_and_keyword(model_state_dict, layer_names, layer_name_keywords):
-    found_layers = []
-    ignored_layers = []
-    if layer_names is None:
-        _layer_names = []
-    else:
-        _layer_names = layer_names
-    if layer_name_keywords is None:
-        _layer_name_keywords = []
-    else:
-        _layer_name_keywords = layer_name_keywords
-    for l in model_state_dict.keys():
-        if l in _layer_names:
-            found_layers.append(l)
-        if special_torch_layers.is_keyword_in_layer_name(l, _layer_name_keywords):
-            found_layers.append(l)
-    for l in model_state_dict.keys():
-        if l not in found_layers:
-            ignored_layers.append(l)
-    return found_layers, ignored_layers
-
-
-def find_normalization_layers(model):
-    def is_normalization_layer(layer):
-        normalization_layers = (
-            nn.BatchNorm1d,
-            nn.BatchNorm2d,
-            nn.BatchNorm3d,
-            nn.LayerNorm,
-            nn.GroupNorm,
-            nn.InstanceNorm1d,
-            nn.InstanceNorm2d,
-            nn.InstanceNorm3d,
-        )
-        return isinstance(layer, normalization_layers)
-    output = []
-    for name, module in model.named_modules():
-        if is_normalization_layer(module):
-            output.append(name)
-    return output
-
 
 def rebuild_norm_layer_function(model: torch.nn.Module, initial_model_state, start_model_state, rebuild_norm_optimizer: torch.optim.Optimizer,
                                 training_optimizer_state, norm_layers, ml_setup: MlSetup,
@@ -454,15 +413,15 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             parameter_train = new_parameter_train
         new_parameter_move: ParameterMove = config_file.get_parameter_move(runtime_parameter, current_ml_setup)
 
-        norm_layers = find_normalization_layers(target_model)
-        norm_layer_names, _ = find_layers_according_to_name_and_keyword(start_model_stat_dict, [], norm_layers)
+        norm_layers = special_torch_layers.find_normalization_layers(target_model)
+        norm_layer_names, _ = special_torch_layers.find_layers_according_to_name_and_keyword(start_model_stat_dict, [], norm_layers)
         norm_layer_names.sort()
         if new_parameter_move is not None:
             parameter_updated = True
             child_logger.info(f"update parameter (move) at tick {runtime_parameter.current_tick}")
             parameter_move = new_parameter_move
             # update layers to move
-            ignore_move_layers, _ = find_layers_according_to_name_and_keyword(start_model_stat_dict, parameter_move.layer_skip_move, parameter_move.layer_skip_move_keyword)
+            ignore_move_layers, _ = special_torch_layers.find_layers_according_to_name_and_keyword(start_model_stat_dict, parameter_move.layer_skip_move, parameter_move.layer_skip_move_keyword)
             child_logger.info(f"updating layers to move at tick {runtime_parameter.current_tick}")
             if runtime_parameter.work_mode in [WorkMode.to_inf, WorkMode.to_mean, WorkMode.to_origin]:
                 child_logger.info(f"norm layers added to ignore moving layer list (found by built-in norm layer detector)[{len(norm_layer_names)} layers]: {norm_layer_names}")
@@ -483,7 +442,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             # update norm layer list
             child_logger.info(f"updating norm layers list at tick {runtime_parameter.current_tick}")
             if ENABLE_REBUILD_NORM and parameter_rebuild_norm.rebuild_norm_for_max_rounds != 0:
-                extra_norm_layers, _ = find_layers_according_to_name_and_keyword(start_model_stat_dict, parameter_rebuild_norm.rebuild_norm_layer, parameter_rebuild_norm.rebuild_norm_layer_keyword)
+                extra_norm_layers, _ = special_torch_layers.find_layers_according_to_name_and_keyword(start_model_stat_dict, parameter_rebuild_norm.rebuild_norm_layer, parameter_rebuild_norm.rebuild_norm_layer_keyword)
                 norm_layer_names.extend(extra_norm_layers)
                 norm_layer_names = list(set(norm_layer_names))
                 non_norm_layers = list(set(start_model_stat_dict.keys()) - set(norm_layer_names))
@@ -522,7 +481,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
         if not runtime_parameter.debug_check_config_mode:
             if runtime_parameter.work_mode == WorkMode.to_certain_model:
                 child_logger.info(f"current tick: {runtime_parameter.current_tick}, rescale variance")
-                target_model_stat_dict = model_variance_correct.VarianceCorrector.scale_model_stat_to_variance(target_model.state_dict(), target_variance)
+                target_model_stat_dict = model_variance_correct.VarianceCorrector.scale_model_stat_to_variance(target_model.state_dict(), target_variance, ignore_layer_list=ignore_move_layers)
                 target_model.load_state_dict(target_model_stat_dict)
 
         """update learning rate"""
@@ -602,7 +561,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
         if not runtime_parameter.debug_check_config_mode:
             if runtime_parameter.work_mode == WorkMode.to_certain_model:
                 child_logger.info(f"current tick: {runtime_parameter.current_tick}, rescale variance")
-                target_model_stat_dict = model_variance_correct.VarianceCorrector.scale_model_stat_to_variance(target_model.state_dict(), target_variance)
+                target_model_stat_dict = model_variance_correct.VarianceCorrector.scale_model_stat_to_variance(target_model.state_dict(), target_variance, ignore_layer_list=ignore_move_layers)
                 target_model.load_state_dict(target_model_stat_dict)
 
         """service"""
