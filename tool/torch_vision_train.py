@@ -32,6 +32,7 @@ def train_one_epoch(model, criterion, optimizer, data_loader, device, epoch, arg
 
     """record variance"""
     variance_correction = args.variance_correction
+    variance_correction_on_norm = args.variance_correction_on_norm
     print(f"variance correction is {variance_correction}.")
     if not hasattr(train_one_epoch, 'norm_layer_names'):
         train_one_epoch.norm_layer_names = None
@@ -74,7 +75,12 @@ def train_one_epoch(model, criterion, optimizer, data_loader, device, epoch, arg
 
         """variance correction"""
         if variance_correction:
-            target_model_stat_dict = model_variance_correct.VarianceCorrector.scale_model_stat_to_variance(model.state_dict(), target_variance, ignore_layer_list=train_one_epoch.norm_layer_names)
+            if variance_correction_on_norm:
+                target_model_stat_dict = model_variance_correct.VarianceCorrector.scale_model_stat_to_variance(
+                    model.state_dict(), target_variance, ignore_layer_list=[])
+            else:
+                target_model_stat_dict = model_variance_correct.VarianceCorrector.scale_model_stat_to_variance(
+                    model.state_dict(), target_variance, ignore_layer_list=train_one_epoch.norm_layer_names)
             model.load_state_dict(target_model_stat_dict)
 
         if model_ema and i % args.model_ema_steps == 0:
@@ -568,6 +574,7 @@ def get_args_parser(add_help=True):
     parser.add_argument("--use-v2", action="store_true", help="Use V2 transforms")
     parser.add_argument("--load-existing-weights", default=None, type=str, help="load existing model weights from path")
     parser.add_argument("--variance-correction", action="store_true", help="enable variance correction") #https://arxiv.org/abs/2404.04616
+    parser.add_argument("--variance-correction-on-norm", action="store_true", help="enable variance correction on norm layers")
     return parser
 
 
