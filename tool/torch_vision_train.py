@@ -39,7 +39,11 @@ def train_one_epoch(model, criterion, optimizer, data_loader, device, epoch, arg
         if variance_correction:
             norm_layers = special_torch_layers.find_normalization_layers(model)
             norm_layer_names, _ = special_torch_layers.find_layers_according_to_name_and_keyword(model.state_dict(), [], norm_layers)
-            print(f"totally {len(norm_layer_names)} normalization layers: {norm_layer_names}. These layers are excluded from variance correction")
+            print(f"totally {len(norm_layer_names)} normalization layers: {norm_layer_names}.")
+            if variance_correction_on_norm:
+                print(f"Above layers are included for variance correction.")
+            else:
+                print(f"Above layers are excluded from variance correction.")
             input("Please check above information and press Enter to continue, or press Ctrl+C to quit")
             train_one_epoch.norm_layer_names = norm_layer_names
         else:
