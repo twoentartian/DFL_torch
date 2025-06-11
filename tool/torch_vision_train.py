@@ -578,7 +578,7 @@ def get_args_parser(add_help=True):
     parser.add_argument("--use-v2", action="store_true", help="Use V2 transforms")
     parser.add_argument("--load-existing-weights", default=None, type=str, help="load existing model weights from path")
     parser.add_argument("--variance-correction", action="store_true", help="enable variance correction") #https://arxiv.org/abs/2404.04616
-    parser.add_argument("--variance-correction-on-norm", action="store_true", help="enable variance correction on norm layers")
+    parser.add_argument("--variance-correction-on-norm", type=bool, default=True, help="enable variance correction on norm layers")
     return parser
 
 
