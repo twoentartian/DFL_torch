@@ -64,3 +64,6 @@ if __name__ == "__main__":
 
     model = models.regnet_y_400mf(weights=models.RegNet_Y_400MF_Weights.IMAGENET1K_V2)
     util.save_model_state(os.path.join(output_path, "regnet_y_400_mf_imagenet_v2.model.pt"), model.state_dict(), model_name=str(ModelType.regnet_y_400mf.name))
+
+    model = models.convnext_tiny(weights=models.ConvNeXt_Tiny_Weights.IMAGENET1K_V1)
+    util.save_model_state(os.path.join(output_path, "convnext_tiny_imagenet_v1.model.pt"), model.state_dict(), model_name=str(ModelType.convnext_tiny.name))
