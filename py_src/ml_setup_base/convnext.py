@@ -9,7 +9,7 @@ def conveNeXt_tiny_imagenet1k():
     output_ml_setup = MlSetup()
     dataset = ml_setup_dataset.dataset_imagenet1k_custom(auto_augment_policy='ta_wide', random_erase_prob=0.1, val_resize_size=232, train_crop_size=176)
 
-    output_ml_setup.model = models.regnet_y_400mf(progress=False, num_classes=1000)
+    output_ml_setup.model = models.convnext_tiny(progress=False, num_classes=1000)
     output_ml_setup.model_name = str(ModelType.convnext_tiny.name)
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.training_batch_size = 128
