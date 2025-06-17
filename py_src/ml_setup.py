@@ -180,7 +180,7 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default, p
             raise NotImplementedError
     elif model_name == ModelType.alexnet:
         if dataset_type in [dataset_type.default, dataset_type.imagenet1k]:
-            output_ml_setup = alexnet_imagenet1k
+            output_ml_setup = alexnet_imagenet1k()
         else:
             raise NotImplementedError
     else:
