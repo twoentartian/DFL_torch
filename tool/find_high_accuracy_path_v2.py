@@ -660,6 +660,7 @@ if __name__ == '__main__':
     runtime_parameter.checkpoint_interval = args.checkpoint_interval
     runtime_parameter.pytorch_preset_version = args.torch_preset_version
     runtime_parameter.across_vs_lr_policy = args.across_vs_lr_policy
+    runtime_parameter.silence_mode = args.silence
 
     # sanity check
     if runtime_parameter.across_vs_lr_policy == 'std':
