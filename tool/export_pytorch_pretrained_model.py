@@ -70,3 +70,9 @@ if __name__ == "__main__":
 
     model = models.alexnet(weights=models.AlexNet_Weights.IMAGENET1K_V1)
     util.save_model_state(os.path.join(output_path, "alexnet_imagenet.model.pt"), model.state_dict(), model_name=str(ModelType.alexnet.name))
+
+    model = models.resnext50_32x4d(weights=models.ResNeXt50_32X4D_Weights.IMAGENET1K_V1)
+    util.save_model_state(os.path.join(output_path, "resnext50_32x4d_imagenet_v1.model.pt"), model.state_dict(), model_name=str(ModelType.resnext50_32x4d.name))
+
+    model = models.resnext50_32x4d(weights=models.ResNeXt50_32X4D_Weights.IMAGENET1K_V2)
+    util.save_model_state(os.path.join(output_path, "resnext50_32x4d_imagenet_v2.model.pt"), model.state_dict(), model_name=str(ModelType.resnext50_32x4d.name))

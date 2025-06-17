@@ -19,6 +19,7 @@ from py_src.ml_setup_base.mnasnet import mnasnet1_0_imagenet1k, mnasnet0_5_image
 from py_src.ml_setup_base.densenet import densenet121_imagenet1k
 from py_src.ml_setup_base.convnext import conveNeXt_tiny_imagenet1k
 from py_src.ml_setup_base.alexnet import alexnet_imagenet1k
+from py_src.ml_setup_base.resnext import resnext50_32x4d_imagenet1k
 
 __all__ = [ 'MlSetup',
             'lenet4_mnist', 'lenet5_mnist', 'lenet5_random_mnist', 'lenet5_large_fc_mnist',
@@ -181,6 +182,12 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default, p
     elif model_name == ModelType.alexnet:
         if dataset_type in [dataset_type.default, dataset_type.imagenet1k]:
             output_ml_setup = alexnet_imagenet1k()
+        else:
+            raise NotImplementedError
+    elif model_name == ModelType.resnext50_32x4d:
+        if dataset_type in [dataset_type.default, dataset_type.imagenet1k]:
+            assert pytorch_preset_version is not None
+            output_ml_setup = resnext50_32x4d_imagenet1k(pytorch_preset_version)
         else:
             raise NotImplementedError
     else:

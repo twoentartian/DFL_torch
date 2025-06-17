@@ -28,3 +28,4 @@ class ModelType(Enum):
     regnet_y_400mf = auto()
     convnext_tiny = auto()
     alexnet = auto()
+    resnext50_32x4d = auto()
