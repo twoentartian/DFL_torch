@@ -150,7 +150,10 @@ def process_folders(args):
             layer_info = util.get_layer_info(model_stat_dict)
             if selected_layer_as_variance is None:
                 selected_layer_as_variance = util.prompt_selection(list(layer_info.keys()))
-            wd = float(re.search(r'_wd([0-9.eE+-]+)', subfolder).group(1))
+            try:
+                wd = float(re.search(r'_wd([0-9.eE+-]+)', subfolder).group(1))
+            except AttributeError:
+                wd = None
             variance_and_accuracy_groups.append({'accuracy': accuracy, 'variance': layer_info[selected_layer_as_variance]["variance"], "type": "single", "group": subfolder_index, "wd":wd})
             subfolder_index += 1
     return variance_and_accuracy_groups

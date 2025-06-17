@@ -1,10 +1,13 @@
 import argparse
+import sys
 import pandas as pd
 from matplotlib import pyplot as plt
 import os
 
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+from py_src import ml_setup, util
+
 target_node = 0
-target_layer_name = "conv1.weight"
 
 def load_and_merge_data(folder_path):
     # Define file paths
@@ -32,7 +35,7 @@ def load_and_merge_data(folder_path):
 
     return merged_df
 
-def plot(whole_df, save_name, loss_limit=None, accuracy_limit=None, vertical=False, scatter=False):
+def plot(whole_df, save_name, target_layer_name, loss_limit=None, accuracy_limit=None, vertical=False, scatter=False):
     if vertical:
         fig, axes = plt.subplots(2, 1, figsize=(5, 12))
     else:
@@ -79,11 +82,13 @@ def main():
     # Concatenate the two dataframes
     final_df = pd.concat([df1, df2], ignore_index=True)
 
-    sorted_final_df = final_df.sort_values(by=[target_layer_name], ascending=True)
-    plot(sorted_final_df, "model_space_generalization_variance.pdf", scatter=True)
-    sorted_df1 = df1.sort_values(by=[target_layer_name], ascending=True)
-    plot(sorted_df1, "model_space_generalization_variance_origin_part.pdf",
-         loss_limit=[0.8, 1.2], accuracy_limit=[0.72, 0.77], vertical=True, scatter=True)
+    selected_layer_as_variance = util.prompt_selection(final_df.columns.tolist())
+
+    sorted_final_df = final_df.sort_values(by=[selected_layer_as_variance], ascending=True)
+    plot(sorted_final_df, "model_space_generalization_variance.pdf", selected_layer_as_variance, scatter=True)
+    sorted_df1 = df1.sort_values(by=[selected_layer_as_variance], ascending=True)
+    plot(sorted_df1, "model_space_generalization_variance_origin_part.pdf", selected_layer_as_variance,
+        vertical=True, scatter=True)
 
 
 if __name__ == "__main__":
