@@ -67,3 +67,6 @@ if __name__ == "__main__":
 
     model = models.convnext_tiny(weights=models.ConvNeXt_Tiny_Weights.IMAGENET1K_V1)
     util.save_model_state(os.path.join(output_path, "convnext_tiny_imagenet_v1.model.pt"), model.state_dict(), model_name=str(ModelType.convnext_tiny.name))
+
+    model = models.alexnet(weights=models.AlexNet_Weights.IMAGENET1K_V1)
+    util.save_model_state(os.path.join(output_path, "alexnet_imagenet.model.pt"), model.state_dict(), model_name=str(ModelType.alexnet.name))

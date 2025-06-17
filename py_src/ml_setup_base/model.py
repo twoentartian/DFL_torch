@@ -27,3 +27,4 @@ class ModelType(Enum):
     densenet121 = auto()
     regnet_y_400mf = auto()
     convnext_tiny = auto()
+    alexnet = auto()
