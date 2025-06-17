@@ -99,7 +99,8 @@ class ModelStatRecorder(Service):
         if self.save_format is None:
             return
         elif self.save_format == "lmdb":
-            existing_lmdb_path = os.path.join(checkpoint_folder_path, f"{"model_stat" if lmdb_db_name is None else lmdb_db_name}.lmdb")
+            lmdb_name = "model_stat" if lmdb_db_name is None else lmdb_db_name
+            existing_lmdb_path = os.path.join(checkpoint_folder_path, f"{lmdb_name}.lmdb")
             existing_lmdb = lmdb.open(existing_lmdb_path, readonly=True, lock=False)
             with self.save_lmdb.begin(write=True) as write_txn:
                 with existing_lmdb.begin() as read_txn:
