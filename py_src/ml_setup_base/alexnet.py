@@ -15,7 +15,7 @@ def alexnet_imagenet1k():
     output_ml_setup.model_name = str(ModelType.alexnet.name)
     output_ml_setup.model = alexnet
     output_ml_setup.get_info_from_dataset(dataset)
-    output_ml_setup.training_batch_size = 32
+    output_ml_setup.training_batch_size = 256
     output_ml_setup.has_normalization_layer = True
     output_ml_setup.criterion = loss_fn
     output_ml_setup.collate_fn = collate_fn
