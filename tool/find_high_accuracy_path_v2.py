@@ -341,7 +341,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
 
     """record variance"""
     variance_record = model_variance_correct.VarianceCorrector(model_variance_correct.VarianceCorrectionType.FollowOthers)
-    variance_record.add_variance(target_model.state_dict())
+    variance_record.add_variance(starting_point)
     target_variance = variance_record.get_variance()
 
     """load checkpoint file"""
@@ -399,26 +399,6 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             check_point_file.init_model_stat = initial_model_stat
             torch.save(check_point_file, checkpoint_file_path)
 
-        """ re init ignore moving layer list """
-        if re_init_norm_layer_list:
-            re_init_norm_layer_list = False
-            norm_layers = special_torch_layers.find_normalization_layers(target_model)
-            norm_layer_names, _ = special_torch_layers.find_layers_according_to_name_and_keyword(start_model_stat_dict, [], norm_layers)
-            norm_layer_names.sort()
-            ignore_move_layers, _ = special_torch_layers.find_layers_according_to_name_and_keyword(start_model_stat_dict, parameter_move.layer_skip_move, parameter_move.layer_skip_move_keyword)
-            child_logger.info(f"updating layers to move at tick {runtime_parameter.current_tick}")
-            if runtime_parameter.work_mode in [WorkMode.to_inf, WorkMode.to_mean, WorkMode.to_origin]:
-                child_logger.info(f"norm layers added to ignore moving layer list (found by built-in norm layer detector)[{len(norm_layer_names)} layers]: {norm_layer_names}")
-                ignore_move_layers.extend(norm_layer_names)
-                ignore_move_layers = list(set(ignore_move_layers))
-                ignore_move_layers.sort()
-            child_logger.info(f"ignore moving {len(ignore_move_layers)} layers: {ignore_move_layers}")
-            moved_layers = list(set(start_model_stat_dict.keys()) - set(ignore_move_layers))
-            moved_layers.sort()
-            child_logger.info(f"plan to move {len(moved_layers)} layers: {moved_layers}")
-            if not runtime_parameter.silence_mode:
-                input("Please check above information and press Enter to continue, or press Ctrl+C to quit")
-
         """update end_model_stat_dict if work_mode = to_inf"""
         if runtime_parameter.work_mode == WorkMode.to_inf:
             target_model_stat = target_model.state_dict()
@@ -443,12 +423,14 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
 
         if new_parameter_move is not None:
             parameter_updated = True
+            re_init_norm_layer_list = True
+
+        """ re init ignore moving layer list """
+        if re_init_norm_layer_list:
+            re_init_norm_layer_list = False
             norm_layers = special_torch_layers.find_normalization_layers(target_model)
             norm_layer_names, _ = special_torch_layers.find_layers_according_to_name_and_keyword(start_model_stat_dict, [], norm_layers)
             norm_layer_names.sort()
-            child_logger.info(f"update parameter (move) at tick {runtime_parameter.current_tick}")
-            parameter_move = new_parameter_move
-            # update layers to move
             ignore_move_layers, _ = special_torch_layers.find_layers_according_to_name_and_keyword(start_model_stat_dict, parameter_move.layer_skip_move, parameter_move.layer_skip_move_keyword)
             child_logger.info(f"updating layers to move at tick {runtime_parameter.current_tick}")
             if runtime_parameter.work_mode in [WorkMode.to_inf, WorkMode.to_mean, WorkMode.to_origin]:
@@ -462,6 +444,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             child_logger.info(f"plan to move {len(moved_layers)} layers: {moved_layers}")
             if not runtime_parameter.silence_mode:
                 input("Please check above information and press Enter to continue, or press Ctrl+C to quit")
+
         new_parameter_rebuild_norm: ParameterRebuildNorm = config_file.get_parameter_rebuild_norm(runtime_parameter, current_ml_setup)
         if (new_parameter_rebuild_norm is not None):
             parameter_updated = True
