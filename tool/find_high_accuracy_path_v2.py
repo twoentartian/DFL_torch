@@ -246,7 +246,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
         runtime_parameter.save_interval = checkpoint_content.current_runtime_parameter.save_interval
         runtime_parameter.save_ticks = checkpoint_content.current_runtime_parameter.save_ticks
 
-        current_ml_setup = ml_setup.get_ml_setup_from_config(start_model_name, dataset_type=dataset_name)
+        current_ml_setup = ml_setup.get_ml_setup_from_config(start_model_name, dataset_type=dataset_name, pytorch_preset_version=runtime_parameter.pytorch_preset_version)
         target_model : torch.nn.Module = copy.deepcopy(current_ml_setup.model)
         target_model.load_state_dict(start_model_stat_dict)
 
