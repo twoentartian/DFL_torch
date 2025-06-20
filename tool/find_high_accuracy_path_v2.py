@@ -350,13 +350,20 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
         runtime_parameter.current_tick = checkpoint_content.current_runtime_parameter.current_tick
 
         # restore service
-        weight_diff_service.continue_from_checkpoint(checkpoint_folder_path, runtime_parameter.current_tick)
-        weight_change_service.continue_from_checkpoint(checkpoint_folder_path, runtime_parameter.current_tick)
-        distance_to_origin_service.continue_from_checkpoint(checkpoint_folder_path, runtime_parameter.current_tick)
-        variance_service.continue_from_checkpoint(checkpoint_folder_path, runtime_parameter.current_tick)
-        record_model_service.continue_from_checkpoint(checkpoint_folder_path, runtime_parameter.current_tick)
-        record_test_accuracy_loss_service.continue_from_checkpoint(checkpoint_folder_path, runtime_parameter.current_tick)
-        record_training_loss_service.continue_from_checkpoint(checkpoint_folder_path, runtime_parameter.current_tick)
+        if weight_diff_service is not None:
+            weight_diff_service.continue_from_checkpoint(checkpoint_folder_path, runtime_parameter.current_tick)
+        if weight_change_service is not None:
+            weight_change_service.continue_from_checkpoint(checkpoint_folder_path, runtime_parameter.current_tick)
+        if distance_to_origin_service is not None:
+            distance_to_origin_service.continue_from_checkpoint(checkpoint_folder_path, runtime_parameter.current_tick)
+        if variance_service is not None:
+            variance_service.continue_from_checkpoint(checkpoint_folder_path, runtime_parameter.current_tick)
+        if record_model_service is not None:
+            record_model_service.continue_from_checkpoint(checkpoint_folder_path, runtime_parameter.current_tick)
+        if record_test_accuracy_loss_service is not None:
+            record_test_accuracy_loss_service.continue_from_checkpoint(checkpoint_folder_path, runtime_parameter.current_tick)
+        if record_training_loss_service is not None:
+            record_training_loss_service.continue_from_checkpoint(checkpoint_folder_path, runtime_parameter.current_tick)
 
     """begin finding the path"""
     if runtime_parameter.use_amp:
