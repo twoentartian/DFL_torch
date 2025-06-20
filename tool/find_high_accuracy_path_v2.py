@@ -371,7 +371,6 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
     if runtime_parameter.use_amp:
         scaler = torch.cuda.amp.GradScaler()
     ignore_move_layers = None
-    norm_layers = None
     cuda.CudaEnv.model_state_dict_to(end_model_stat_dict, device)
     timer = time.time()
 
@@ -403,6 +402,9 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
         """ re init ignore moving layer list """
         if re_init_norm_layer_list:
             re_init_norm_layer_list = False
+            norm_layers = special_torch_layers.find_normalization_layers(target_model)
+            norm_layer_names, _ = special_torch_layers.find_layers_according_to_name_and_keyword(start_model_stat_dict, [], norm_layers)
+            norm_layer_names.sort()
             ignore_move_layers, _ = special_torch_layers.find_layers_according_to_name_and_keyword(start_model_stat_dict, parameter_move.layer_skip_move, parameter_move.layer_skip_move_keyword)
             child_logger.info(f"updating layers to move at tick {runtime_parameter.current_tick}")
             if runtime_parameter.work_mode in [WorkMode.to_inf, WorkMode.to_mean, WorkMode.to_origin]:
@@ -439,11 +441,11 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             parameter_train = new_parameter_train
         new_parameter_move: ParameterMove = config_file.get_parameter_move(runtime_parameter, current_ml_setup)
 
-        norm_layers = special_torch_layers.find_normalization_layers(target_model)
-        norm_layer_names, _ = special_torch_layers.find_layers_according_to_name_and_keyword(start_model_stat_dict, [], norm_layers)
-        norm_layer_names.sort()
         if new_parameter_move is not None:
             parameter_updated = True
+            norm_layers = special_torch_layers.find_normalization_layers(target_model)
+            norm_layer_names, _ = special_torch_layers.find_layers_according_to_name_and_keyword(start_model_stat_dict, [], norm_layers)
+            norm_layer_names.sort()
             child_logger.info(f"update parameter (move) at tick {runtime_parameter.current_tick}")
             parameter_move = new_parameter_move
             # update layers to move
