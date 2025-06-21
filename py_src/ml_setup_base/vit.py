@@ -8,7 +8,7 @@ from py_src.ml_setup_base.other_setup import get_pytorch_training_imagenet
 def vit_b_32_imagenet1k():
     output_ml_setup = MlSetup()
     dataset = ml_setup_dataset.dataset_imagenet1k_custom(auto_augment_policy='imagenet', random_erase_prob=0.1,
-                                                             val_crop_size=224, val_resize_size=232, train_crop_size=224)
+                                                             val_crop_size=224, val_resize_size=256, train_crop_size=224)
     output_ml_setup.model = models.vit_b_32(progress=False, num_classes=1000)
     output_ml_setup.model_name = str(ModelType.vit_b_32.name)
     output_ml_setup.get_info_from_dataset(dataset)
