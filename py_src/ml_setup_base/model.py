@@ -10,6 +10,7 @@ class ModelType(Enum):
     simplenet = auto()
     cct7 = auto()
     vit_b_16 = auto()
+    vit_b_32 = auto()
     lenet5_large_fc = auto()
     mobilenet_v3_small = auto()
     mobilenet_v3_large = auto()

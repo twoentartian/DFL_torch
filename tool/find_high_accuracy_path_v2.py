@@ -532,12 +532,18 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
                             outputs = target_model(data)
                             training_loss = criterion(outputs, label)
                             scaler.scale(training_loss).backward()
+                            if current_ml_setup.clip_grad_norm is not None:
+                                # we should unscale the gradients of optimizer's assigned params if do gradient clipping
+                                scaler.unscale_(optimizer)
+                                nn.utils.clip_grad_norm_(target_model.parameters(), current_ml_setup.clip_grad_norm)
                             scaler.step(optimizer)
                             scaler.update()
                     else:
                         outputs = target_model(data)
                         training_loss = criterion(outputs, label)
                         training_loss.backward()
+                        if current_ml_setup.clip_grad_norm is not None:
+                            nn.utils.clip_grad_norm_(target_model.parameters(), current_ml_setup.clip_grad_norm)
                         optimizer.step()
                     training_loss_val = training_loss.item()
                     moving_average.add(training_loss_val)

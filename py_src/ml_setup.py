@@ -20,6 +20,7 @@ from py_src.ml_setup_base.densenet import densenet121_imagenet1k
 from py_src.ml_setup_base.convnext import conveNeXt_tiny_imagenet1k
 from py_src.ml_setup_base.alexnet import alexnet_imagenet1k
 from py_src.ml_setup_base.resnext import resnext50_32x4d_imagenet1k
+from py_src.ml_setup_base.vit import vit_b_32_imagenet1k
 
 __all__ = [ 'MlSetup',
             'lenet4_mnist', 'lenet5_mnist', 'lenet5_random_mnist', 'lenet5_large_fc_mnist',
@@ -34,11 +35,9 @@ __all__ = [ 'MlSetup',
             'mnasnet1_0_imagenet1k', 'mnasnet0_5_imagenet1k',
             'densenet121_imagenet1k',
             'conveNeXt_tiny_imagenet1k',
-            'alexnet_imagenet1k'
+            'alexnet_imagenet1k',
+            'vit_b_32_imagenet1k',
            ]
-
-from py_src.ml_setup_base.vit import vit_b_16_imagenet100, vit_b_16_imagenet1k
-
 
 """ Helper function """
 def get_ml_setup_from_config(model_type: str, dataset_type: str = 'default', pytorch_preset_version=None):
@@ -120,11 +119,9 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default, p
             output_ml_setup = vgg11_bn_imagenet1k()
         else:
             raise NotImplementedError
-    elif model_name == ModelType.vit_b_16:
+    elif model_name == ModelType.vit_b_32:
         if dataset_type in [DatasetType.default, DatasetType.imagenet1k]:
-            output_ml_setup = vit_b_16_imagenet1k()
-        elif dataset_type in [DatasetType.imagenet100]:
-            output_ml_setup = vit_b_16_imagenet100()
+            output_ml_setup = vit_b_32_imagenet1k()
         else:
             raise NotImplementedError
     elif model_name == ModelType.efficientnet_v2_s:

@@ -42,6 +42,7 @@ class MlSetup:
         self.dataset_tensor_size = None
         self.weights_init_func = None
         self.get_lr_scheduler_func = None
+        self.clip_grad_norm = None
 
         self.has_normalization_layer = None
 
