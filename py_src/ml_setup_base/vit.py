@@ -12,7 +12,7 @@ def vit_b_32_imagenet1k():
     output_ml_setup.model = models.vit_b_32(progress=False, num_classes=1000)
     output_ml_setup.model_name = str(ModelType.vit_b_32.name)
     output_ml_setup.get_info_from_dataset(dataset)
-    output_ml_setup.training_batch_size = 1024
+    output_ml_setup.training_batch_size = 512
     output_ml_setup.has_normalization_layer = True
     loss_fn, collate_fn, model_ema_decay, model_ema_steps, sampler_fn = get_pytorch_training_imagenet(2, label_smoothing=0.11, mixup_alpha=0.2, cutmix_alpha=1.0)
     output_ml_setup.criterion = loss_fn
