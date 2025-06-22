@@ -190,8 +190,6 @@ if __name__ == '__main__':
         weight_change_df = pandas.read_csv(weight_change_file_path, index_col=0, header=0)
         if enable_draw_every_tick:
             weight_change_df = weight_change_df[weight_change_df.index % draw_every_tick == 0]
-        else:
-            weight_change_df = weight_change_df[weight_change_df.index % 50 == 0]
         print(weight_change_df)
         weight_change_x = weight_change_df.index
         weight_change_df_len = len(weight_change_df)
