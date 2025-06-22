@@ -79,3 +79,9 @@ if __name__ == "__main__":
 
     model = models.vit_b_32(weights=models.ViT_B_32_Weights.IMAGENET1K_V1)
     util.save_model_state(os.path.join(output_path, "vit_b_32_imagenet_v1.model.pt"), model.state_dict(), model_name=str(ModelType.vit_b_32.name))
+
+    model = models.wide_resnet50_2(weights=models.Wide_ResNet50_2_Weights.IMAGENET1K_V1)
+    util.save_model_state(os.path.join(output_path, "wide_resnet50_2_imagenet_v1.model.pt"), model.state_dict(), model_name=str(ModelType.wide_resnet50_2.name))
+
+    model = models.wide_resnet50_2(weights=models.Wide_ResNet50_2_Weights.IMAGENET1K_V2)
+    util.save_model_state(os.path.join(output_path, "wide_resnet50_2_imagenet_v2.model.pt"), model.state_dict(), model_name=str(ModelType.wide_resnet50_2.name))
