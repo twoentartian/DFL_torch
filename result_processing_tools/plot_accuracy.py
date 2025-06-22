@@ -115,7 +115,6 @@ if __name__ == '__main__':
         axs[plot_index].set_xlabel('time (tick)')
         axs[plot_index].set_ylabel('accuracy (0-1)')
         axs[plot_index].set_xlim([0, accuracy_df.index[accuracy_df_len-1]])
-        axs[plot_index].set_ylim([0, 1])
         if len(accuracy_df.columns) > 10:
             axs[plot_index].legend().remove()
         plot_index = plot_index + 1
