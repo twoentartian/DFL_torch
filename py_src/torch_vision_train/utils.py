@@ -243,7 +243,7 @@ def save_on_master(*args, **kwargs):
 
 
 def init_distributed_mode(args):
-    if args.disable_distributeddisable_distributed:
+    if args.disable_distributed:
         print("Not using distributed mode")
         args.distributed = False
         return
