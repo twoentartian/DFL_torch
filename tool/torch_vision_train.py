@@ -579,6 +579,7 @@ def get_args_parser(add_help=True):
     parser.add_argument("--load-existing-weights", default=None, type=str, help="load existing model weights from path")
     parser.add_argument("--variance-correction", action="store_true", help="enable variance correction") #https://arxiv.org/abs/2404.04616
     parser.add_argument("--variance-correction-on-norm", type=bool, default=True, help="enable variance correction on norm layers")
+    parser.add_argument("--disable_distributed", action="store_true", help="disable distributed training")
     return parser
 
 
