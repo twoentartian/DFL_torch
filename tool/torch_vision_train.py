@@ -44,7 +44,8 @@ def train_one_epoch(model, criterion, optimizer, data_loader, device, epoch, arg
                 print(f"Above layers are included for variance correction.")
             else:
                 print(f"Above layers are excluded from variance correction.")
-            input("Please check above information and press Enter to continue, or press Ctrl+C to quit")
+            if not args.silence:
+                input("Please check above information and press Enter to continue, or press Ctrl+C to quit")
             train_one_epoch.norm_layer_names = norm_layer_names
         else:
             train_one_epoch.norm_layer_names = []
@@ -580,6 +581,7 @@ def get_args_parser(add_help=True):
     parser.add_argument("--variance-correction", action="store_true", help="enable variance correction") #https://arxiv.org/abs/2404.04616
     parser.add_argument("--variance-correction-on-norm", type=bool, default=True, help="enable variance correction on norm layers")
     parser.add_argument("--disable_distributed", action="store_true", help="disable distributed training")
+    parser.add_argument("-S", "--silence", action='store_true', help='enable silence mode, do not interact with users, all checks will be bypassed')
     return parser
 
 
