@@ -19,7 +19,13 @@ def resnext50_32x4d_imagenet1k(pytorch_preset_version=2):
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.training_batch_size = 128
     output_ml_setup.has_normalization_layer = True
-    loss_fn, collate_fn, model_ema_decay, model_ema_steps, sampler_fn = get_pytorch_training_imagenet(pytorch_preset_version)
+    if pytorch_preset_version == 1:
+        loss_fn, collate_fn, model_ema_decay, model_ema_steps, sampler_fn = get_pytorch_training_imagenet(1)
+    elif pytorch_preset_version == 2:
+        loss_fn, collate_fn, model_ema_decay, model_ema_steps, sampler_fn = get_pytorch_training_imagenet(2, enable_collate_and_sampler=True)
+    else:
+        raise NotImplementedError
+
     output_ml_setup.criterion = loss_fn
     output_ml_setup.collate_fn = collate_fn
     output_ml_setup.model_ema = (model_ema_decay, model_ema_steps)
