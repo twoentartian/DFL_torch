@@ -105,7 +105,7 @@ class FastTrainingSetup(object):
                     return lr / initial_lr
                 lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
                 return optimizer, lr_scheduler, epochs
-            elif arg_ml_setup.dataset_name == 'cifar10_32':
+            elif arg_ml_setup.dataset_name == 'cifar100_32':
                 steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
                 initial_lr = 6e-4
                 weight_decay = 6e-2
