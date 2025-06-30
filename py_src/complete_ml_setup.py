@@ -75,7 +75,7 @@ class FastTrainingSetup(object):
             lr_scheduler = None
             return optimizer, lr_scheduler, epochs
         elif arg_ml_setup.model_name == 'cct7':
-            if arg_ml_setup.dataset_name == 'cifar10_32':
+            if arg_ml_setup.dataset_name == str(DatasetType.cifar10.name):
                 steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
                 initial_lr = 55e-5
                 weight_decay = 6e-2
@@ -105,7 +105,7 @@ class FastTrainingSetup(object):
                     return lr / initial_lr
                 lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
                 return optimizer, lr_scheduler, epochs
-            elif arg_ml_setup.dataset_name == 'cifar100_32':
+            elif arg_ml_setup.dataset_name == str(DatasetType.cifar100.name):
                 steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
                 initial_lr = 6e-4
                 weight_decay = 6e-2
@@ -135,7 +135,7 @@ class FastTrainingSetup(object):
                     return lr / initial_lr
                 lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
                 return optimizer, lr_scheduler, epochs
-            elif arg_ml_setup.dataset_name == 'imagenet100_224':
+            elif arg_ml_setup.dataset_name == str(DatasetType.imagenet100.name):
                 steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
                 initial_lr = 5e-4
                 weight_decay = 5e-2
