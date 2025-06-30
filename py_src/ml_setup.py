@@ -12,7 +12,7 @@ from py_src.ml_setup_base.resnet import resnet18_cifar10, resnet18_cifar100, res
     resnet50_imagenet1k, resnet34_imagenet1k
 from py_src.ml_setup_base.simplenet import simplenet_cifar10, simplenet_cifar100
 from py_src.ml_setup_base.mobilenet import mobilenet_v2_cifar10, mobilenet_v3_large_imagenet1k
-from py_src.ml_setup_base.cct import cct7_3x1_cifar10, cct7_7x2_imagenet10, cct7_7x2_imagenet100, cct7_7x2_imagenet1k
+from py_src.ml_setup_base.cct import cct7_3x1_cifar10, cct7_3x1_cifar100, cct7_7x2_imagenet10, cct7_7x2_imagenet100, cct7_7x2_imagenet1k
 from py_src.ml_setup_base.shufflenet import shufflenet_v2_cifar10, shufflenet_v2_x2_0_imagenet1k
 from py_src.ml_setup_base.efficientnet import efficientnet_v2_s_imagenet1k, efficientnet_b1_imagenet1k
 from py_src.ml_setup_base.mnasnet import mnasnet1_0_imagenet1k, mnasnet0_5_imagenet1k
@@ -30,7 +30,7 @@ __all__ = [ 'MlSetup',
             'resnet18_cifar10', 'resnet18_cifar100', 'resnet18_imagenet100', 'resnet18_imagenet1k', 'resnet50_imagenet1k',
             'simplenet_cifar10', 'simplenet_cifar100',
             'mobilenet_v2_cifar10', 'mobilenet_v3_large_imagenet1k',
-            'cct7_3x1_cifar10', 'cct7_7x2_imagenet10', 'cct7_7x2_imagenet100', 'cct7_7x2_imagenet1k',
+            'cct7_3x1_cifar10', 'cct7_3x1_cifar100', 'cct7_7x2_imagenet10', 'cct7_7x2_imagenet100', 'cct7_7x2_imagenet1k',
             'shufflenet_v2_cifar10',
             'efficientnet_v2_s_imagenet1k', 'efficientnet_b1_imagenet1k',
             'mnasnet1_0_imagenet1k', 'mnasnet0_5_imagenet1k',
@@ -90,6 +90,8 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default, p
     elif model_name == ModelType.cct7:
         if dataset_type in [dataset_type.default, dataset_type.cifar10]:
             output_ml_setup = cct7_3x1_cifar10()
+        elif dataset_type in [dataset_type.cifar100]:
+            output_ml_setup = cct7_3x1_cifar100()
         elif dataset_type in [dataset_type.imagenet100]:
             output_ml_setup = cct7_7x2_imagenet100()
         elif dataset_type in [dataset_type.imagenet1k]:
