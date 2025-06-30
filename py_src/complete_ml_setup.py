@@ -105,6 +105,36 @@ class FastTrainingSetup(object):
                     return lr / initial_lr
                 lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
                 return optimizer, lr_scheduler, epochs
+            elif arg_ml_setup.dataset_name == 'cifar10_32':
+                steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
+                initial_lr = 6e-4
+                weight_decay = 6e-2
+                warmup_lr = 1e-5
+                min_lr = 1e-5
+                warmup_epochs = 10
+                epochs = 300
+                cooldown_epochs = 10
+                warmup_steps = warmup_epochs * steps_per_epoch
+                cosine_steps = (epochs - warmup_epochs) * steps_per_epoch
+                cooldown_steps = cooldown_epochs * steps_per_epoch
+                total_steps = warmup_steps + cosine_steps + cooldown_steps
+                optimizer = torch.optim.AdamW(model.parameters(), lr=initial_lr, weight_decay=weight_decay)
+
+                def lr_lambda(current_step):
+                    if current_step < warmup_steps:
+                        # Linear warmup
+                        lr = warmup_lr + (initial_lr - warmup_lr) * (current_step / warmup_steps)
+                    elif current_step < warmup_steps + cosine_steps:
+                        # Cosine annealing
+                        t = current_step - warmup_steps
+                        T = cosine_steps
+                        lr = min_lr + 0.5 * (initial_lr - min_lr) * (1 + math.cos(math.pi * t / T))
+                    else:
+                        # Cooldown phase
+                        lr = min_lr
+                    return lr / initial_lr
+                lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
+                return optimizer, lr_scheduler, epochs
             elif arg_ml_setup.dataset_name == 'imagenet100_224':
                 steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
                 initial_lr = 5e-4
@@ -134,6 +164,8 @@ class FastTrainingSetup(object):
                     return lr / initial_lr
                 lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
                 return optimizer, lr_scheduler, epochs
+            else:
+                raise NotImplementedError
         elif arg_ml_setup.model_name == "mobilenet_v3_small":
             epochs = 150
             optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
