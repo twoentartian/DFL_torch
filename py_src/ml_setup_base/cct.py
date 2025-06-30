@@ -22,7 +22,7 @@ def cct7_3x1_cifar100():
     output_ml_setup = MlSetup()
     dataset = ml_setup_dataset.dataset_cifar100()
 
-    output_ml_setup.model = cct.cct_7_3x1_32()
+    output_ml_setup.model = cct.cct_7_3x1_32(num_classes=100)
     output_ml_setup.model_name = str(ModelType.cct7.name)
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.criterion = nn.CrossEntropyLoss()
