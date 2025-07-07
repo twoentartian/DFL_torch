@@ -160,6 +160,9 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
         elif end_point == "inf":
             assert runtime_parameter.work_mode == WorkMode.to_inf
             end_file_name = "inf"
+        elif end_point == "mean":
+            assert runtime_parameter.work_mode == WorkMode.to_mean
+            end_file_name = "mean"
         else:
             end_file_name = os.path.basename(end_point).replace('.model.pt', '')
         """logger"""
