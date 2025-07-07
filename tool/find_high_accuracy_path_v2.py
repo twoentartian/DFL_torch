@@ -378,6 +378,8 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
     timer = time.time()
 
     latest_check_point_file_path = None
+    norm_layer_names = []
+    compensate_move_layer = []
     while runtime_parameter.current_tick < runtime_parameter.max_tick:
         parameter_updated = False
         child_logger.info(f"tick: {runtime_parameter.current_tick}")
@@ -429,8 +431,6 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             re_init_norm_layer_list = True
 
         """ re init ignore moving layer list """
-        norm_layer_names = []
-        compensate_move_layer = []
         if re_init_norm_layer_list:
             re_init_norm_layer_list = False
             norm_layers = special_torch_layers.find_normalization_layers(target_model)
