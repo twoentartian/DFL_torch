@@ -35,20 +35,32 @@ def train_one_epoch(model, criterion, optimizer, data_loader, device, epoch, arg
     variance_correction_on_norm = args.variance_correction_on_norm
     print(f"variance correction is {variance_correction}.")
     if not hasattr(train_one_epoch, 'norm_layer_names'):
-        train_one_epoch.norm_layer_names = None
+        train_one_epoch.batch_norm_layer_names = None
+        train_one_epoch.layer_norm_layer_names = None
+        train_one_epoch.variance_correction_norm_layer_names = None
+        train_one_epoch.ignore_move_layer_names = None
+        train_one_epoch.all_norm_layer_names = None
+
+        norm_layers = special_torch_layers.find_normalization_layers(model)
+        batch_norm_layer_names, _ = special_torch_layers.find_layers_according_to_name_and_keyword(model.state_dict(),[], norm_layers.batch_normalization)
+        print(f"totally {len(batch_norm_layer_names)} batch-normalization layers: {batch_norm_layer_names}.")
+        layer_norm_layer_names, _ = special_torch_layers.find_layers_according_to_name_and_keyword(model.state_dict(),[], norm_layers.layer_normalization)
+        print(f"totally {len(layer_norm_layer_names)} layer-normalization layers: {layer_norm_layer_names}.")
+        assert len(norm_layers.group_normalization) == 0, "group normalization layers are not supported yet."
+        assert len(norm_layers.instance_normalization) == 0, "instance normalization layers are not supported yet."
+
+        train_one_epoch.batch_norm_layer_names = batch_norm_layer_names
+        train_one_epoch.layer_norm_layer_names = layer_norm_layer_names
+        train_one_epoch.ignore_move_layer_names = train_one_epoch.batch_norm_layer_names + train_one_epoch.layer_norm_layer_names
+        train_one_epoch.all_norm_layer_names = train_one_epoch.batch_norm_layer_names + train_one_epoch.layer_norm_layer_names
+
+        train_one_epoch.variance_correction_norm_layer_names = []
         if variance_correction:
-            norm_layers = special_torch_layers.find_normalization_layers(model)
-            norm_layer_names, _ = special_torch_layers.find_layers_according_to_name_and_keyword(model.state_dict(), [], norm_layers)
-            print(f"totally {len(norm_layer_names)} normalization layers: {norm_layer_names}.")
             if variance_correction_on_norm:
-                print(f"Above layers are included for variance correction.")
-            else:
-                print(f"Above layers are excluded from variance correction.")
-            if not args.silence:
-                input("Please check above information and press Enter to continue, or press Ctrl+C to quit")
-            train_one_epoch.norm_layer_names = norm_layer_names
-        else:
-            train_one_epoch.norm_layer_names = []
+                print(f"Batch norm layers are included for variance correction.")
+                train_one_epoch.variance_correction_norm_layer_names += train_one_epoch.batch_norm_layer_names
+        if not args.silence:
+            input("Please check above information and press Enter to continue, or press Ctrl+C to quit")
 
     target_variance = None
     if variance_correction:
@@ -85,7 +97,7 @@ def train_one_epoch(model, criterion, optimizer, data_loader, device, epoch, arg
                     model.state_dict(), target_variance, ignore_layer_list=[])
             else:
                 target_model_stat_dict = model_variance_correct.VarianceCorrector.scale_model_stat_to_variance(
-                    model.state_dict(), target_variance, ignore_layer_list=train_one_epoch.norm_layer_names)
+                    model.state_dict(), target_variance, ignore_layer_list=train_one_epoch.all_norm_layer_names)
             model.load_state_dict(target_model_stat_dict)
 
         if model_ema and i % args.model_ema_steps == 0:

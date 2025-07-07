@@ -426,20 +426,39 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             re_init_norm_layer_list = True
 
         """ re init ignore moving layer list """
+        norm_layer_names = []
+        compensate_move_layer = []
         if re_init_norm_layer_list:
             re_init_norm_layer_list = False
             norm_layers = special_torch_layers.find_normalization_layers(target_model)
-            norm_layer_names, _ = special_torch_layers.find_layers_according_to_name_and_keyword(start_model_stat_dict, [], norm_layers)
-            norm_layer_names.sort()
+            batch_norm_layer_names, _ = special_torch_layers.find_layers_according_to_name_and_keyword(start_model_stat_dict, [], norm_layers.batch_normalization)
+            batch_norm_layer_names.sort()
+            layer_norm_layer_names, _ = special_torch_layers.find_layers_according_to_name_and_keyword(start_model_stat_dict, [], norm_layers.layer_normalization)
+            layer_norm_layer_names.sort()
+            assert len(norm_layers.group_normalization) == 0, "group normalization layers are not supported yet."
+            assert len(norm_layers.instance_normalization) == 0, "instance normalization layers are not supported yet."
+
+            norm_layer_names.extend(batch_norm_layer_names)
+            norm_layer_names.extend(layer_norm_layer_names)
+
             ignore_move_layers, _ = special_torch_layers.find_layers_according_to_name_and_keyword(start_model_stat_dict, parameter_move.layer_skip_move, parameter_move.layer_skip_move_keyword)
             child_logger.info(f"updating layers to move at tick {runtime_parameter.current_tick}")
             if runtime_parameter.work_mode in [WorkMode.to_inf, WorkMode.to_mean, WorkMode.to_origin]:
-                child_logger.info(f"norm layers added to ignore moving layer list (found by built-in norm layer detector)[{len(norm_layer_names)} layers]: {norm_layer_names}")
-                ignore_move_layers.extend(norm_layer_names)
+                child_logger.info(f"layer norm layers added to compensate moving layer list (found by built-in norm layer detector)[{len(layer_norm_layer_names)} layers]: {layer_norm_layer_names}")
+                compensate_move_layer.extend(layer_norm_layer_names) # we should move layer norm to compensate
+                ignore_move_layers.extend(layer_norm_layer_names) # we do not move layer norm towards the destination direction
+
+                child_logger.info(f"batch norm layers added to ignore moving layer list (found by built-in norm layer detector)[{len(batch_norm_layer_names)} layers]: {batch_norm_layer_names}")
+                ignore_move_layers.extend(batch_norm_layer_names)
+
+                compensate_move_layer = list(set(compensate_move_layer))
+                compensate_move_layer.sort()
                 ignore_move_layers = list(set(ignore_move_layers))
                 ignore_move_layers.sort()
+
             child_logger.info(f"ignore moving {len(ignore_move_layers)} layers: {ignore_move_layers}")
-            moved_layers = list(set(start_model_stat_dict.keys()) - set(ignore_move_layers))
+            child_logger.info(f"compensate moving {len(compensate_move_layer)} layers: {compensate_move_layer}")
+            moved_layers = list(set(start_model_stat_dict.keys()) - set(ignore_move_layers) - set(compensate_move_layer))
             moved_layers.sort()
             child_logger.info(f"plan to move {len(moved_layers)} layers: {moved_layers}")
             if not runtime_parameter.silence_mode:
@@ -456,7 +475,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
                 extra_norm_layers, _ = special_torch_layers.find_layers_according_to_name_and_keyword(start_model_stat_dict, parameter_rebuild_norm.rebuild_norm_layer, parameter_rebuild_norm.rebuild_norm_layer_keyword)
                 norm_layer_names.extend(extra_norm_layers)
                 norm_layer_names = list(set(norm_layer_names))
-                non_norm_layers = list(set(start_model_stat_dict.keys()) - set(norm_layer_names))
+                norm_layer_names.sort()
                 child_logger.info(f"totally {len(norm_layer_names)} layers to rebuild: {norm_layer_names}")
                 if not runtime_parameter.silence_mode:
                     input("Please check above information and press Enter to continue, or press Ctrl+C to quit")
@@ -485,14 +504,22 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             target_model_stat_dict = model_average.move_model_state_toward(target_model.state_dict(), end_model_stat_dict,
                                                                        parameter_move.step_size, parameter_move.adoptive_step_size,
                                                                        enable_merge_bias_with_weight=parameter_move.merge_bias_with_weights,
-                                                                       ignore_layers=ignore_move_layers)
+                                                                       ignore_layers=ignore_move_layers) # move towards destination
+            if len(compensate_move_layer) > 0:
+                compensate_end_model_stat_dict = {k: v.detach().clone() * 2 for k, v in target_model.state_dict().items()}
+                ignore_compensate_layers = list(set(target_model_stat_dict) - set(compensate_move_layer))
+                target_model_stat_dict = model_average.move_model_state_toward(target_model_stat_dict, compensate_end_model_stat_dict,
+                                                                               parameter_move.step_size, parameter_move.adoptive_step_size,
+                                                                               enable_merge_bias_with_weight=parameter_move.merge_bias_with_weights,
+                                                                               ignore_layers=ignore_compensate_layers)
             target_model.load_state_dict(target_model_stat_dict)
 
         """variance correction"""
         if not runtime_parameter.debug_check_config_mode:
             if runtime_parameter.work_mode == WorkMode.to_certain_model:
                 child_logger.info(f"current tick: {runtime_parameter.current_tick}, rescale variance")
-                target_model_stat_dict = model_variance_correct.VarianceCorrector.scale_model_stat_to_variance(target_model.state_dict(), target_variance, ignore_layer_list=ignore_move_layers)
+                target_model_stat_dict = model_variance_correct.VarianceCorrector.scale_model_stat_to_variance(target_model.state_dict(), target_variance,
+                                                                                                               ignore_layer_list=ignore_move_layers)
                 target_model.load_state_dict(target_model_stat_dict)
 
         """update learning rate"""

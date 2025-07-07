@@ -59,21 +59,22 @@ def find_layers_according_to_name_and_keyword(model_state_dict, layer_names, lay
     return found_layers, ignored_layers
 
 
+class normalization_layer_results:
+    def __init__(self):
+        self.batch_normalization = []
+        self.layer_normalization = []
+        self.group_normalization = []
+        self.instance_normalization = []
+
 def find_normalization_layers(model):
-    def is_normalization_layer(layer):
-        normalization_layers = (
-            nn.BatchNorm1d,
-            nn.BatchNorm2d,
-            nn.BatchNorm3d,
-            nn.LayerNorm,
-            nn.GroupNorm,
-            nn.InstanceNorm1d,
-            nn.InstanceNorm2d,
-            nn.InstanceNorm3d,
-        )
-        return isinstance(layer, normalization_layers)
-    output = []
+    output = normalization_layer_results()
     for name, module in model.named_modules():
-        if is_normalization_layer(module):
-            output.append(name)
+        if isinstance(module, (nn.BatchNorm1d, nn.BatchNorm2d, nn.BatchNorm3d,)):
+            output.batch_normalization.append(name)
+        if isinstance(module, (nn.LayerNorm)):
+            output.layer_normalization.append(name)
+        if isinstance(module, (nn.GroupNorm)):
+            output.group_normalization.append(name)
+        if isinstance(module, (nn.InstanceNorm1d, nn.InstanceNorm2d, nn.InstanceNorm3d,)):
+            output.instance_normalization.append(name)
     return output
