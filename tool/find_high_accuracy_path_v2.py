@@ -524,7 +524,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
 
         """update learning rate"""
         if not runtime_parameter.debug_check_config_mode:
-            if runtime_parameter.work_mode == WorkMode.to_inf or runtime_parameter.work_mode == WorkMode.to_origin:
+            if runtime_parameter.work_mode in [WorkMode.to_inf, WorkMode.to_origin, WorkMode.to_mean]:
                 for param_group, initial_optimizer_state, (name, param) in zip(optimizer.param_groups, initial_optimizer_state_dict['param_groups'], target_model.named_parameters()):
                     if name in norm_layer_names:
                         continue  # skip norm layers
