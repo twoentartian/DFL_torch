@@ -286,8 +286,10 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
 
     """update parameters"""
     parameter_train: ParameterTrain = config_file.get_parameter_train(runtime_parameter, current_ml_setup)
+    parameter_train.fill_default()
     parameter_train.validate()
     parameter_move: ParameterMove = config_file.get_parameter_move(runtime_parameter, current_ml_setup)
+    parameter_move.fill_default()
     parameter_move.validate()
     parameter_rebuild_norm: ParameterRebuildNorm = config_file.get_parameter_rebuild_norm(runtime_parameter, current_ml_setup)
     parameter_rebuild_norm.validate()
@@ -380,6 +382,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
     latest_check_point_file_path = None
     norm_layer_names = []
     compensate_move_layer = []
+    compensate_movex2_layer = []
     while runtime_parameter.current_tick < runtime_parameter.max_tick:
         parameter_updated = False
         child_logger.info(f"tick: {runtime_parameter.current_tick}")
@@ -423,12 +426,17 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
         if new_parameter_train is not None:
             parameter_updated = True
             child_logger.info(f"update parameter (train) at tick {runtime_parameter.current_tick}")
+            new_parameter_train.fill_default()
+            new_parameter_train.validate()
             parameter_train = new_parameter_train
         new_parameter_move: ParameterMove = config_file.get_parameter_move(runtime_parameter, current_ml_setup)
 
         if new_parameter_move is not None:
             parameter_updated = True
             re_init_norm_layer_list = True
+            new_parameter_move.fill_default()
+            new_parameter_move.validate()
+            parameter_move = new_parameter_move
 
         """ re init ignore moving layer list """
         if re_init_norm_layer_list:
@@ -445,10 +453,14 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             norm_layer_names.extend(layer_norm_layer_names)
 
             ignore_move_layers, _ = special_torch_layers.find_layers_according_to_name_and_keyword(start_model_stat_dict, parameter_move.layer_skip_move, parameter_move.layer_skip_move_keyword)
+            layer_norm_in_attention, _ = special_torch_layers.find_layers_according_to_name_and_keyword(start_model_stat_dict, parameter_move.layer_norm_in_attention, parameter_move.layer_norm_in_attention_keyword)
             child_logger.info(f"updating layers to move at tick {runtime_parameter.current_tick}")
             if runtime_parameter.work_mode in [WorkMode.to_inf, WorkMode.to_mean, WorkMode.to_origin]:
                 child_logger.info(f"layer norm layers added to compensate moving layer list (found by built-in norm layer detector)[{len(layer_norm_layer_names)} layers]: {layer_norm_layer_names}")
+                for n in layer_norm_in_attention:
+                    assert n in layer_norm_layer_names, f"{n} is not a layer norm layer."
                 compensate_move_layer.extend(layer_norm_layer_names) # we should move layer norm to compensate
+                compensate_movex2_layer.extend(layer_norm_in_attention)
                 ignore_move_layers.extend(layer_norm_layer_names) # we do not move layer norm towards the destination direction
 
                 child_logger.info(f"batch norm layers added to ignore moving layer list (found by built-in norm layer detector)[{len(batch_norm_layer_names)} layers]: {batch_norm_layer_names}")
@@ -456,12 +468,15 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
 
                 compensate_move_layer = list(set(compensate_move_layer))
                 compensate_move_layer.sort()
+                compensate_movex2_layer = list(set(compensate_movex2_layer))
+                compensate_movex2_layer.sort()
                 ignore_move_layers = list(set(ignore_move_layers))
                 ignore_move_layers.sort()
 
             child_logger.info(f"ignore moving {len(ignore_move_layers)} layers: {ignore_move_layers}")
             child_logger.info(f"compensate moving {len(compensate_move_layer)} layers: {compensate_move_layer}")
-            moved_layers = list(set(start_model_stat_dict.keys()) - set(ignore_move_layers) - set(compensate_move_layer))
+            child_logger.info(f"compensate moving x2 {len(compensate_movex2_layer)} layers: {compensate_movex2_layer}")
+            moved_layers = list(set(start_model_stat_dict.keys()) - set(ignore_move_layers) - set(compensate_move_layer) - set(compensate_movex2_layer))
             moved_layers.sort()
             child_logger.info(f"plan to move {len(moved_layers)} layers: {moved_layers}")
             if not runtime_parameter.silence_mode:
@@ -508,9 +523,15 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
                                                                        parameter_move.step_size, parameter_move.adoptive_step_size,
                                                                        enable_merge_bias_with_weight=parameter_move.merge_bias_with_weights,
                                                                        ignore_layers=ignore_move_layers) # move towards destination
+            compensate_end_model_stat_dict = {k: v.detach().clone() * 2 for k, v in target_model.state_dict().items()}
             if len(compensate_move_layer) > 0:
-                compensate_end_model_stat_dict = {k: v.detach().clone() * 2 for k, v in target_model.state_dict().items()}
                 ignore_compensate_layers = list(set(target_model_stat_dict) - set(compensate_move_layer))
+                target_model_stat_dict = model_average.move_model_state_toward(target_model_stat_dict, compensate_end_model_stat_dict,
+                                                                               parameter_move.step_size, parameter_move.adoptive_step_size,
+                                                                               enable_merge_bias_with_weight=parameter_move.merge_bias_with_weights,
+                                                                               ignore_layers=ignore_compensate_layers)
+            if len(compensate_movex2_layer) > 0:
+                ignore_compensate_layers = list(set(target_model_stat_dict) - set(compensate_movex2_layer))
                 target_model_stat_dict = model_average.move_model_state_toward(target_model_stat_dict, compensate_end_model_stat_dict,
                                                                                parameter_move.step_size, parameter_move.adoptive_step_size,
                                                                                enable_merge_bias_with_weight=parameter_move.merge_bias_with_weights,

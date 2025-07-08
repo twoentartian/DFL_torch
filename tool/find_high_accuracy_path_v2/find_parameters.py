@@ -14,12 +14,25 @@ class ParameterMove(Parameter):
     layer_skip_move_keyword = None
     merge_bias_with_weights = None
 
+    # layer norm layers
+    layer_norm_in_attention = None
+    layer_norm_in_attention_keyword = None
+
+    def fill_default(self):
+        if self.layer_norm_in_attention is None:
+            self.layer_norm_in_attention = []
+        if self.layer_norm_in_attention_keyword is None:
+            self.layer_norm_in_attention_keyword = []
+
 class ParameterTrain(Parameter):
     train_for_max_rounds = None
     train_until_loss = None
     train_for_min_rounds = None
     pretrain_optimizer = None
     load_existing_optimizer = None
+
+    def fill_default(self):
+        pass
 
 class ParameterRebuildNorm(Parameter):
     rebuild_norm_for_max_rounds = None
