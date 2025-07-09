@@ -205,9 +205,9 @@ class ServiceTestAccuracyLossRecorder(Service):
                     correct_predictions = (predicted == test_labels).sum().item()
                     accuracy = correct_predictions / len(test_labels)
                     var = outputs.var(dim=0, unbiased=False).mean().item()
-            row_accuracy.append(str(accuracy))
-            row_loss.append('%.4f' % loss)
-            row_output_var.append('%.4f' % var)
+            row_accuracy.append('%.4E' % accuracy)
+            row_loss.append('%.4E' % loss)
+            row_output_var.append('%.4E' % var)
             final_accuracy[node_name] = accuracy
             final_model[node_name] = model_stat
         row_accuracy_str = ",".join([str(tick), str(phase_str), *row_accuracy])
