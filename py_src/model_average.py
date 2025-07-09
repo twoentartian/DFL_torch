@@ -15,7 +15,7 @@ def move_tensor_toward(layer_name, src_tensor, dest_tensor, step, adoptive_step,
     move_tensor = angle_tensor * real_step
     return src_tensor + move_tensor
 
-def move_model_state_toward(src_model_stat, dest_model_stat, step, adoptive_step, enable_merge_bias_with_weight=False, ignore_layers=None, random_scale=None):
+def move_model_state_toward(src_model_stat, dest_model_stat, step, adoptive_step, enable_merge_bias_with_weight=False, ignore_layers=None, move_layer=None, random_scale=None):
     """
     move src_model_stat to dest_model_stat
     Args:
@@ -30,11 +30,14 @@ def move_model_state_toward(src_model_stat, dest_model_stat, step, adoptive_step
     Returns:
 
     """
+    assert not (ignore_layers is not None and move_layer is not None), "only ignore_layers or move_layer can have values"
     if ignore_layers is None:
         ignore_layers = []
+    if move_layer is None:
+        move_layer = list(src_model_stat.keys())
     output_stat = copy.deepcopy(src_model_stat)
     layers_already_process = set()
-    for layer_name in src_model_stat.keys():
+    for layer_name in move_layer:
         if layer_name in layers_already_process:
             continue
         if layer_name in ignore_layers:
@@ -44,7 +47,7 @@ def move_model_state_toward(src_model_stat, dest_model_stat, step, adoptive_step
         # process associated bias tensor with weight tensor
         if enable_merge_bias_with_weight and ('weight' in layer_name):
             bias_layer_name = layer_name.replace('weight', 'bias')
-            if bias_layer_name in src_model_stat.keys():
+            if bias_layer_name in move_layer:
                 # process bias layer and weight layer
                 layers_already_process.add(bias_layer_name)
                 layers_already_process.add(layer_name)

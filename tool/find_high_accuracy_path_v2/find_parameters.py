@@ -15,14 +15,14 @@ class ParameterMove(Parameter):
     merge_bias_with_weights = None
 
     # layer norm layers
-    layer_norm_in_attention = None
-    layer_norm_in_attention_keyword = None
+    layer_compensate_x2 = None
+    layer_compensate_x2_keyword = None
 
     def fill_default(self):
-        if self.layer_norm_in_attention is None:
-            self.layer_norm_in_attention = []
-        if self.layer_norm_in_attention_keyword is None:
-            self.layer_norm_in_attention_keyword = []
+        if self.layer_compensate_x2 is None:
+            self.layer_compensate_x2 = []
+        if self.layer_compensate_x2_keyword is None:
+            self.layer_compensate_x2_keyword = []
 
 class ParameterTrain(Parameter):
     train_for_max_rounds = None

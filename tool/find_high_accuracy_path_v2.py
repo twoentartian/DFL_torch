@@ -453,14 +453,14 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             norm_layer_names.extend(layer_norm_layer_names)
 
             ignore_move_layers, _ = special_torch_layers.find_layers_according_to_name_and_keyword(start_model_stat_dict, parameter_move.layer_skip_move, parameter_move.layer_skip_move_keyword)
-            layer_norm_in_attention, _ = special_torch_layers.find_layers_according_to_name_and_keyword(start_model_stat_dict, parameter_move.layer_norm_in_attention, parameter_move.layer_norm_in_attention_keyword)
+            layer_compensate_x2, _ = special_torch_layers.find_layers_according_to_name_and_keyword(start_model_stat_dict, parameter_move.layer_compensate_x2, parameter_move.layer_compensate_x2_keyword)
             child_logger.info(f"updating layers to move at tick {runtime_parameter.current_tick}")
             if runtime_parameter.work_mode in [WorkMode.to_inf, WorkMode.to_mean, WorkMode.to_origin]:
                 child_logger.info(f"layer norm layers added to compensate moving layer list (found by built-in norm layer detector)[{len(layer_norm_layer_names)} layers]: {layer_norm_layer_names}")
-                for n in layer_norm_in_attention:
+                for n in layer_compensate_x2:
                     assert n in layer_norm_layer_names, f"{n} is not a layer norm layer."
                 compensate_move_layer.extend(layer_norm_layer_names) # we should move layer norm to compensate
-                compensate_movex2_layer.extend(layer_norm_in_attention)
+                compensate_movex2_layer.extend(layer_compensate_x2)
                 ignore_move_layers.extend(layer_norm_layer_names) # we do not move layer norm towards the destination direction
 
                 child_logger.info(f"batch norm layers added to ignore moving layer list (found by built-in norm layer detector)[{len(batch_norm_layer_names)} layers]: {batch_norm_layer_names}")
@@ -525,17 +525,15 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
                                                                        ignore_layers=ignore_move_layers) # move towards destination
             compensate_end_model_stat_dict = {k: v.detach().clone() * 2 - end_model_stat_dict[k] for k, v in target_model.state_dict().items()}
             if len(compensate_move_layer) > 0:
-                ignore_compensate_layers = list(set(target_model_stat_dict) - set(compensate_move_layer))
                 target_model_stat_dict = model_average.move_model_state_toward(target_model_stat_dict, compensate_end_model_stat_dict,
                                                                                parameter_move.step_size, parameter_move.adoptive_step_size,
                                                                                enable_merge_bias_with_weight=parameter_move.merge_bias_with_weights,
-                                                                               ignore_layers=ignore_compensate_layers)
+                                                                               move_layer=compensate_move_layer)
             if len(compensate_movex2_layer) > 0:
-                ignore_compensate_layers = list(set(target_model_stat_dict) - set(compensate_movex2_layer))
                 target_model_stat_dict = model_average.move_model_state_toward(target_model_stat_dict, compensate_end_model_stat_dict,
                                                                                parameter_move.step_size, parameter_move.adoptive_step_size,
                                                                                enable_merge_bias_with_weight=parameter_move.merge_bias_with_weights,
-                                                                               ignore_layers=ignore_compensate_layers)
+                                                                               move_layer=compensate_movex2_layer)
             target_model.load_state_dict(target_model_stat_dict)
 
         """variance correction"""
