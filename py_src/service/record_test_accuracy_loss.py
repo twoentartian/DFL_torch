@@ -12,13 +12,16 @@ from py_src.node import Node
 import py_src.util as util
 
 class ServiceTestAccuracyLossRecorder(Service):
-    def __init__(self, interval, test_batch_size, phase_to_record=(SimulationPhase.END_OF_TICK,), model_name=None, use_fixed_testing_dataset=True, store_top_accuracy_model_count = 0, accuracy_file_name="accuracy.csv", loss_file_name="loss.csv", test_whole_dataset=False):
+    def __init__(self, interval, test_batch_size, phase_to_record=(SimulationPhase.END_OF_TICK,), model_name=None, use_fixed_testing_dataset=True, store_top_accuracy_model_count = 0,
+                 accuracy_file_name="accuracy.csv", loss_file_name="loss.csv", output_var_file_name="output_var.csv", test_whole_dataset=False):
         super().__init__()
         self.accuracy_file = None
         self.loss_file = None
+        self.output_var_file = None
         self.node_order = None
         self.accuracy_file_name = accuracy_file_name
         self.loss_file_name = loss_file_name
+        self.output_var_file_name = output_var_file_name
         self.interval = interval
         self.phase_to_record = phase_to_record
         self.store_top_accuracy_model_count = store_top_accuracy_model_count
@@ -59,11 +62,14 @@ class ServiceTestAccuracyLossRecorder(Service):
     def initialize_without_runtime_parameters(self, output_path, node_names, model, criterion, test_dataset, gpu: CudaDevice=None, existing_model_for_testing=None, num_workers=None):
         self.accuracy_file = open(os.path.join(output_path, f"{self.accuracy_file_name}"), "w+")
         self.loss_file = open(os.path.join(output_path, f"{self.loss_file_name}"), "w+")
+        self.output_var_file = open(os.path.join(output_path, f"{self.output_var_file_name}"), "w+")
+
         self.node_order = node_names
         node_order_str = [str(i) for i in self.node_order]
         header = ",".join(["tick", "phase", *node_order_str])
         self.accuracy_file.write(header + "\n")
         self.loss_file.write(header + "\n")
+        self.output_var_file.write(header + "\n")
         self.criterion = criterion
 
         # set testing dataset
@@ -134,6 +140,7 @@ class ServiceTestAccuracyLossRecorder(Service):
             return
         row_accuracy = []
         row_loss = []
+        row_output_var = []
         final_accuracy = {}
         final_model = {}
         for node_name in self.node_order:
@@ -143,7 +150,7 @@ class ServiceTestAccuracyLossRecorder(Service):
                 if self.allocated_gpu is not None:
                     self.test_model.to(self.allocated_gpu.device)
                 self.test_model.eval()
-                total_loss, correct, total = 0, 0, 0
+                total_loss, correct, var_acc, total = 0, 0, 0.0, 0
                 for d, l in self.test_dataset:
                     test_data = d
                     test_labels = l
@@ -154,11 +161,13 @@ class ServiceTestAccuracyLossRecorder(Service):
                     _, predicted = torch.max(outputs, 1)
                     correct += (predicted == test_labels).sum().item()
                     total += test_labels.size(0)
+                    var_acc += outputs.var(dim=0, unbiased=False).mean().item()
                 loss = total_loss / total
                 accuracy = correct / total
+                var = var_acc / total
             else:
                 if self.use_fixed_testing_dataset:
-                    total_loss, correct, total = 0, 0, 0
+                    total_loss, correct, var_acc, total = 0, 0, 0.0, 0
                     model_stat = node_names_and_model_stats[node_name]
                     self.test_model.load_state_dict(model_stat)
                     for test_data, test_labels in self.test_dataset:
@@ -172,8 +181,10 @@ class ServiceTestAccuracyLossRecorder(Service):
                         _, predicted = torch.max(outputs, 1)
                         correct += (predicted == test_labels).sum().item()
                         total += test_labels.size(0)
+                        var_acc += outputs.var(dim=0, unbiased=False).mean().item()
                     loss = total_loss / total
                     accuracy = correct / total
+                    var = var_acc / total
                 else:
                     test_data = None
                     test_labels = None
@@ -193,37 +204,41 @@ class ServiceTestAccuracyLossRecorder(Service):
                     _, predicted = torch.max(outputs, 1)
                     correct_predictions = (predicted == test_labels).sum().item()
                     accuracy = correct_predictions / len(test_labels)
+                    var = outputs.var(dim=0, unbiased=False).mean().item()
             row_accuracy.append(str(accuracy))
             row_loss.append('%.4f' % loss)
+            row_output_var.append('%.4f' % var)
             final_accuracy[node_name] = accuracy
             final_model[node_name] = model_stat
         row_accuracy_str = ",".join([str(tick), str(phase_str), *row_accuracy])
         row_loss_str = ",".join([str(tick), str(phase_str), *row_loss])
+        row_output_var_str = ",".join([str(tick), str(phase_str), *row_output_var])
         self.accuracy_file.write(row_accuracy_str + "\n")
         self.accuracy_file.flush()
         self.loss_file.write(row_loss_str + "\n")
         self.loss_file.flush()
+        self.output_var_file.write(row_output_var_str + "\n")
+        self.output_var_file.flush()
 
         # store_top_accuracy_model
         self._check_store_top_accuracy_model(final_accuracy, final_model, tick)
 
     def continue_from_checkpoint(self, checkpoint_folder_path: str, restore_until_tick: int, *args, **kwargs):
-        infile_path = os.path.join(checkpoint_folder_path, self.accuracy_file_name)
-        with open(infile_path, 'r', newline='') as infile:
-            next(infile)
-            for line in infile:
-                row_tick = int(line.split(",", 1)[0])
-                if row_tick < restore_until_tick:
-                    self.accuracy_file.write(line)
-        self.accuracy_file.flush()
-        infile_path = os.path.join(checkpoint_folder_path, self.loss_file_name)
-        with open(infile_path, 'r', newline='') as infile:
-            next(infile)
-            for line in infile:
-                row_tick = int(line.split(",", 1)[0])
-                if row_tick < restore_until_tick:
-                    self.loss_file.write(line)
-        self.loss_file.flush()
+        def copy_file(file_name, file):
+            infile_path = os.path.join(checkpoint_folder_path, file_name)
+            with open(infile_path, 'r', newline='') as infile:
+                next(infile)
+                for line in infile:
+                    row_tick = int(line.split(",", 1)[0])
+                    if row_tick < restore_until_tick:
+                        file.write(line)
+            file.flush()
+        # accuracy file
+        copy_file(self.accuracy_file_name, self.accuracy_file)
+        # loss file
+        copy_file(self.loss_file_name, self.loss_file)
+        # output variance file
+        copy_file(self.output_var_file_name, self.output_var_file)
 
     def _check_store_top_accuracy_model(self, final_accuracy, final_model, tick):
         if self.store_top_accuracy_model:
@@ -257,6 +272,9 @@ class ServiceTestAccuracyLossRecorder(Service):
         self.accuracy_file.close()
         self.loss_file.flush()
         self.loss_file.close()
+        self.output_var_file.flush()
+        self.output_var_file.close()
+
 
 import unittest
 class TestStoreTopAccuracyModel(unittest.TestCase):
