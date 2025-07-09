@@ -523,7 +523,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
                                                                        parameter_move.step_size, parameter_move.adoptive_step_size,
                                                                        enable_merge_bias_with_weight=parameter_move.merge_bias_with_weights,
                                                                        ignore_layers=ignore_move_layers) # move towards destination
-            compensate_end_model_stat_dict = {k: v.detach().clone() * 2 for k, v in target_model.state_dict().items()}
+            compensate_end_model_stat_dict = {k: v.detach().clone() * 2 - end_model_stat_dict[k] for k, v in target_model.state_dict().items()}
             if len(compensate_move_layer) > 0:
                 ignore_compensate_layers = list(set(target_model_stat_dict) - set(compensate_move_layer))
                 target_model_stat_dict = model_average.move_model_state_toward(target_model_stat_dict, compensate_end_model_stat_dict,
@@ -553,6 +553,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
                     if name in norm_layer_names:
                         continue  # skip norm layers
                     if 'weight' in name and param.requires_grad:  # Only adjust weights, not biases
+                    # if param.requires_grad:
                         current_layer_variance = torch.var(param.data).item()
                         if runtime_parameter.across_vs_lr_policy == 'var':
                             new_lr = initial_optimizer_state['lr'] * current_layer_variance / target_variance[name]
