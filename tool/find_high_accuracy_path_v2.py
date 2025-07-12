@@ -383,6 +383,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
     norm_layer_names = []
     compensate_move_layer = []
     compensate_movex2_layer = []
+    ignore_move_layers = []
     while runtime_parameter.current_tick < runtime_parameter.max_tick:
         parameter_updated = False
         child_logger.info(f"tick: {runtime_parameter.current_tick}")
