@@ -452,7 +452,8 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             norm_layer_names.extend(batch_norm_layer_names)
             norm_layer_names.extend(layer_norm_layer_names)
 
-            ignore_move_layers, _ = special_torch_layers.find_layers_according_to_name_and_keyword(start_model_stat_dict, parameter_move.layer_skip_move, parameter_move.layer_skip_move_keyword)
+            ignore_move_layers_from_config, _ = special_torch_layers.find_layers_according_to_name_and_keyword(start_model_stat_dict, parameter_move.layer_skip_move, parameter_move.layer_skip_move_keyword)
+            ignore_move_layers.extend(ignore_move_layers_from_config)
             layer_compensate_x2, _ = special_torch_layers.find_layers_according_to_name_and_keyword(start_model_stat_dict, parameter_move.layer_compensate_x2, parameter_move.layer_compensate_x2_keyword)
             child_logger.info(f"updating layers to move at tick {runtime_parameter.current_tick}")
             if runtime_parameter.work_mode in [WorkMode.to_inf, WorkMode.to_mean, WorkMode.to_origin]:
@@ -472,6 +473,12 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
                 compensate_movex2_layer.sort()
                 ignore_move_layers = list(set(ignore_move_layers))
                 ignore_move_layers.sort()
+
+            # remove layers if mentioned in ignore_move_layers
+            compensate_move_layer = list(set(compensate_move_layer) - set(ignore_move_layers_from_config))
+            compensate_move_layer.sort()
+            compensate_movex2_layer = list(set(compensate_movex2_layer) - set(ignore_move_layers_from_config))
+            compensate_movex2_layer.sort()
 
             child_logger.info(f"ignore moving {len(ignore_move_layers)} layers: {ignore_move_layers}")
             child_logger.info(f"compensate moving {len(compensate_move_layer)} layers: {compensate_move_layer}")
