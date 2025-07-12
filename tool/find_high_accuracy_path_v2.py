@@ -557,7 +557,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             if runtime_parameter.work_mode in [WorkMode.to_inf, WorkMode.to_origin, WorkMode.to_mean]:
                 for param_group, initial_optimizer_state, (name, param) in zip(optimizer.param_groups, initial_optimizer_state_dict['param_groups'], target_model.named_parameters()):
                     if name in norm_layer_names:
-                        child_logger.info(f"tick {runtime_parameter.current_tick}: keep lr for layer {name} (norm layer): {initial_optimizer_state['lr']:.3E}")
+                        child_logger.info(f"tick {runtime_parameter.current_tick}: [keep] lr for layer {name} (norm layer): {initial_optimizer_state['lr']:.3E}")
                         continue  # skip norm layers
                     if 'weight' in name and param.requires_grad:  # Only adjust weights, not biases
                     # if param.requires_grad:
