@@ -98,10 +98,10 @@ if __name__ == '__main__':
         accuracy_x = accuracy_df.index
         accuracy_df_len = len(accuracy_df)
 
-        herd_effect_delay = calculate_herd_effect_delay(accuracy_df)
+        # herd_effect_delay = calculate_herd_effect_delay(accuracy_df)
 
         ###################### accuracy
-        axs[plot_index].axvline(x=herd_effect_delay, color='r', label=f'herd effect delay={herd_effect_delay}')
+        # axs[plot_index].axvline(x=herd_effect_delay, color='r', label=f'herd effect delay={herd_effect_delay}')
         for col in accuracy_df.columns:
             if draw_only_first_node:
                 if col == "0":
