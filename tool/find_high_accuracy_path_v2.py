@@ -13,7 +13,6 @@ import copy
 import time
 from datetime import datetime
 
-from torch import old_flags
 from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
 
