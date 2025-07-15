@@ -541,7 +541,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             attention_layer_weights = {}
             for layer_name, weights in target_model.state_dict().items():
                 if layer_name in attention_layer:
-                    attention_layer_weights[layer_name] = weights.detach().copy()
+                    attention_layer_weights[layer_name] = weights.detach().clone()
 
             target_model_stat_dict = model_average.move_model_state_toward(target_model.state_dict(), end_model_stat_dict,
                                                                        parameter_move.step_size, parameter_move.adoptive_step_size,
