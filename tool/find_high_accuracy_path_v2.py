@@ -383,6 +383,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
     norm_layer_names = []
     compensate_move_layer = []
     compensate_movex2_layer = []
+    attention_layer = []
     ignore_move_layers = []
     while runtime_parameter.current_tick < runtime_parameter.max_tick:
         parameter_updated = False
@@ -457,6 +458,15 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             ignore_move_layers.extend(ignore_move_layers_from_config)
             layer_compensate_x2, _ = special_torch_layers.find_layers_according_to_name_and_keyword(start_model_stat_dict, parameter_move.layer_compensate_x2, parameter_move.layer_compensate_x2_keyword)
             child_logger.info(f"updating layers to move at tick {runtime_parameter.current_tick}")
+
+            # attention layers
+            attention_layer, _ = special_torch_layers.find_layers_according_to_name_and_keyword(start_model_stat_dict, parameter_move.layer_attention, parameter_move.layer_attention_keyword)
+            attention_layer.sort()
+            if len(attention_layer) > 0:
+                child_logger.info(f"found {len(attention_layer)} attention layers (policy: {parameter_move.layer_attention_policy}): {attention_layer}")
+            else:
+                child_logger.info(f"found no attention layers")
+
             if runtime_parameter.work_mode in [WorkMode.to_inf, WorkMode.to_mean, WorkMode.to_origin]:
                 child_logger.info(f"layer norm layers added to compensate moving layer list (found by built-in norm layer detector)[{len(layer_norm_layer_names)} layers]: {layer_norm_layer_names}")
                 for n in layer_compensate_x2:
@@ -527,6 +537,12 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
 
         """move model"""
         if not runtime_parameter.debug_check_config_mode:
+            # store attention layer weights
+            attention_layer_weights = {}
+            for layer_name, weights in target_model.state_dict().items():
+                if layer_name in attention_layer:
+                    attention_layer_weights[layer_name] = weights.detach().copy()
+
             target_model_stat_dict = model_average.move_model_state_toward(target_model.state_dict(), end_model_stat_dict,
                                                                        parameter_move.step_size, parameter_move.adoptive_step_size,
                                                                        enable_merge_bias_with_weight=parameter_move.merge_bias_with_weights,
@@ -542,6 +558,13 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
                                                                                parameter_move.step_size, parameter_move.adoptive_step_size,
                                                                                enable_merge_bias_with_weight=parameter_move.merge_bias_with_weights,
                                                                                move_layer=compensate_movex2_layer)
+            # attention layer
+            if len(attention_layer) > 0 and parameter_move.layer_attention_policy != 'none':
+                if parameter_move.layer_attention_policy == 'ignore_kv':
+                    pass
+                else:
+                    raise NotImplementedError
+
             target_model.load_state_dict(target_model_stat_dict)
 
         """variance correction"""

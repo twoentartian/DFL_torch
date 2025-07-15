@@ -18,11 +18,22 @@ class ParameterMove(Parameter):
     layer_compensate_x2 = None
     layer_compensate_x2_keyword = None
 
+    # attention layers
+    layer_attention = None
+    layer_attention_keyword = None
+    layer_attention_policy = None # 'none', 'ignore_kv'
+
     def fill_default(self):
         if self.layer_compensate_x2 is None:
             self.layer_compensate_x2 = []
         if self.layer_compensate_x2_keyword is None:
             self.layer_compensate_x2_keyword = []
+        if self.layer_attention is None:
+            self.layer_attention = []
+        if self.layer_attention_keyword is None:
+            self.layer_attention_keyword = []
+        if self.layer_attention_policy is None:
+            self.layer_attention_policy = 'none'
 
 class ParameterTrain(Parameter):
     train_for_max_rounds = None
