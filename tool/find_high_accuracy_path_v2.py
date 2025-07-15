@@ -12,6 +12,8 @@ import concurrent.futures
 import copy
 import time
 from datetime import datetime
+
+from torch import old_flags
 from torch.utils.data import DataLoader
 from torch.utils.data.dataloader import default_collate
 
@@ -538,10 +540,10 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
         """move model"""
         if not runtime_parameter.debug_check_config_mode:
             # store attention layer weights
-            attention_layer_weights = {}
+            old_attention_layer_weights = {}
             for layer_name, weights in target_model.state_dict().items():
                 if layer_name in attention_layer:
-                    attention_layer_weights[layer_name] = weights.detach().clone()
+                    old_attention_layer_weights[layer_name] = weights.detach().clone()
 
             target_model_stat_dict = model_average.move_model_state_toward(target_model.state_dict(), end_model_stat_dict,
                                                                        parameter_move.step_size, parameter_move.adoptive_step_size,
@@ -558,10 +560,34 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
                                                                                parameter_move.step_size, parameter_move.adoptive_step_size,
                                                                                enable_merge_bias_with_weight=parameter_move.merge_bias_with_weights,
                                                                                move_layer=compensate_movex2_layer)
-            # attention layer
+            # attention layer: apply policy
             if len(attention_layer) > 0 and parameter_move.layer_attention_policy != 'none':
                 if parameter_move.layer_attention_policy == 'ignore_kv':
-                    pass
+                    def copy_qk_weights(source_qkv: nn.Linear, target_qkv: nn.Linear):
+                        """
+                        Copy the query and key weights from source_qkv to target_qkv.
+                        Both are nn.Linear layers with weight shape (3m, m).
+                        """
+                        assert source_qkv.weight.shape == target_qkv.weight.shape, "Shape mismatch"
+
+                        # Split weights: [Q; K; V] -> each of shape (m, m)
+                        source_q, source_k, source_v = source_qkv.weight.chunk(3, dim=0)
+                        target_q, target_k, target_v = target_qkv.weight.chunk(3, dim=0)
+
+                        # Reconstruct new weight: use source Q and K, keep target V
+                        new_weight = torch.cat([source_q, source_k, target_v], dim=0)
+                        target_qkv.weight.data.copy_(new_weight)
+
+                        # Optional: if you also want to update biases
+                        if source_qkv.bias is not None and target_qkv.bias is not None:
+                            source_qb, source_kb, source_vb = source_qkv.bias.chunk(3, dim=0)
+                            target_qb, target_kb, target_vb = target_qkv.bias.chunk(3, dim=0)
+                            new_bias = torch.cat([source_qb, source_kb, target_vb], dim=0)
+                            target_qkv.bias.data.copy_(new_bias)
+
+                        print("Query and Key weights copied successfully.")
+                    for target_layer_name in attention_layer:
+                        copy_qk_weights(old_attention_layer_weights[target_layer_name], target_model_stat_dict[target_layer_name])
                 else:
                     raise NotImplementedError
 
