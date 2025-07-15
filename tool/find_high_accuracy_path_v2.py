@@ -562,31 +562,46 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             # attention layer: apply policy
             if len(attention_layer) > 0 and parameter_move.layer_attention_policy != 'none':
                 if parameter_move.layer_attention_policy == 'ignore_kv':
-                    def copy_qk_weights(source_qkv: nn.Linear, target_qkv: nn.Linear):
+                    def copy_qk_from_state_dict(source_sd: dict, target_sd: dict,
+                            qkv_weight_key: str, qkv_bias_key: str = None):
                         """
-                        Copy the query and key weights from source_qkv to target_qkv.
-                        Both are nn.Linear layers with weight shape (3m, m).
+                        Copy query and key weights (and optionally biases) from source_sd to target_sd.
+
+                        Args:
+                            source_sd (dict): state_dict of the source model/layer
+                            target_sd (dict): state_dict of the target model/layer (to modify in place)
+                            qkv_weight_key (str): key for qkv.weight (e.g., 'blocks.0.self_attn.qkv.weight')
+                            qkv_bias_key (str): optional key for qkv.bias
                         """
-                        assert source_qkv.weight.shape == target_qkv.weight.shape, "Shape mismatch"
+                        # Get weights
+                        W_src = source_sd[qkv_weight_key]  # shape: [3m, m]
+                        W_tgt = target_sd[qkv_weight_key]
 
-                        # Split weights: [Q; K; V] -> each of shape (m, m)
-                        source_q, source_k, source_v = source_qkv.weight.chunk(3, dim=0)
-                        target_q, target_k, target_v = target_qkv.weight.chunk(3, dim=0)
+                        assert W_src.shape == W_tgt.shape, "Weight shape mismatch"
 
-                        # Reconstruct new weight: use source Q and K, keep target V
-                        new_weight = torch.cat([source_q, source_k, target_v], dim=0)
-                        target_qkv.weight.data.copy_(new_weight)
+                        # Split Q, K, V
+                        src_q, src_k, src_v = W_src.chunk(3, dim=0)
+                        _, _, tgt_v = W_tgt.chunk(3, dim=0)
 
-                        # Optional: if you also want to update biases
-                        if source_qkv.bias is not None and target_qkv.bias is not None:
-                            source_qb, source_kb, source_vb = source_qkv.bias.chunk(3, dim=0)
-                            target_qb, target_kb, target_vb = target_qkv.bias.chunk(3, dim=0)
-                            new_bias = torch.cat([source_qb, source_kb, target_vb], dim=0)
-                            target_qkv.bias.data.copy_(new_bias)
+                        # Replace Q and K, keep V from target
+                        new_weight = torch.cat([src_q, src_k, tgt_v], dim=0)
+                        target_sd[qkv_weight_key] = new_weight
 
-                        print("Query and Key weights copied successfully.")
+                        # Optionally handle bias
+                        if qkv_bias_key and qkv_bias_key in source_sd and qkv_bias_key in target_sd:
+                            B_src = source_sd[qkv_bias_key]
+                            B_tgt = target_sd[qkv_bias_key]
+
+                            assert B_src.shape == B_tgt.shape, "Bias shape mismatch"
+
+                            src_qb, src_kb, src_vb = B_src.chunk(3, dim=0)
+                            _, _, tgt_vb = B_tgt.chunk(3, dim=0)
+
+                            new_bias = torch.cat([src_qb, src_kb, tgt_vb], dim=0)
+                            target_sd[qkv_bias_key] = new_bias
+
                     for target_layer_name in attention_layer:
-                        copy_qk_weights(old_attention_layer_weights[target_layer_name], target_model_stat_dict[target_layer_name])
+                        copy_qk_from_state_dict(old_attention_layer_weights, target_model_stat_dict, target_layer_name)
                 else:
                     raise NotImplementedError
 
