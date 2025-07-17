@@ -40,6 +40,8 @@ class ParameterTrain(Parameter):
     train_until_loss = None
     train_for_min_rounds = None
     pretrain_optimizer = None
+    pretrain_model_weights = None
+    pretrain_iterations = None
     load_existing_optimizer = None
 
     def fill_default(self):

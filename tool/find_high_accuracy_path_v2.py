@@ -46,28 +46,40 @@ def load_existing_optimizer_stat(optimizer, optimizer_stat_dict_path, logger=Non
             raise RuntimeError(f"fail to load optimizer state: {str(e)}, now skip")
     del optimizer_test
 
-def pre_train(model, optimizer, criterion, dataloader, device, cpu_device, logger=None):
+# this function pretrain model weights / optimizer weights
+def pre_train(model, optimizer, criterion, dataloader, device, train_iteration=0, train_model_weights=False, train_optimizer=False, logger=None):
     if logger is not None:
-        logger.info(f"pre training")
-    temp_model_state = model.state_dict()
-    cuda.CudaEnv.model_state_dict_to(temp_model_state, cpu_device)
+        if train_model_weights is False and train_optimizer is False:
+            logger.info(f"skip pretraining")
+            return
+        logger.info(f"pre training, train_iteration:{train_iteration}, train_model_weights:{train_model_weights}, train_optimizer:{train_optimizer}")
+    old_model_state = None if train_model_weights else copy.deepcopy(model.state_dict())
+    old_optimizer_state = None if train_optimizer else copy.deepcopy(optimizer.state_dict())
     model.train()
     model.to(device)
     cuda.CudaEnv.optimizer_to(optimizer, device)
-    for (training_index, (data, label)) in enumerate(dataloader):
-        data, label = data.to(device), label.to(device)
-        optimizer.zero_grad(set_to_none=True)
-        output = model(data)
-        loss = criterion(output, label)
-        loss.backward()
-        optimizer.step()
-        loss_val = loss.item()
-        if training_index == 100:
-            break
-    model.load_state_dict(temp_model_state)
+    training_index = 0
+    while training_index < train_iteration:
+        for data, label in dataloader:
+            data, label = data.to(device), label.to(device)
+            optimizer.zero_grad(set_to_none=True)
+            output = model(data)
+            loss = criterion(output, label)
+            loss.backward()
+            optimizer.step()
+            loss_val = loss.item()
+            training_index += 1
+            if training_index >= train_iteration:
+                break
+    if old_model_state is not None:
+        model.load_state_dict(old_model_state)
+        if logger is not None:
+            logger.info(f"pre training done, load old model state")
+    if old_optimizer_state is not None:
+        optimizer.load_state_dict(old_optimizer_state)
+        if logger is not None:
+            logger.info(f"pre training done, load old optimizer state")
     model.to(device)
-    if logger is not None:
-        logger.info(f"pre training finished")
 
 
 def rebuild_norm_layer_function(model: torch.nn.Module, initial_model_state, start_model_state, rebuild_norm_optimizer: torch.optim.Optimizer,
@@ -523,8 +535,9 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
                 logger.critical("cannot enable both pretrain_optimizer and load_existing_optimizer")
             # pretrain optimizer
             if not runtime_parameter.debug_check_config_mode:
-                if parameter_train.pretrain_optimizer:
-                    pre_train(target_model, optimizer, criterion, dataloader, device, cpu_device, logger=child_logger)
+                if parameter_train.pretrain_optimizer or parameter_train.pretrain_optimizer:
+                    pre_train(target_model, optimizer, criterion, dataloader, device, train_iteration=parameter_train.pretrain_iterations, logger=child_logger,
+                              train_optimizer=parameter_train.pretrain_optimizer, train_model_weights=parameter_train.pretrain_model_weights)
             # load existing optimizer
             if not runtime_parameter.debug_check_config_mode:
                 if parameter_train.load_existing_optimizer:
