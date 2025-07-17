@@ -69,6 +69,8 @@ def pre_train(model, optimizer, criterion, dataloader, device, train_iteration=0
             optimizer.step()
             loss_val = loss.item()
             training_index += 1
+            if training_index % 100 == 0:
+                logger.info(f"pre training iter {training_index}, loss: {loss_val}")
             if training_index >= train_iteration:
                 break
     if old_model_state is not None:
