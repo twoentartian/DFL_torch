@@ -476,9 +476,9 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             attention_layer, _ = special_torch_layers.find_layers_according_to_name_and_keyword(start_model_stat_dict, parameter_move.layer_attention, parameter_move.layer_attention_keyword)
             attention_layer.sort()
             if len(attention_layer) > 0:
-                child_logger.info(f"found {len(attention_layer)} attention layers (policy: {parameter_move.layer_attention_policy}): {attention_layer}")
+                child_logger.info(f"found {len(attention_layer)} policy- attention layers (policy: {parameter_move.layer_attention_policy}): {attention_layer}")
             else:
-                child_logger.info(f"found no attention layers")
+                child_logger.info(f"found no policy- attention layers (policy: {parameter_move.layer_attention_policy}))")
 
             if runtime_parameter.work_mode in [WorkMode.to_inf, WorkMode.to_mean, WorkMode.to_origin]:
                 child_logger.info(f"layer norm layers added to compensate moving layer list (found by built-in norm layer detector)[{len(layer_norm_layer_names)} layers]: {layer_norm_layer_names}")
