@@ -3,11 +3,10 @@ import torchvision.models as models
 import os
 import sys
 
-from sympy.codegen.cxxnodes import using
-
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from py_src import util
 from py_src.ml_setup_base.model import ModelType
+import py_src.third_party.compact_transformers.src.cct as cct
 
 if __name__ == "__main__":
     output_path = "pytorch_pretrained"
@@ -85,3 +84,6 @@ if __name__ == "__main__":
 
     model = models.wide_resnet50_2(weights=models.Wide_ResNet50_2_Weights.IMAGENET1K_V2)
     util.save_model_state(os.path.join(output_path, "wide_resnet50_2_imagenet_v2.model.pt"), model.state_dict(), model_name=str(ModelType.wide_resnet50_2.name))
+
+    model = cct.cct_7_7x2_224(pretrained=True, progress=False)
+    util.save_model_state(os.path.join(output_path, "cct_7_7x2_224.model.pt"), model.state_dict(), model_name=str(ModelType.cct_7_7x2_224.name))
