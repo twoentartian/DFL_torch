@@ -144,7 +144,7 @@ def dla_cifar10():
     output_ml_setup.model = DLA(num_classes=10)
     output_ml_setup.model_name = str(ModelType.dla.name)
     output_ml_setup.get_info_from_dataset(dataset)
-    output_ml_setup.training_batch_size = 128
+    output_ml_setup.training_batch_size = 256
     output_ml_setup.has_normalization_layer = True
     output_ml_setup.criterion = nn.CrossEntropyLoss()
     return output_ml_setup
