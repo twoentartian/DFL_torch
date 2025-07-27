@@ -206,8 +206,8 @@ class FastTrainingSetup(object):
             else:
                 raise NotImplemented
             return optimizer, lr_scheduler, epochs
-        elif arg_ml_setup.model_name == 'shufflenet_v2':
-            if arg_ml_setup.dataset_name == "cifar10_32":
+        elif arg_ml_setup.model_name == ModelType.shufflenet_v2.name:
+            if arg_ml_setup.dataset_name == DatasetType.cifar10.name:
                 epochs = 300
                 optimizer = torch.optim.SGD(model.parameters(), lr = 1e-1, weight_decay = 4e-5, momentum = 0.9)
                 steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
@@ -215,7 +215,18 @@ class FastTrainingSetup(object):
                 milestones = [steps_per_epoch * i for i in milestones_epoch]
                 lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones, gamma=0.1)
             else:
-                raise NotImplemented
+                raise NotImplementedError
+            return optimizer, lr_scheduler, epochs
+        elif arg_ml_setup.model_name == ModelType.dla.name:
+            if arg_ml_setup.dataset_name == DatasetType.cifar10.name:
+                epochs = 120
+                optimizer = torch.optim.SGD(model.parameters(), lr=1e-1, weight_decay=1e-4, momentum=0.9)
+                steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
+                milestones_epoch = [30, 60, 90]
+                milestones = [steps_per_epoch * i for i in milestones_epoch]
+                lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones, gamma=0.1)
+            else:
+                raise NotImplementedError
             return optimizer, lr_scheduler, epochs
         else:
             raise NotImplementedError

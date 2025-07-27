@@ -33,3 +33,4 @@ class ModelType(Enum):
     alexnet = auto()
     resnext50_32x4d = auto()
     wide_resnet50_2 = auto()
+    dla = auto()
