@@ -212,31 +212,36 @@ def prompt_selection(options, prompt_message="Please make a selection:", allow_q
 
 def geodesic_distance(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     """
-    Compute the geodesic (spherical) distance between two points a and b
+    Compute the geodesic (spherical) distance between two multi-dimensional points a and b
     on a sphere centered at the origin.
 
     Args:
-        a (torch.Tensor): Tensor of shape (n,) representing the first point.
-        b (torch.Tensor): Tensor of shape (n,) representing the second point.
+        a (torch.Tensor): Tensor of any shape representing the first point.
+        b (torch.Tensor): Tensor of the same shape representing the second point.
 
     Returns:
         torch.Tensor: Scalar tensor representing the geodesic distance.
     """
-    # Compute norms
-    norm_a = torch.norm(a)
-    norm_b = torch.norm(b)
+    # Flatten the tensors
+    a_flat = a.flatten()
+    b_flat = b.flatten()
 
-    # Use average radius if norms are close (optional)
+    # Compute norms
+    norm_a = torch.norm(a_flat)
+    norm_b = torch.norm(b_flat)
+
+    # Use average radius (or assume sphere radius is consistent)
     r = (norm_a + norm_b) / 2
 
     # Compute cosine of angle
-    cos_theta = torch.dot(a, b) / (norm_a * norm_b)
+    cos_theta = torch.dot(a_flat, b_flat) / (norm_a * norm_b)
 
-    # Clamp to avoid numerical errors outside [-1, 1]
+    # Clamp cosine to avoid numerical errors
     cos_theta = torch.clamp(cos_theta, -1.0, 1.0)
 
-    # Compute angle and distance
+    # Compute angle and geodesic distance
     theta = torch.acos(cos_theta)
     distance = r * theta
 
     return distance
+
