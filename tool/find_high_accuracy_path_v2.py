@@ -400,6 +400,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
     compensate_movex2_layer = []
     attention_layer = []
     ignore_move_layers = []
+    ratio_step_size = None
     while runtime_parameter.current_tick < runtime_parameter.max_tick:
         parameter_updated = False
         child_logger.info(f"tick: {runtime_parameter.current_tick}")
@@ -454,6 +455,16 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             new_parameter_move.fill_default()
             new_parameter_move.validate()
             parameter_move = new_parameter_move
+
+            # calculate ratio step size
+            if parameter_move.ratio_step_size is not None:
+                ratio_step_size = {}
+                current_model_stat = target_model.state_dict()
+                for layer_name, current_layer_weights in current_model_stat.items():
+                    distance = util.geodesic_distance(current_layer_weights, end_model_stat_dict[layer_name])
+                    ratio_step_size[layer_name] = distance.item() * parameter_move.ratio_step_size
+            else:
+                ratio_step_size = None
 
         """ re init ignore moving layer list """
         if re_init_norm_layer_list:
@@ -562,18 +573,20 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             target_model_stat_dict = model_average.move_model_state_toward(target_model.state_dict(), end_model_stat_dict,
                                                                        parameter_move.step_size, parameter_move.adoptive_step_size,
                                                                        enable_merge_bias_with_weight=parameter_move.merge_bias_with_weights,
-                                                                       ignore_layers=ignore_move_layers) # move towards destination
+                                                                       ignore_layers=ignore_move_layers, ratio_step_per_layer=ratio_step_size) # move towards destination
             compensate_end_model_stat_dict = {k: v.detach().clone() * 2 - end_model_stat_dict[k] for k, v in target_model.state_dict().items()}
             if len(compensate_move_layer) > 0:
+                if ratio_step_size is not None:
+                    child_logger.warning(f"using ratio step size in layer compensate might cause wrong results.")
                 target_model_stat_dict = model_average.move_model_state_toward(target_model_stat_dict, compensate_end_model_stat_dict,
                                                                                parameter_move.step_size, parameter_move.adoptive_step_size,
                                                                                enable_merge_bias_with_weight=parameter_move.merge_bias_with_weights,
-                                                                               move_layer=compensate_move_layer)
+                                                                               move_layer=compensate_move_layer, ratio_step_per_layer=ratio_step_size)
             if len(compensate_movex2_layer) > 0:
                 target_model_stat_dict = model_average.move_model_state_toward(target_model_stat_dict, compensate_end_model_stat_dict,
                                                                                parameter_move.step_size, parameter_move.adoptive_step_size,
                                                                                enable_merge_bias_with_weight=parameter_move.merge_bias_with_weights,
-                                                                               move_layer=compensate_movex2_layer)
+                                                                               move_layer=compensate_movex2_layer, ratio_step_per_layer=ratio_step_size)
             # attention layer: apply policy
             if len(attention_layer) > 0 and parameter_move.layer_attention_policy != 'none':
                 if parameter_move.layer_attention_policy == 'ignore_kv':

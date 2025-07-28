@@ -15,7 +15,7 @@ def move_tensor_toward(layer_name, src_tensor, dest_tensor, step, adoptive_step,
     move_tensor = angle_tensor * real_step
     return src_tensor + move_tensor
 
-def move_model_state_toward(src_model_stat, dest_model_stat, step, adoptive_step, enable_merge_bias_with_weight=False, ignore_layers=None, move_layer=None, random_scale=None):
+def move_model_state_toward(src_model_stat, dest_model_stat, step, adoptive_step, ratio_step_per_layer=None, enable_merge_bias_with_weight=False, ignore_layers=None, move_layer=None, random_scale=None):
     """
     move src_model_stat to dest_model_stat
     Args:
@@ -43,6 +43,7 @@ def move_model_state_toward(src_model_stat, dest_model_stat, step, adoptive_step
         if layer_name in ignore_layers:
             continue
 
+        total_step = step if ratio_step_per_layer is None else step + ratio_step_per_layer[layer_name]
         current_layer_processed = False
         # process associated bias tensor with weight tensor
         if enable_merge_bias_with_weight and ('weight' in layer_name):
@@ -55,7 +56,7 @@ def move_model_state_toward(src_model_stat, dest_model_stat, step, adoptive_step
                 src_model_bias: torch.Tensor = src_model_stat[bias_layer_name]
                 src_tensor = torch.cat((src_model_weight.flatten(), src_model_bias.flatten()), dim=0)
                 dst_tensor = torch.cat((dest_model_stat[layer_name].flatten(), dest_model_stat[bias_layer_name].flatten()), dim=0)
-                output_tensor = move_tensor_toward(layer_name, src_tensor, dst_tensor, step, adoptive_step, random_scale=random_scale)
+                output_tensor = move_tensor_toward(layer_name, src_tensor, dst_tensor, total_step, adoptive_step, random_scale=random_scale)
                 output_weight_tensor, output_bias_tensor = torch.split(output_tensor, [src_model_weight.nelement(), src_model_bias.nelement()], dim=0)
                 output_weight_tensor = output_weight_tensor.reshape(src_model_weight.shape)
                 output_bias_tensor = output_bias_tensor.reshape(src_model_bias.shape)
@@ -67,7 +68,7 @@ def move_model_state_toward(src_model_stat, dest_model_stat, step, adoptive_step
             layers_already_process.add(layer_name)
             src_tensor = src_model_stat[layer_name]
             dst_tensor = dest_model_stat[layer_name]
-            output_stat[layer_name] = move_tensor_toward(layer_name, src_tensor, dst_tensor, step, adoptive_step, random_scale=random_scale)
+            output_stat[layer_name] = move_tensor_toward(layer_name, src_tensor, dst_tensor, total_step, adoptive_step, random_scale=random_scale)
     return output_stat
 
 class ModelAverager:

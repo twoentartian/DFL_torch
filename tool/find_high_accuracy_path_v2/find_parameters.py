@@ -10,6 +10,7 @@ class ParameterGeneral(Parameter):
 class ParameterMove(Parameter):
     step_size = None
     adoptive_step_size = None
+    ratio_step_size = None
     layer_skip_move = None
     layer_skip_move_keyword = None
     merge_bias_with_weights = None

@@ -208,3 +208,35 @@ def prompt_selection(options, prompt_message="Please make a selection:", allow_q
                 print(f"Please enter a number between 1 and {len(options)}")
         except ValueError:
             print("Please enter a valid number or 'q' to quit")
+
+
+def geodesic_distance(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+    """
+    Compute the geodesic (spherical) distance between two points a and b
+    on a sphere centered at the origin.
+
+    Args:
+        a (torch.Tensor): Tensor of shape (n,) representing the first point.
+        b (torch.Tensor): Tensor of shape (n,) representing the second point.
+
+    Returns:
+        torch.Tensor: Scalar tensor representing the geodesic distance.
+    """
+    # Compute norms
+    norm_a = torch.norm(a)
+    norm_b = torch.norm(b)
+
+    # Use average radius if norms are close (optional)
+    r = (norm_a + norm_b) / 2
+
+    # Compute cosine of angle
+    cos_theta = torch.dot(a, b) / (norm_a * norm_b)
+
+    # Clamp to avoid numerical errors outside [-1, 1]
+    cos_theta = torch.clamp(cos_theta, -1.0, 1.0)
+
+    # Compute angle and distance
+    theta = torch.acos(cos_theta)
+    distance = r * theta
+
+    return distance
