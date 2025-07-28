@@ -462,6 +462,8 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
                 current_model_stat = target_model.state_dict()
                 for layer_name, current_layer_weights in current_model_stat.items():
                     distance = util.geodesic_distance(current_layer_weights, end_model_stat_dict[layer_name])
+                    if distance is None:
+                        continue
                     ratio_step_size[layer_name] = distance.item() * parameter_move.ratio_step_size
             else:
                 ratio_step_size = None

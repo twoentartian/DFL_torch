@@ -210,18 +210,23 @@ def prompt_selection(options, prompt_message="Please make a selection:", allow_q
             print("Please enter a valid number or 'q' to quit")
 
 
-def geodesic_distance(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
+def geodesic_distance(a: torch.Tensor, b: torch.Tensor) -> None | torch.Tensor:
     """
     Compute the geodesic (spherical) distance between two multi-dimensional points a and b
-    on a sphere centered at the origin.
+    on a sphere centered at the origin. Skips computation if dtype is not floating point.
 
     Args:
-        a (torch.Tensor): Tensor of any shape representing the first point.
-        b (torch.Tensor): Tensor of the same shape representing the second point.
+        a (torch.Tensor): Tensor of any shape and type representing the first point.
+        b (torch.Tensor): Tensor of the same shape and type representing the second point.
 
     Returns:
         torch.Tensor: Scalar tensor representing the geodesic distance.
+                      Returns torch.tensor(0.0) if types are not float.
     """
+    # Skip if types are not float
+    if not a.dtype.is_floating_point or not b.dtype.is_floating_point:
+        return None
+
     # Flatten the tensors
     a_flat = a.flatten()
     b_flat = b.flatten()
@@ -230,13 +235,16 @@ def geodesic_distance(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     norm_a = torch.norm(a_flat)
     norm_b = torch.norm(b_flat)
 
-    # Use average radius (or assume sphere radius is consistent)
+    if norm_a == 0 or norm_b == 0:
+        return torch.tensor(0.0, dtype=torch.float32)  # Avoid division by zero
+
+    # Use average radius
     r = (norm_a + norm_b) / 2
 
     # Compute cosine of angle
     cos_theta = torch.dot(a_flat, b_flat) / (norm_a * norm_b)
 
-    # Clamp cosine to avoid numerical errors
+    # Clamp cosine to avoid numerical issues
     cos_theta = torch.clamp(cos_theta, -1.0, 1.0)
 
     # Compute angle and geodesic distance
@@ -244,4 +252,5 @@ def geodesic_distance(a: torch.Tensor, b: torch.Tensor) -> torch.Tensor:
     distance = r * theta
 
     return distance
+
 
