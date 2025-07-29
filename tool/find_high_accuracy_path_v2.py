@@ -407,23 +407,24 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
 
         """save checkpoint file"""
         if runtime_parameter.current_tick % runtime_parameter.checkpoint_interval == 0:
-            checkpoint_file_path = os.path.join(arg_output_folder_path, f"checkpoint_{runtime_parameter.current_tick}.checkpoint.pt")
-            if latest_check_point_file_path is not None:
-                os.remove(latest_check_point_file_path)
-            latest_check_point_file_path = checkpoint_file_path
-            child_logger.info(f"save checkpoint file to {checkpoint_file_path}")
-            check_point_file = Checkpoint()
-            check_point_file.current_model_stat = target_model.state_dict()
-            check_point_file.current_optimizer_stat = optimizer.state_dict()
-            check_point_file.current_runtime_parameter = runtime_parameter
-            check_point_file.current_general_parameter = general_parameter
-            check_point_file.current_move_parameter = parameter_move
-            check_point_file.current_train_parameter = parameter_train
-            check_point_file.current_rebuild_norm_parameter = parameter_rebuild_norm
-            check_point_file.start_model_stat = starting_point
-            check_point_file.end_model_stat = end_model_stat_dict
-            check_point_file.init_model_stat = initial_model_stat
-            torch.save(check_point_file, checkpoint_file_path)
+            if not runtime_parameter.debug_check_config_mode:
+                checkpoint_file_path = os.path.join(arg_output_folder_path, f"checkpoint_{runtime_parameter.current_tick}.checkpoint.pt")
+                if latest_check_point_file_path is not None:
+                    os.remove(latest_check_point_file_path)
+                latest_check_point_file_path = checkpoint_file_path
+                child_logger.info(f"save checkpoint file to {checkpoint_file_path}")
+                check_point_file = Checkpoint()
+                check_point_file.current_model_stat = target_model.state_dict()
+                check_point_file.current_optimizer_stat = optimizer.state_dict()
+                check_point_file.current_runtime_parameter = runtime_parameter
+                check_point_file.current_general_parameter = general_parameter
+                check_point_file.current_move_parameter = parameter_move
+                check_point_file.current_train_parameter = parameter_train
+                check_point_file.current_rebuild_norm_parameter = parameter_rebuild_norm
+                check_point_file.start_model_stat = starting_point
+                check_point_file.end_model_stat = end_model_stat_dict
+                check_point_file.init_model_stat = initial_model_stat
+                torch.save(check_point_file, checkpoint_file_path)
 
         """update end_model_stat_dict if work_mode = to_inf"""
         if runtime_parameter.work_mode == WorkMode.to_inf:
