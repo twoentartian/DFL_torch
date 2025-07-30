@@ -1,6 +1,8 @@
 import torch
 import math
 
+from scipy.odr import Model
+
 from py_src import ml_setup
 from py_src.ml_setup_base.model import ModelType
 from py_src.ml_setup_base.dataset import DatasetType
@@ -225,6 +227,18 @@ class FastTrainingSetup(object):
                 milestones_epoch = [30, 60, 90]
                 milestones = [steps_per_epoch * i for i in milestones_epoch]
                 lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones, gamma=0.1)
+            else:
+                raise NotImplementedError
+            return optimizer, lr_scheduler, epochs
+        elif arg_ml_setup.model_name == ModelType.regnet_x_200mf.name:
+            if arg_ml_setup.dataset_name == DatasetType.cifar10.name:
+                epochs = 120
+                optimizer = torch.optim.SGD(model.parameters(), lr=1e-1, weight_decay=1e-4, momentum=0.9)
+                steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
+                milestones_epoch = [30, 60, 90]
+                milestones = [steps_per_epoch * i for i in milestones_epoch]
+                lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones, gamma=0.1)
+                # lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
             else:
                 raise NotImplementedError
             return optimizer, lr_scheduler, epochs

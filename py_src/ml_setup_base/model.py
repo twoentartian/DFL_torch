@@ -28,6 +28,7 @@ class ModelType(Enum):
     mnasnet0_5 = auto()
     mnasnet1_0 = auto()
     densenet121 = auto()
+    regnet_x_200mf = auto()
     regnet_y_400mf = auto()
     convnext_tiny = auto()
     alexnet = auto()
