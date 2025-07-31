@@ -1,4 +1,3 @@
-import regnet_cifar
 import torch.nn as nn
 from torchvision import models
 
@@ -6,6 +5,7 @@ from py_src.ml_setup_base.base import MlSetup
 from py_src.ml_setup_base.model import ModelType
 import py_src.ml_setup_base.dataset as ml_setup_dataset
 from py_src.ml_setup_base.other_setup import get_pytorch_training_imagenet
+import py_src.ml_setup_base.regnet_cifar as regnet_cifar
 
 
 def regnet_y_400mf_imagenet1k(pytorch_preset_version=2):

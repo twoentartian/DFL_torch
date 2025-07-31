@@ -1,9 +1,9 @@
-import dla_cifar
 import torch.nn as nn
 
 import py_src.ml_setup_base.dataset as ml_setup_dataset
 from py_src.ml_setup_base.base import MlSetup
 from py_src.ml_setup_base.model import ModelType
+import py_src.ml_setup_base.dla_cifar as dla_cifar
 
 def dla_cifar10():
     output_ml_setup = MlSetup()
