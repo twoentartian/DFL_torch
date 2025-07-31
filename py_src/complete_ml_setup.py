@@ -237,8 +237,8 @@ class FastTrainingSetup(object):
                 steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
                 milestones_epoch = [30, 60, 90]
                 milestones = [steps_per_epoch * i for i in milestones_epoch]
-                lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones, gamma=0.1)
-                # lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
+                # lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones, gamma=0.1)
+                lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs)
             else:
                 raise NotImplementedError
             return optimizer, lr_scheduler, epochs
