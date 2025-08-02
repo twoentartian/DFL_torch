@@ -4,6 +4,7 @@ from py_src.models import vgg
 import py_src.ml_setup_base.dataset as ml_setup_dataset
 from py_src.ml_setup_base.base import MlSetup
 from py_src.ml_setup_base.model import ModelType
+import py_src.ml_setup_base.vgg_cifar as vgg_cifar
 from py_src.ml_setup_base.other_setup import get_pytorch_training_imagenet
 
 def vgg11_mnist():
@@ -31,6 +32,19 @@ def vgg11_cifar10():
     output_ml_setup.criterion = nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 32
     output_ml_setup.has_normalization_layer = False
+    return output_ml_setup
+
+def vgg11_bn_cifar10():
+    output_ml_setup = MlSetup()
+    dataset = ml_setup_dataset.dataset_cifar10()
+
+    vgg11_bn = vgg_cifar.VGG("VGG11")
+    output_ml_setup.model_name = str(ModelType.vgg11_bn.name)
+    output_ml_setup.model = vgg11_bn
+    output_ml_setup.get_info_from_dataset(dataset)
+    output_ml_setup.criterion = nn.CrossEntropyLoss()
+    output_ml_setup.training_batch_size = 256
+    output_ml_setup.has_normalization_layer = True
     return output_ml_setup
 
 
