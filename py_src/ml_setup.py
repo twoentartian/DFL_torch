@@ -155,7 +155,6 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default, p
             raise NotImplementedError
     elif model_name == ModelType.efficientnet_b0:
         if dataset_type in [DatasetType.default, DatasetType.cifar10]:
-            assert pytorch_preset_version is not None
             output_ml_setup = efficientnet_b0_cifar10()
         else:
             raise NotImplementedError
