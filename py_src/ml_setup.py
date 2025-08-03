@@ -14,7 +14,7 @@ from py_src.ml_setup_base.simplenet import simplenet_cifar10, simplenet_cifar100
 from py_src.ml_setup_base.mobilenet import mobilenet_v2_cifar10, mobilenet_v3_large_imagenet1k
 from py_src.ml_setup_base.cct import cct7_3x1_cifar10, cct7_3x1_cifar100, cct7_7x2_imagenet10, cct7_7x2_imagenet100, cct7_7x2_imagenet1k, cct14_7x2_imagenet1k
 from py_src.ml_setup_base.shufflenet import shufflenet_v2_cifar10, shufflenet_v2_x2_0_imagenet1k
-from py_src.ml_setup_base.efficientnet import efficientnet_v2_s_imagenet1k, efficientnet_b1_imagenet1k
+from py_src.ml_setup_base.efficientnet import efficientnet_v2_s_imagenet1k, efficientnet_b1_imagenet1k, efficientnet_b0_cifar10
 from py_src.ml_setup_base.mnasnet import mnasnet1_0_imagenet1k, mnasnet0_5_imagenet1k
 from py_src.ml_setup_base.densenet import densenet121_imagenet1k
 from py_src.ml_setup_base.convnext import conveNeXt_tiny_imagenet1k
@@ -33,7 +33,7 @@ __all__ = [ 'MlSetup',
             'mobilenet_v2_cifar10', 'mobilenet_v3_large_imagenet1k',
             'cct7_3x1_cifar10', 'cct7_3x1_cifar100', 'cct7_7x2_imagenet10', 'cct7_7x2_imagenet100', 'cct7_7x2_imagenet1k', 'cct14_7x2_imagenet1k',
             'shufflenet_v2_cifar10',
-            'efficientnet_v2_s_imagenet1k', 'efficientnet_b1_imagenet1k',
+            'efficientnet_v2_s_imagenet1k', 'efficientnet_b1_imagenet1k', 'efficientnet_b0_cifar10',
             'mnasnet1_0_imagenet1k', 'mnasnet0_5_imagenet1k',
             'densenet121_imagenet1k',
             'conveNeXt_tiny_imagenet1k',
@@ -151,6 +151,12 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default, p
         if dataset_type in [DatasetType.default, DatasetType.imagenet1k]:
             assert pytorch_preset_version is not None
             output_ml_setup = efficientnet_b1_imagenet1k(pytorch_preset_version)
+        else:
+            raise NotImplementedError
+    elif model_name == ModelType.efficientnet_b0.name:
+        if dataset_type in [DatasetType.default, DatasetType.cifar10]:
+            assert pytorch_preset_version is not None
+            output_ml_setup = efficientnet_b0_cifar10()
         else:
             raise NotImplementedError
     elif model_name == ModelType.shufflenet_v2:

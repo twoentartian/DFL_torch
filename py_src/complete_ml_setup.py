@@ -76,7 +76,7 @@ class FastTrainingSetup(object):
                 return optimizer, lr_scheduler, epochs
             else:
                 raise NotImplemented
-        elif arg_ml_setup.model_name == 'cct7':
+        elif arg_ml_setup.model_name == ModelType.cct_7_3x1_32.name:
             if arg_ml_setup.dataset_name == str(DatasetType.cifar10.name):
                 steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
                 initial_lr = 55e-5
@@ -137,74 +137,28 @@ class FastTrainingSetup(object):
                     return lr / initial_lr
                 lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
                 return optimizer, lr_scheduler, epochs
-            elif arg_ml_setup.dataset_name == str(DatasetType.imagenet100.name):
-                steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
-                initial_lr = 5e-4
-                weight_decay = 5e-2
-                warmup_lr = 1e-6
-                min_lr = 1e-5
-                warmup_epochs = 10
-                epochs = 300
-                cooldown_epochs = 10
-                warmup_steps = warmup_epochs * steps_per_epoch
-                cosine_steps = (epochs - warmup_epochs) * steps_per_epoch
-                cooldown_steps = cooldown_epochs * steps_per_epoch
-                total_steps = warmup_steps + cosine_steps + cooldown_steps
-                optimizer = torch.optim.AdamW(model.parameters(), lr=initial_lr, weight_decay=weight_decay)
-                def lr_lambda(current_step):
-                    if current_step < warmup_steps:
-                        # Linear warmup
-                        lr = warmup_lr + (initial_lr - warmup_lr) * (current_step / warmup_steps)
-                    elif current_step < warmup_steps + cosine_steps:
-                        # Cosine annealing
-                        t = current_step - warmup_steps
-                        T = cosine_steps
-                        lr = min_lr + 0.5 * (initial_lr - min_lr) * (1 + math.cos(math.pi * t / T))
-                    else:
-                        # Cooldown phase
-                        lr = min_lr
-                    return lr / initial_lr
-                lr_scheduler = torch.optim.lr_scheduler.LambdaLR(optimizer, lr_lambda=lr_lambda)
-                return optimizer, lr_scheduler, epochs
             else:
                 raise NotImplementedError
-        elif arg_ml_setup.model_name == "mobilenet_v3_small":
-            epochs = 150
-            optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
-            lr_scheduler = None
-            return optimizer, lr_scheduler, epochs
-        elif arg_ml_setup.model_name == "mobilenet_v3_large":
-            epochs = 150
-            optimizer = torch.optim.Adam(model.parameters(), lr=0.01)
-            lr_scheduler = None
-            return optimizer, lr_scheduler, epochs
-        elif arg_ml_setup.model_name == "mobilenet_v2_cifar10":
-            epochs = 200
-            optimizer = torch.optim.SGD(model.parameters(), lr=1e-1, weight_decay=4e-5, momentum=0.9)
-            steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
-            milestones_epoch = [100]
-            milestones = [steps_per_epoch * i for i in milestones_epoch]
-            lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones, gamma=0.1)
-            return optimizer, lr_scheduler, epochs
-        elif arg_ml_setup.model_name == 'vit_b_16':
-            if arg_ml_setup.dataset_name == "imagenet100_224":
-                epochs = 150
+        elif arg_ml_setup.model_name == ModelType.mobilenet_v2.name:
+            if arg_ml_setup.dataset_name == str(DatasetType.cifar10.name):
+                epochs = 200
                 optimizer = torch.optim.SGD(model.parameters(), lr=1e-1, weight_decay=4e-5, momentum=0.9)
                 steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
-                milestones_epoch = [50,100]
+                milestones_epoch = [100]
                 milestones = [steps_per_epoch * i for i in milestones_epoch]
                 lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones, gamma=0.1)
+                return optimizer, lr_scheduler, epochs
             else:
                 raise NotImplemented
-            return optimizer, lr_scheduler, epochs
-        elif arg_ml_setup.model_name == 'efficientnet_v2':
-            if arg_ml_setup.dataset_name == "cifar100_224":
-                epochs = 100
-                optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9, weight_decay=1e-4)
+        elif arg_ml_setup.model_name == ModelType.efficientnet_b0.name:
+            if arg_ml_setup.dataset_name == DatasetType.cifar10.name:
+                epochs = 120
+                optimizer = torch.optim.SGD(model.parameters(), lr=1e-1, weight_decay=1e-4, momentum=0.9)
                 steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
                 milestones_epoch = [30, 60, 90]
                 milestones = [steps_per_epoch * i for i in milestones_epoch]
-                lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones, gamma=0.1)
+                # lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones, gamma=0.1)
+                lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs * steps_per_epoch)
             else:
                 raise NotImplemented
             return optimizer, lr_scheduler, epochs
