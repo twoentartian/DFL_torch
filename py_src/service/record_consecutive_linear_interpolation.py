@@ -126,8 +126,8 @@ class ServiceConsecutiveLinearInterpolationRecorder(Service):
                     total += test_labels.size(0)
                 loss = total_loss / total
                 accuracy = correct / total
-                loss_results.append(str(loss))
-                accuracy_results.append(str(accuracy))
+                loss_results.append('%.4E' % loss)
+                accuracy_results.append('%.4E' % accuracy)
             row_accuracy_str = ",".join([str(tick), str(phase.name), *accuracy_results])
             row_loss_str = ",".join([str(tick), str(phase.name), *loss_results])
             self.accuracy_file.write(row_accuracy_str + "\n")
