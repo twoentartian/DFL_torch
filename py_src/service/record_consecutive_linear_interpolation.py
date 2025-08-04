@@ -81,6 +81,7 @@ class ServiceConsecutiveLinearInterpolationRecorder(Service):
             self.accuracy_file = open(os.path.join(output_path, f"{self.accuracy_file_name}"), "w+")
             self.loss_file = open(os.path.join(output_path, f"{self.loss_file_name}"), "w+")
             points_names = list(range(1, self.points_size))
+            points_names = [str(i) for i in points_names]
             first_row = ",".join(["tick", "phase", *points_names])
             self.accuracy_file.write(first_row + "\n")
             self.loss_file.write(first_row + "\n")
