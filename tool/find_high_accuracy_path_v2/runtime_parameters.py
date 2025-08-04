@@ -31,6 +31,8 @@ class RuntimeParameters(object):
     task_name = None
     silence_mode = None
     across_vs_lr_policy = None
+    linear_interpolation_points_size = None
+    linear_interpolation_dataset_size = None
 
     """real-time values"""
     current_tick = None

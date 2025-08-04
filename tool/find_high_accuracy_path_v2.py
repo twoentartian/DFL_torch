@@ -361,8 +361,8 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
     child_logger.info("setting service done: record_training_loss_service")
 
     record_consecutive_points_service = record_consecutive_linear_interpolation.ServiceConsecutiveLinearInterpolationRecorder(1, runtime_parameter.service_test_accuracy_loss_batch_size,
-                                                                                                                              1000,
-                                                                                                                              50, 0)
+                                                                                                                              runtime_parameter.linear_interpolation_dataset_size,
+                                                                                                                              runtime_parameter.linear_interpolation_points_size, 0)
     record_consecutive_points_service.initialize_without_runtime_parameters(arg_output_folder_path, target_model, criterion, current_ml_setup.training_data,
                                                                             existing_model_for_testing=target_model, gpu=gpu, num_workers=general_parameter.dataloader_worker)
     child_logger.info("setting service done: record_consecutive_points_service")
@@ -817,6 +817,9 @@ if __name__ == '__main__':
     parser.add_argument("--test_batch", type=int, default=100, help='specify the batch size of measuring model on the test dataset.')
     parser.add_argument("-P", "--torch_preset_version", type=int, default=None, help='specify the pytorch data training preset version')
     parser.add_argument("-S", "--silence", action='store_true', help='enable silence mode, do not interact with users, all checks will be bypassed')
+    parser.add_argument("--linear_interpolation_points_size", type=int, default=0, help='specify the size of linear interpolation points between two consecutive points')
+    parser.add_argument("--linear_interpolation_dataset_size", type=int, default=1000, help='specify the size of linear interpolation dataset size')
+
 
     args = parser.parse_args()
 
@@ -847,6 +850,8 @@ if __name__ == '__main__':
     runtime_parameter.pytorch_preset_version = args.torch_preset_version
     runtime_parameter.across_vs_lr_policy = args.across_vs_lr_policy
     runtime_parameter.silence_mode = args.silence
+    runtime_parameter.linear_interpolation_points_size = args.linear_interpolation_points_size
+    runtime_parameter.linear_interpolation_dataset_size = args.linear_interpolation_dataset_size
 
     # sanity check
     if runtime_parameter.across_vs_lr_policy == 'std':
