@@ -19,10 +19,11 @@ from torch.utils.data.dataloader import default_collate
 from find_high_accuracy_path_v2.runtime_parameters import RuntimeParameters, WorkMode, Checkpoint
 from find_high_accuracy_path_v2.find_parameters import ParameterGeneral, ParameterMove, ParameterTrain, ParameterRebuildNorm
 from find_high_accuracy_path import set_logging, get_files_to_process
+from py_src.simulation_runtime_parameters import SimulationPhase
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from py_src import ml_setup, model_average, model_variance_correct, special_torch_layers, cuda, util, configuration_file
-from py_src.service import record_weights_difference, record_test_accuracy_loss, record_variance, record_model_stat, record_training_loss
+from py_src.service import record_weights_difference, record_test_accuracy_loss, record_variance, record_model_stat, record_training_loss, record_consecutive_linear_interpolation
 from py_src.ml_setup import MlSetup
 
 logger = logging.getLogger("find_high_accuracy_path_v2")
@@ -359,6 +360,13 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
     record_training_loss_service.initialize_without_runtime_parameters(arg_output_folder_path, [0])
     child_logger.info("setting service done: record_training_loss_service")
 
+    record_consecutive_points_service = record_consecutive_linear_interpolation.ServiceConsecutiveLinearInterpolationRecorder(1, runtime_parameter.service_test_accuracy_loss_batch_size,
+                                                                                                                              1000,
+                                                                                                                              50, 0)
+    record_consecutive_points_service.initialize_without_runtime_parameters(arg_output_folder_path, target_model, criterion, current_ml_setup.training_data,
+                                                                            existing_model_for_testing=target_model, gpu=gpu, num_workers=general_parameter.dataloader_worker)
+    child_logger.info("setting service done: record_consecutive_points_service")
+
     """record variance"""
     variance_record = model_variance_correct.VarianceCorrector(model_variance_correct.VarianceCorrectionType.FollowOthers)
     variance_record.add_variance(starting_point)
@@ -570,6 +578,9 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             util.save_model_state(os.path.join(arg_output_folder_path, f"{runtime_parameter.current_tick}.model.pt"), target_model.state_dict(), current_ml_setup.model_name)
             util.save_optimizer_state(os.path.join(arg_output_folder_path, f"{runtime_parameter.current_tick}.optimizer.pt"), optimizer.state_dict(), current_ml_setup.model_name)
 
+        """service"""
+        record_consecutive_points_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, SimulationPhase.START_OF_TICK, target_model.state_dict())
+
         """move model"""
         if not runtime_parameter.debug_check_config_mode:
             # store attention layer weights
@@ -765,7 +776,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
                     record_model_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, [0], [target_model_stat_dict])
             record_test_accuracy_loss_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, {0: target_model_stat_dict})
             record_training_loss_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, {0: training_loss_val})
-
+            record_consecutive_points_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, SimulationPhase.END_OF_TICK, target_model.state_dict())
         # update tick
         runtime_parameter.current_tick += 1
 

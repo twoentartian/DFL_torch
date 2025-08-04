@@ -6,6 +6,7 @@ from collections import OrderedDict
 from torch.utils.data import DataLoader, Subset
 
 from py_src.cuda import CudaDevice
+from py_src.ml_setup_base.base import MlSetup
 from py_src.service_base import Service
 from py_src.simulation_runtime_parameters import RuntimeParameters, SimulationPhase
 from py_src.node import Node
@@ -13,7 +14,7 @@ import py_src.util as util
 
 class ServiceTestAccuracyLossRecorder(Service):
     def __init__(self, interval, test_batch_size, phase_to_record=(SimulationPhase.END_OF_TICK,), model_name=None, use_fixed_testing_dataset=True, store_top_accuracy_model_count = 0,
-                 accuracy_file_name="accuracy.csv", loss_file_name="loss.csv", output_var_file_name="output_var.csv", test_whole_dataset=False):
+                 accuracy_file_name="accuracy.csv", loss_file_name="loss.csv", output_var_file_name="output_var.csv", test_whole_dataset=False,):
         super().__init__()
         self.accuracy_file = None
         self.loss_file = None
@@ -42,7 +43,7 @@ class ServiceTestAccuracyLossRecorder(Service):
     def get_service_name() -> str:
         return "test_accuracy_loss_recorder"
 
-    def initialize(self, parameters: RuntimeParameters, output_path, ml_setup=None, gpu: CudaDevice=None, *args, **kwargs):
+    def initialize(self, parameters: RuntimeParameters, output_path, ml_setup: MlSetup=None, gpu: CudaDevice=None, *args, **kwargs):
         assert parameters.phase == SimulationPhase.INITIALIZING
         assert ml_setup is not None
 
