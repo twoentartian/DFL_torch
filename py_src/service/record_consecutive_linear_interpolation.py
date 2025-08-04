@@ -84,7 +84,9 @@ class ServiceConsecutiveLinearInterpolationRecorder(Service):
             points_names = [str(i) for i in points_names]
             first_row = ",".join(["tick", "phase", *points_names])
             self.accuracy_file.write(first_row + "\n")
+            self.accuracy_file.flush()
             self.loss_file.write(first_row + "\n")
+            self.loss_file.flush()
 
     def trigger(self, parameters: RuntimeParameters, *args, **kwargs):
         if parameters.phase in [SimulationPhase.START_OF_TICK, SimulationPhase.END_OF_TICK]:
@@ -124,8 +126,8 @@ class ServiceConsecutiveLinearInterpolationRecorder(Service):
                     total += test_labels.size(0)
                 loss = total_loss / total
                 accuracy = correct / total
-                loss_results.append(loss)
-                accuracy_results.append(accuracy)
+                loss_results.append(str(loss))
+                accuracy_results.append(str(accuracy))
             row_accuracy_str = ",".join([str(tick), str(phase.name), *accuracy_results])
             row_loss_str = ",".join([str(tick), str(phase.name), *loss_results])
             self.accuracy_file.write(row_accuracy_str + "\n")
