@@ -11,7 +11,7 @@ def cct7_3x1_cifar10():
     dataset = ml_setup_dataset.dataset_cifar10()
 
     output_ml_setup.model = cct.cct_7_3x1_32()
-    output_ml_setup.model_name = str(ModelType.cct7.name)
+    output_ml_setup.model_name = str(ModelType.cct_7_3x1_32.name)
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.criterion = nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 128
