@@ -95,6 +95,8 @@ class ServiceConsecutiveLinearInterpolationRecorder(Service):
             self.trigger_without_runtime_parameters(parameters.current_tick, parameters.phase, target_model_state)
 
     def trigger_without_runtime_parameters(self, tick, phase:SimulationPhase, model_state):
+        if self.accuracy_file is None or self.loss_file is None:
+            return
         if phase == SimulationPhase.START_OF_TICK:
             assert self.cache_state_model_stat is None
             self.cache_state_model_stat = {k: v.detach().clone() for k, v in model_state.items()}

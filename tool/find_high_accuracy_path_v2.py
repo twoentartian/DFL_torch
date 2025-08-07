@@ -579,7 +579,11 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             util.save_optimizer_state(os.path.join(arg_output_folder_path, f"{runtime_parameter.current_tick}.optimizer.pt"), optimizer.state_dict(), current_ml_setup.model_name)
 
         """service"""
-        record_consecutive_points_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, SimulationPhase.START_OF_TICK, target_model.state_dict())
+        run_service = True
+        if runtime_parameter.debug_check_config_mode:
+            run_service = runtime_parameter.current_tick % 1000 == 0
+        if run_service:
+            record_consecutive_points_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, SimulationPhase.START_OF_TICK, target_model.state_dict())
 
         """move model"""
         if not runtime_parameter.debug_check_config_mode:
