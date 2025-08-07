@@ -813,7 +813,7 @@ if __name__ == '__main__':
     parser.add_argument("-v", "--verbose", action='store_true', help='verbose mode')
     parser.add_argument("-o", "--output_folder_name", default=None, help='specify the output folder name')
     parser.add_argument("--store_top_accuracy_model_count", type=int, default=5, help='save n highest test accuracy models')
-    parser.add_argument("--checkpoint_interval", type=int, default=10, help='save a checkpoint every n ticks')
+    parser.add_argument("--checkpoint_interval", type=int, default=100, help='save a checkpoint every n ticks')
     parser.add_argument("--continue_from_checkpoint", type=str, help='continue from a checkpoint file')
     parser.add_argument("-A", "--across_vs_lr_policy", type=str, choices=['std', 'var'], default='var', help='set the lr to follow variance or standard derivation of variance sphere')
 
