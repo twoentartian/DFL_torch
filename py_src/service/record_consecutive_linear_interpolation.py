@@ -154,7 +154,9 @@ class ServiceConsecutiveLinearInterpolationRecorder(Service):
         copy_file(self.loss_file_name, self.loss_file)
 
     def __del__(self):
-        self.accuracy_file.flush()
-        self.accuracy_file.close()
-        self.loss_file.flush()
-        self.loss_file.close()
+        if self.accuracy_file is not None:
+            self.accuracy_file.flush()
+            self.accuracy_file.close()
+        if self.loss_file is not None:
+            self.loss_file.flush()
+            self.loss_file.close()
