@@ -32,3 +32,14 @@ def densenet121_cifar10():
     output_ml_setup.has_normalization_layer = True
     output_ml_setup.criterion = nn.CrossEntropyLoss()
     return output_ml_setup
+
+def densenet_cifar10():
+    output_ml_setup = MlSetup()
+    dataset = ml_setup_dataset.dataset_cifar10()
+    output_ml_setup.model = densenet_cifar.densenet_cifar()
+    output_ml_setup.model_name = str(ModelType.densenet_cifar.name)
+    output_ml_setup.get_info_from_dataset(dataset)
+    output_ml_setup.training_batch_size = 256
+    output_ml_setup.has_normalization_layer = True
+    output_ml_setup.criterion = nn.CrossEntropyLoss()
+    return output_ml_setup
