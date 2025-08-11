@@ -364,7 +364,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
                                                                                                                               runtime_parameter.linear_interpolation_dataset_size,
                                                                                                                               runtime_parameter.linear_interpolation_points_size, 0)
     record_consecutive_points_service.initialize_without_runtime_parameters(arg_output_folder_path, target_model, criterion, current_ml_setup.training_data,
-                                                                            existing_model_for_testing=target_model, gpu=gpu, num_workers=general_parameter.dataloader_worker)
+                                                                            existing_model_for_testing=None, gpu=gpu, num_workers=general_parameter.dataloader_worker)
     child_logger.info("setting service done: record_consecutive_points_service")
 
     """record variance"""
