@@ -914,14 +914,16 @@ if __name__ == '__main__':
     runtime_parameter.total_cpu_count = args.core
     runtime_parameter.worker_count = args.worker
     if args.continue_from_checkpoint is not None:
-        process_file_func(0, runtime_parameter, args.continue_from_checkpoint)
+        for index, path in enumerate(paths_to_find):
+            process_file_func(index, runtime_parameter, args.continue_from_checkpoint)
     else:
         # normal mode
         if runtime_parameter.worker_count > paths_to_find_count:
             runtime_parameter.worker_count = paths_to_find_count
         logger.info(f"worker: {runtime_parameter.worker_count}")
         if runtime_parameter.worker_count == 1:
-            process_file_func(0, runtime_parameter, None)
+            for index, path in enumerate(paths_to_find):
+                process_file_func(index, runtime_parameter, None)
         else:
             assert runtime_parameter.silence_mode, "silence_mode must be set for multiple workers"
             with concurrent.futures.ProcessPoolExecutor(max_workers=runtime_parameter.worker_count) as executor:
