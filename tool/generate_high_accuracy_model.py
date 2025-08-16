@@ -169,7 +169,7 @@ if __name__ == "__main__":
     parser.add_argument("--save_format", type=str, default='none', choices=['none', 'file', 'lmdb'], help='which format to save the training states')
     parser.add_argument("--amp", action='store_true', help='enable auto mixed precision')
     parser.add_argument("--random_seed", type=int, help='specify the random seed')
-    parser.add_argument("--start_index", type=int, default=0, help='specify the start index for model names')
+    parser.add_argument("-i", "--start_index", type=int, default=0, help='specify the start index for model names')
 
     args = parser.parse_args()
 
