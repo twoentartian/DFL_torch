@@ -169,6 +169,7 @@ if __name__ == "__main__":
     parser.add_argument("--save_format", type=str, default='none', choices=['none', 'file', 'lmdb'], help='which format to save the training states')
     parser.add_argument("--amp", action='store_true', help='enable auto mixed precision')
     parser.add_argument("--random_seed", type=int, help='specify the random seed')
+    parser.add_argument("--start_index", type=int, default=0, help='specify the start index for model names')
 
     args = parser.parse_args()
 
@@ -182,6 +183,7 @@ if __name__ == "__main__":
     save_format = args.save_format
     amp = args.amp
     random_seed = args.random_seed
+    start_index = args.start_index
 
     # logger
     set_logging(logger, "main")
@@ -212,7 +214,7 @@ if __name__ == "__main__":
     # training
     if worker_count > number_of_models:
         worker_count = number_of_models
-    args = [(output_folder_path, i, number_of_models, current_ml_setup, use_cpu, random_seed, worker_count, total_cpu_cores, save_format, amp) for i in range(number_of_models)]
+    args = [(output_folder_path, i, number_of_models, current_ml_setup, use_cpu, random_seed, worker_count, total_cpu_cores, save_format, amp) for i in range(start_index, start_index+number_of_models, 1)]
     if worker_count == 1:
         for arg in args:
             training_model(*arg)
