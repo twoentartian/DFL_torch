@@ -57,6 +57,13 @@ def testing_model(model, current_ml_setup, test_training, batch_size):
             train_accuracy = 0
     return test_loss, test_accuracy, train_loss, train_accuracy
 
+def get_layer_variances(state_dict):
+    output = {}
+    for name, param in state_dict.items():
+        if torch.is_tensor(param) and param.dtype.is_floating_point:
+            var = param.var().item()
+            output[name] = var
+    return output
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Measure model test accuracy and loss.')
@@ -87,9 +94,15 @@ if __name__ == "__main__":
     model.load_state_dict(model_stat)
 
     test_loss, test_accuracy, train_loss, train_accuracy = testing_model(model, current_ml_setup, args.training, args.batch_size)
+    layer_variances = get_layer_variances(model_stat)
     print(f"test loss={test_loss}, test acc={test_accuracy}")
     print(f"train loss={train_loss}, train acc={train_accuracy}")
     if test_accuracy * train_accuracy >0.001:
         with open(f"{model_file_path}.txt", "w") as f:
             f.write(f"test loss={test_loss}, test acc={test_accuracy}\n")
             f.write(f"train loss={train_loss}, train acc={train_accuracy}\n")
+            f.write("\nLayer Variance List:\n")
+            for layer_name, layer_var in layer_variances.items():
+                f.write(f"layer {layer_name}: {layer_var}\n")
+    f.flush()
+    f.close()
