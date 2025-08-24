@@ -64,7 +64,7 @@ def manually_define_optimizer(arg_ml_setup: ml_setup, model):
 
     return None, None, None
 
-def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_setup, arg_use_cpu: bool, random_seed, arg_worker_count, arg_total_cpu_count, arg_save_format, arg_amp):
+def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_setup, arg_use_cpu: bool, random_seed, arg_worker_count, arg_total_cpu_count, arg_save_format, arg_amp, arg_preset):
     thread_per_process = arg_total_cpu_count // arg_worker_count
     torch.set_num_threads(thread_per_process)
 
@@ -89,7 +89,7 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
 
     optimizer, lr_scheduler, epochs = manually_define_optimizer(arg_ml_setup, model)
     if optimizer is None:
-        optimizer, lr_scheduler, epochs = complete_ml_setup.FastTrainingSetup.get_optimizer_lr_scheduler_epoch(arg_ml_setup, model)
+        optimizer, lr_scheduler, epochs = complete_ml_setup.FastTrainingSetup.get_optimizer_lr_scheduler_epoch(arg_ml_setup, model, arg_preset)
 
     # services
     if arg_save_format != 'none':
@@ -170,6 +170,7 @@ if __name__ == "__main__":
     parser.add_argument("--amp", action='store_true', help='enable auto mixed precision')
     parser.add_argument("--random_seed", type=int, help='specify the random seed')
     parser.add_argument("-i", "--start_index", type=int, default=0, help='specify the start index for model names')
+    parser.add_argument("-p", "--preset", type=int, default=0, help='specify the preset training hyperparameters')
 
     args = parser.parse_args()
 
@@ -184,6 +185,7 @@ if __name__ == "__main__":
     amp = args.amp
     random_seed = args.random_seed
     start_index = args.start_index
+    preset = args.preset
 
     # logger
     set_logging(logger, "main")
@@ -214,7 +216,7 @@ if __name__ == "__main__":
     # training
     if worker_count > number_of_models:
         worker_count = number_of_models
-    args = [(output_folder_path, i, number_of_models, current_ml_setup, use_cpu, random_seed, worker_count, total_cpu_cores, save_format, amp) for i in range(start_index, start_index+number_of_models, 1)]
+    args = [(output_folder_path, i, number_of_models, current_ml_setup, use_cpu, random_seed, worker_count, total_cpu_cores, save_format, amp, preset) for i in range(start_index, start_index+number_of_models, 1)]
     if worker_count == 1:
         for arg in args:
             training_model(*arg)

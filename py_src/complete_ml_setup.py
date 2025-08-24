@@ -10,7 +10,7 @@ from py_src.ml_setup_base.dataset import DatasetType
 """ this class records the hyperparameters need for training a model in generate_high_accuracy_model.py """
 class FastTrainingSetup(object):
     @staticmethod
-    def get_optimizer_lr_scheduler_epoch(arg_ml_setup: ml_setup, model):
+    def get_optimizer_lr_scheduler_epoch(arg_ml_setup: ml_setup, model, preset=0):
         if arg_ml_setup.model_name == str(ModelType.lenet5.name) or arg_ml_setup.model_name == str(ModelType.lenet4.name):
             if arg_ml_setup.dataset_name == str(DatasetType.mnist.name):
                 epochs = 20
@@ -175,13 +175,21 @@ class FastTrainingSetup(object):
             return optimizer, lr_scheduler, epochs
         elif arg_ml_setup.model_name == ModelType.dla.name:
             if arg_ml_setup.dataset_name == DatasetType.cifar10.name:
-                epochs = 120
-                optimizer = torch.optim.SGD(model.parameters(), lr=1e-1, weight_decay=1e-4, momentum=0.9)
-                steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
-                milestones_epoch = [30, 60, 90]
-                milestones = [steps_per_epoch * i for i in milestones_epoch]
-                # lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones, gamma=0.1)
-                lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs * steps_per_epoch)
+                if preset == 0:
+                    epochs = 120
+                    optimizer = torch.optim.SGD(model.parameters(), lr=1e-1, weight_decay=1e-4, momentum=0.9)
+                    steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
+                    milestones_epoch = [30, 60, 90]
+                    milestones = [steps_per_epoch * i for i in milestones_epoch]
+                    # lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones, gamma=0.1)
+                    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs * steps_per_epoch)
+                elif preset == 1:
+                    epochs = 120
+                    optimizer = torch.optim.SGD(model.parameters(), lr=1e-1, weight_decay=3e-4, momentum=0.9)
+                    steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
+                    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs * steps_per_epoch)
+                else:
+                    raise NotImplementedError
             else:
                 raise NotImplementedError
             return optimizer, lr_scheduler, epochs
