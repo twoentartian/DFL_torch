@@ -254,3 +254,50 @@ def geodesic_distance(a: torch.Tensor, b: torch.Tensor) -> None | torch.Tensor:
     return distance
 
 
+def calculate_layer_wise_projection_to_variance_sphere(A, B, strict=True):
+    """
+    For every FLOAT tensor key present in both A and B (and same shape),
+    scale A[key] by (||B[key]||_2 / ||A[key]||_2), preserving direction.
+    Non-float tensors are left untouched. If strict=True, raise on missing/mismatch.
+    """
+    def l2(x): return torch.linalg.vector_norm(x.reshape(-1).to(torch.float32))
+
+    keysA = set(A.keys())
+    keysB = set(B.keys())
+    common = [k for k in keysA & keysB if torch.is_tensor(A[k]) and torch.is_tensor(B[k])
+              and A[k].dtype.is_floating_point and B[k].dtype.is_floating_point]
+
+    # Strict checks
+    if strict:
+        missing_in_B = [k for k in A if torch.is_tensor(A[k]) and A[k].dtype.is_floating_point and k not in keysB]
+        missing_in_A = [k for k in B if torch.is_tensor(B[k]) and B[k].dtype.is_floating_point and k not in keysA]
+        shape_mismatch = [k for k in common if A[k].shape != B[k].shape]
+        if missing_in_B or missing_in_A or shape_mismatch:
+            msgs = []
+            if missing_in_B: msgs.append(f"Missing in B: {missing_in_B}")
+            if missing_in_A: msgs.append(f"Missing in A: {missing_in_A}")
+            if shape_mismatch: msgs.append(f"Shape mismatch: {[(k, A[k].shape, B[k].shape) for k in shape_mismatch]}")
+            raise ValueError("; ".join(msgs))
+
+    target = {k: v.detach().clone() if torch.is_tensor(v) else v for k, v in A.items()}
+
+    for k in common:
+        if A[k].shape != B[k].shape:
+            # skip silently in non-strict mode
+            if strict:  # (already handled above), but keep guard
+                raise ValueError(f"Shape mismatch for {k}: {A[k].shape} vs {B[k].shape}")
+            continue
+        na = l2(A[k])
+        nb = l2(B[k])
+        if na.item() == 0.0:
+            # If both zero, leave as is; if only A is zero and B nonzero, direction undefined → skip
+            if nb.item() != 0.0:
+                # You could also choose to copy B's tensor or raise. Here we skip to avoid division by zero.
+                continue
+            else:
+                continue
+        scale = (nb / na).to(A[k].dtype)
+        target[k] = A[k] * scale
+
+    return target
+

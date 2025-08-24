@@ -240,6 +240,11 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             end_model_stat_dict, end_model_name = util.load_model_state_file(end_point)
             child_logger.info(f"work mode: to_certain_model at {end_point}")
             assert end_model_name == start_model_name, f"start({start_model_name}) != end({end_model_name})"
+        elif runtime_parameter.work_mode == WorkMode.to_vs:
+            runtime_parameter.variance_sphere_model, temp_model_name = util.load_model_state_file(runtime_parameter.variance_sphere_file_path)
+            assert temp_model_name == start_model_name, f"start({start_model_name}) != variance sphere({temp_model_name})"
+            end_model_stat_dict = util.calculate_layer_wise_projection_to_variance_sphere(start_model_stat_dict, runtime_parameter.variance_sphere_model)
+            child_logger.info(f"work mode: to_variance_sphere at {runtime_parameter.variance_sphere_file_path}")
         else:
             raise NotImplemented
         """assert start_model_state_dict != end_model_stat_dict"""
@@ -438,6 +443,10 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
         if runtime_parameter.work_mode == WorkMode.to_inf:
             target_model_stat = target_model.state_dict()
             end_model_stat_dict = {k: v.detach().clone() * 2 for k, v in target_model_stat.items()}
+            cuda.CudaEnv.model_state_dict_to(end_model_stat_dict, device)
+        if runtime_parameter.work_mode == WorkMode.to_vs:
+            target_model_stat = target_model.state_dict()
+            end_model_stat_dict = util.calculate_layer_wise_projection_to_variance_sphere(target_model_stat, runtime_parameter.variance_sphere_model)
             cuda.CudaEnv.model_state_dict_to(end_model_stat_dict, device)
 
         if runtime_parameter.current_tick % REPORT_FINISH_TIME_PER_TICK == 0 and runtime_parameter.current_tick != 0:
@@ -796,7 +805,9 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Move the model towards certain direction and keep its accuracy')
     parser.add_argument("start_folder", nargs='?', type=str, help="folder containing starting models")
 
-    parser.add_argument("end_folder", nargs='?', type=str, help="folder containing destination models, or 'inf', 'origin' ")
+    parser.add_argument("end_folder", nargs='?', type=str, help="folder containing destination models, or 'inf', 'origin', 'mean', 'to_vs' ")
+
+    parser.add_argument("--variance_sphere", type=str, help="specify the variance sphere by giving a model state, use when 'end_folder' is 'to_vs'")
     parser.add_argument("--config", type=str, help="the config file")
     parser.add_argument("--mapping_mode", type=str, default='auto', choices=['auto', 'all_to_all', 'each_to_each', 'one_to_all', 'all_to_one'])
 
@@ -880,6 +891,12 @@ if __name__ == '__main__':
             assert args.mapping_mode == "auto", "mapping mode has to be 'auto' for move to mean"
             files_in_start_folder = sorted(set(temp_file for temp_file in os.listdir(start_folder) if temp_file.endswith('model.pt')))
             paths_to_find = [(os.path.join(start_folder, i), "mean") for i in files_in_start_folder]
+        elif args.end_folder == "to_vs":
+            runtime_parameter.work_mode = WorkMode.to_vs
+            assert args.variance_sphere is not None, "variance_sphere cannot be None for 'to_vs' mode"
+            files_in_start_folder = sorted(set(temp_file for temp_file in os.listdir(start_folder) if temp_file.endswith('model.pt')))
+            paths_to_find = [(os.path.join(start_folder, i), "to_vs") for i in files_in_start_folder]
+            runtime_parameter.variance_sphere_file_path = args.variance_sphere
         else:
             runtime_parameter.work_mode = WorkMode.to_certain_model
             paths_to_find = get_files_to_process(args.start_folder, args.end_folder, args.mapping_mode)

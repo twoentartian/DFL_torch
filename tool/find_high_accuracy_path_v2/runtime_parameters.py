@@ -6,6 +6,7 @@ class WorkMode(Enum):
     to_inf = auto()
     to_certain_model = auto()
     to_mean = auto()
+    to_vs = auto()
 
 class RuntimeParameters(object):
     start_and_end_point_for_paths = None
@@ -33,6 +34,8 @@ class RuntimeParameters(object):
     across_vs_lr_policy = None
     linear_interpolation_points_size = None
     linear_interpolation_dataset_size = None
+    variance_sphere_file_path = None
+    variance_sphere_model = None
 
     """real-time values"""
     current_tick = None
