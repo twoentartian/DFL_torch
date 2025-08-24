@@ -104,5 +104,3 @@ if __name__ == "__main__":
             f.write("\nLayer Variance List:\n")
             for layer_name, layer_var in layer_variances.items():
                 f.write(f"layer {layer_name}: {layer_var}\n")
-    f.flush()
-    f.close()
