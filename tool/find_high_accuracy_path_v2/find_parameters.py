@@ -46,7 +46,7 @@ class ParameterTrain(Parameter):
     load_existing_optimizer = None
 
     def fill_default(self):
-        pass
+        self.pretrain_iterations = 100
 
 class ParameterRebuildNorm(Parameter):
     rebuild_norm_for_max_rounds = None
