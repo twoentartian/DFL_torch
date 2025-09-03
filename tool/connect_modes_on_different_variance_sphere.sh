@@ -14,5 +14,5 @@ python3 ./generate_high_accuracy_model.py -n 1 -m "${MODEL_NAME}" -d cifar10 -p 
 python3 ./generate_high_accuracy_model.py -n 1 -m "${MODEL_NAME}" -d cifar10 -p 0 -o "${END_FOLDER_NAME}"
 python3 ./find_high_accuracy_path_v2.py "./${START_FOLDER_NAME}/" to_vs --variance_sphere "./${END_FOLDER_NAME}/0.model.pt" -o "${M2O_OUTPUT}" -S --config "${CONFIG_FOLDER}/m2o.py"
 mkdir "${INTERMEDIATE_FOLDER_NAME}"
-cp ./avs_cct7_m2o/0-to_vs/1000.model.pt "./${INTERMEDIATE_FOLDER_NAME}/0.model.pt"
+cp "./${M2O_OUTPUT}/0-to_vs/1000.model.pt" "./${INTERMEDIATE_FOLDER_NAME}/0.model.pt"
 python3 ./find_high_accuracy_path_v2.py "./${INTERMEDIATE_FOLDER_NAME}" "./${END_FOLDER_NAME}" -o "${M2M_OUTPUT}" -S --config "${CONFIG_FOLDER}/m2m.py"
