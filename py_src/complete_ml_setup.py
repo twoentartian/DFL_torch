@@ -27,7 +27,7 @@ class FastTrainingSetup(object):
                 # optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
                 # return optimizer, None, epochs
             else:
-                raise NotImplemented
+                raise NotImplementedError
 
         if arg_ml_setup.model_name == str(ModelType.lenet5_large_fc.name):
             epochs = 20
@@ -54,12 +54,14 @@ class FastTrainingSetup(object):
                 epochs = 50
                 if preset == 0:
                     optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=5e-4)
-                else:
+                elif preset == 1:
                     optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=1e-4)
+                else:
+                    raise NotImplementedError
                 steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
                 lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, lr, steps_per_epoch=steps_per_epoch, epochs=epochs)
             else:
-                raise NotImplemented
+                raise NotImplementedError
             return optimizer, lr_scheduler, epochs
         elif arg_ml_setup.model_name == str(ModelType.simplenet.name):
             lr = 0.1
@@ -81,12 +83,17 @@ class FastTrainingSetup(object):
                 lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs * steps_per_epoch)
                 return optimizer, lr_scheduler, epochs
             else:
-                raise NotImplemented
+                raise NotImplementedError
         elif arg_ml_setup.model_name == ModelType.cct_7_3x1_32.name:
             if arg_ml_setup.dataset_name == str(DatasetType.cifar10.name):
                 steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
                 initial_lr = 55e-5
-                weight_decay = 6e-2
+                if preset == 0:
+                    weight_decay = 6e-2
+                elif preset == 1:
+                    weight_decay = 1e-2
+                else:
+                    raise NotImplementedError
                 warmup_lr = 1e-5
                 min_lr = 1e-5
                 warmup_epochs = 10
@@ -155,7 +162,7 @@ class FastTrainingSetup(object):
                 lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones, gamma=0.1)
                 return optimizer, lr_scheduler, epochs
             else:
-                raise NotImplemented
+                raise NotImplementedError
         elif arg_ml_setup.model_name == ModelType.efficientnet_b0.name:
             if arg_ml_setup.dataset_name == DatasetType.cifar10.name:
                 epochs = 120
@@ -166,7 +173,7 @@ class FastTrainingSetup(object):
                 # lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones, gamma=0.1)
                 lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs * steps_per_epoch)
             else:
-                raise NotImplemented
+                raise NotImplementedError
             return optimizer, lr_scheduler, epochs
         elif arg_ml_setup.model_name == ModelType.shufflenet_v2.name:
             if arg_ml_setup.dataset_name == DatasetType.cifar10.name:
