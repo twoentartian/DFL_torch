@@ -51,7 +51,7 @@ class FastTrainingSetup(object):
                 lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, lr, steps_per_epoch=steps_per_epoch, epochs=epochs)
             elif str(DatasetType.cifar100.name) == arg_ml_setup.dataset_name:
                 lr = 0.1
-                epochs = 50
+                epochs = 70
                 if preset == 0:
                     optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=5e-4)
                 elif preset == 1:
