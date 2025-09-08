@@ -927,6 +927,11 @@ if __name__ == '__main__':
 
     logger.info(f"final runtime parameters: {runtime_parameter.print()}")
 
+    if not runtime_parameter.use_cpu:
+        assert torch.cuda.is_available()
+        for i in range(torch.cuda.device_count()):
+            print(f"GPU {i}: {torch.cuda.get_device_name(i)}")
+
     # worker and cpu cores setting
     runtime_parameter.total_cpu_count = args.core
     runtime_parameter.worker_count = args.worker
