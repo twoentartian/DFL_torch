@@ -22,7 +22,7 @@ from py_src.ml_setup_base.alexnet import alexnet_imagenet1k
 from py_src.ml_setup_base.resnext import resnext50_32x4d_imagenet1k
 from py_src.ml_setup_base.vit import vit_b_32_imagenet1k
 from py_src.ml_setup_base.wide_resnet50_2 import wide_resnet50_2_imagenet1k
-from py_src.ml_setup_base.dla import dla_cifar10
+from py_src.ml_setup_base.dla import dla_cifar10, dla_cifar100
 
 __all__ = [ 'MlSetup',
             'lenet4_mnist', 'lenet5_mnist', 'lenet5_random_mnist', 'lenet5_large_fc_mnist',
@@ -40,7 +40,7 @@ __all__ = [ 'MlSetup',
             'alexnet_imagenet1k',
             'vit_b_32_imagenet1k',
             'wide_resnet50_2_imagenet1k',
-            'dla_cifar10',
+            'dla_cifar10', 'dla_cifar100',
            ]
 
 
@@ -231,6 +231,8 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default, p
     elif model_name == ModelType.dla:
         if dataset_type in [dataset_type.default, dataset_type.cifar10]:
             output_ml_setup = dla_cifar10()
+        elif dataset_type in [dataset_type.cifar100]:
+            output_ml_setup = dla_cifar100()
         else:
             raise NotImplementedError
     else:

@@ -203,6 +203,14 @@ class FastTrainingSetup(object):
                     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs * steps_per_epoch)
                 else:
                     raise NotImplementedError
+            elif arg_ml_setup.dataset_name == DatasetType.cifar100.name:
+                if preset == 0:
+                    epochs = 120
+                    optimizer = torch.optim.SGD(model.parameters(), lr=1e-1, weight_decay=1e-4, momentum=0.9)
+                    steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
+                    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs * steps_per_epoch)
+                else:
+                    raise NotImplementedError
             else:
                 raise NotImplementedError
             return optimizer, lr_scheduler, epochs
