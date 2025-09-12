@@ -107,7 +107,7 @@ class ServiceConsecutiveLinearInterpolationRecorder(Service):
             points_size =  self.points_size
             loss_results = []
             accuracy_results = []
-            for i in range(1, points_size):
+            for i in range(0, points_size+1):
                 alpha = i / points_size
                 model_stat = {k: (1 - alpha) * start_mode_state[k] + alpha * end_model_state[k] for k in start_mode_state.keys()}
 
@@ -115,7 +115,7 @@ class ServiceConsecutiveLinearInterpolationRecorder(Service):
                 if self.allocated_gpu is not None:
                     self.test_model.to(self.allocated_gpu.device)
                 self.test_model.eval()
-                total_loss, correct, total = 0, 0.0, 0
+                total_loss, correct, total = 0, 0, 0
                 for d, l in self.dataloader:
                     test_data = d
                     test_labels = l
