@@ -107,7 +107,7 @@ class ServiceConsecutiveLinearInterpolationRecorder(Service):
             points_size =  self.points_size
             loss_results = []
             accuracy_results = []
-            for i in range(0, points_size+1):
+            for i in range(1, points_size):
                 alpha = i / points_size
                 model_stat = {k: (1 - alpha) * start_mode_state[k] + alpha * end_model_state[k] for k in start_mode_state.keys()}
 
