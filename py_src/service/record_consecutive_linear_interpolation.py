@@ -73,9 +73,9 @@ class ServiceConsecutiveLinearInterpolationRecorder(Service):
             subset = Subset(train_dataset, subset_indices)
             batch_size = 100 if self.batch_size > 100 else self.batch_size
             if num_workers is None:
-                loader = DataLoader(subset, batch_size=batch_size, shuffle=True)
+                loader = DataLoader(subset, batch_size=batch_size, shuffle=True, pin_memory=True)
             else:
-                loader = DataLoader(subset, batch_size=batch_size, shuffle=True, num_workers=num_workers, persistent_workers=True)
+                loader = DataLoader(subset, batch_size=batch_size, shuffle=True, num_workers=num_workers, persistent_workers=True, pin_memory=True)
             self.dataloader = loader
 
             self.accuracy_file = open(os.path.join(output_path, f"{self.accuracy_file_name}"), "w+")
