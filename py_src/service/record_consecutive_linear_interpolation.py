@@ -69,7 +69,9 @@ class ServiceConsecutiveLinearInterpolationRecorder(Service):
 
         # set dataset for measuring loss/accuracy of consecutive linear interpolation
         if self.points_size != 0:
-            subset_indices = np.random.choice(range(len(train_dataset)), self.dataset_size)
+            indices = list(range(len(train_dataset)))
+            np.random.shuffle(indices)
+            subset_indices = indices[:self.dataset_size]
             subset = Subset(train_dataset, subset_indices)
             batch_size = 100 if self.batch_size > 100 else self.batch_size
             if num_workers is None:
