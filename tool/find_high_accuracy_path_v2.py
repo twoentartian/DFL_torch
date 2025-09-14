@@ -730,9 +730,10 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
                         if current_ml_setup.clip_grad_norm is not None:
                             nn.utils.clip_grad_norm_(target_model.parameters(), current_ml_setup.clip_grad_norm)
                         optimizer.step()
+                    _, predicted = torch.max(outputs, 1)
                     training_loss_val = training_loss.item()
                     moving_average.add(training_loss_val)
-                    training_correct_val += (outputs == label).sum().item()
+                    training_correct_val += (predicted == label).sum().item()
                     training_total_val += label.size(0)
 
                     if runtime_parameter.verbose:
