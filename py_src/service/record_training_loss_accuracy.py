@@ -2,12 +2,14 @@ import os
 from py_src.service_base import Service
 from py_src.simulation_runtime_parameters import RuntimeParameters, SimulationPhase
 
-class ServiceTrainingLossRecorder(Service):
-    def __init__(self, interval, save_file_name="training_loss.csv"):
+class ServiceTrainingLossAccuracyRecorder(Service):
+    def __init__(self, interval, loss_file_name="training_loss.csv", accuracy_file_name="training_accuracy.csv"):
         super().__init__()
-        self.save_file = None
+        self.loss_file = None
+        self.accuracy_file = None
         self.node_order = None
-        self.save_file_name = save_file_name
+        self.loss_file_name = loss_file_name
+        self.accuracy_file_name = accuracy_file_name
         self.interval = interval
 
     @staticmethod
@@ -22,11 +24,13 @@ class ServiceTrainingLossRecorder(Service):
         self.initialize_without_runtime_parameters(output_path, node_order)
 
     def initialize_without_runtime_parameters(self, output_path, node_order):
-        self.save_file = open(os.path.join(output_path, f"{self.save_file_name}"), "w+")
+        self.loss_file = open(os.path.join(output_path, f"{self.loss_file_name}"), "w+")
+        self.accuracy_file = open(os.path.join(output_path, f"{self.accuracy_file_name}"), "w+")
         self.node_order = node_order
         node_order_str = [str(i) for i in self.node_order]
         header = ",".join(["tick", *node_order_str])
-        self.save_file.write(header + "\n")
+        self.loss_file.write(header + "\n")
+        self.accuracy_file.write(header + "\n")
 
     def trigger(self, parameters: RuntimeParameters, *args, **kwargs):
         if (parameters.phase == SimulationPhase.AFTER_TRAINING) and (parameters.current_tick % self.interval == 0):
@@ -36,25 +40,44 @@ class ServiceTrainingLossRecorder(Service):
                 node_name_and_loss[node_name] = node_loss
             self.trigger_without_runtime_parameters(parameters.current_tick, node_name_and_loss)
 
-    def trigger_without_runtime_parameters(self, tick, node_name_and_loss):
+    def trigger_without_runtime_parameters(self, tick, node_name_and_loss, node_name_and_accuracy):
         loss_row = []
         for node_name in self.node_order:
             node_loss = node_name_and_loss[node_name]
             loss_row.append('%.4f' % node_loss)
         row = ",".join([str(tick), *loss_row])
-        self.save_file.write(row + "\n")
-        self.save_file.flush()
+        self.loss_file.write(row + "\n")
+        self.loss_file.flush()
+
+        accuracy_row = []
+        for node_name in self.node_order:
+            node_accuracy = node_name_and_accuracy[node_name]
+            accuracy_row.append('%.4f' % node_accuracy)
+        row = ",".join([str(tick), *accuracy_row])
+        self.accuracy_file.write(row + "\n")
+        self.accuracy_file.flush()
 
     def continue_from_checkpoint(self, checkpoint_folder_path: str, restore_until_tick: int, *args, **kwargs):
-        infile_path = os.path.join(checkpoint_folder_path, self.save_file_name)
+        infile_path = os.path.join(checkpoint_folder_path, self.loss_file_name)
         with open(infile_path, 'r', newline='') as infile:
             next(infile)
             for line in infile:
                 row_tick = int(line.split(",", 1)[0])
                 if row_tick < restore_until_tick:
-                    self.save_file.write(line)
-        self.save_file.flush()
+                    self.loss_file.write(line)
+        self.loss_file.flush()
+
+        infile_path = os.path.join(checkpoint_folder_path, self.accuracy_file_name)
+        with open(infile_path, 'r', newline='') as infile:
+            next(infile)
+            for line in infile:
+                row_tick = int(line.split(",", 1)[0])
+                if row_tick < restore_until_tick:
+                    self.accuracy_file.write(line)
+        self.accuracy_file.flush()
 
     def __del__(self):
-        self.save_file.flush()
-        self.save_file.close()
+        self.loss_file.flush()
+        self.loss_file.close()
+        self.accuracy_file.flush()
+        self.accuracy_file.close()

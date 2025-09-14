@@ -11,7 +11,7 @@ from py_src.service.record_weights_difference import ServiceWeightsDifferenceRec
 from py_src.simulation_runtime_parameters import SimulationPhase, RuntimeParameters
 from py_src.config_file_util import label_distribution
 from py_src.service.record_variance import ServiceVarianceRecorder
-from py_src.service.record_training_loss import ServiceTrainingLossRecorder
+from py_src.service.record_training_loss_accuracy import ServiceTrainingLossRecorder
 from py_src.service.record_test_accuracy_loss import ServiceTestAccuracyLossRecorder
 from py_src.model_variance_correct import VarianceCorrector, VarianceCorrectionType
 

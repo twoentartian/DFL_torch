@@ -23,7 +23,7 @@ from py_src.simulation_runtime_parameters import SimulationPhase
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from py_src import ml_setup, model_average, model_variance_correct, special_torch_layers, cuda, util, configuration_file
-from py_src.service import record_weights_difference, record_test_accuracy_loss, record_variance, record_model_stat, record_training_loss, record_consecutive_linear_interpolation
+from py_src.service import record_weights_difference, record_test_accuracy_loss, record_variance, record_model_stat, record_training_loss_accuracy, record_consecutive_linear_interpolation
 from py_src.ml_setup import MlSetup
 
 logger = logging.getLogger("find_high_accuracy_path_v2")
@@ -361,7 +361,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
                                                                             existing_model_for_testing=target_model, gpu=gpu, num_workers=general_parameter.dataloader_worker)
     child_logger.info("setting service done: record_test_accuracy_loss_service")
 
-    record_training_loss_service = record_training_loss.ServiceTrainingLossRecorder(1)
+    record_training_loss_service = record_training_loss_accuracy.ServiceTrainingLossAccuracyRecorder(1)
     record_training_loss_service.initialize_without_runtime_parameters(arg_output_folder_path, [0])
     child_logger.info("setting service done: record_training_loss_service")
 
@@ -696,6 +696,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
 
         """training"""
         training_loss_val = 0
+        training_accuracy_val = 0.0
         if not runtime_parameter.debug_check_config_mode:
             target_model.train()
             target_model.to(device)
@@ -705,6 +706,8 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             moving_average = util.MovingAverage(parameter_train.train_for_min_rounds)
             while training_iter_counter < parameter_train.train_for_max_rounds:
                 exit_training = False
+                training_correct_val = 0
+                training_total_val = 0
                 for data, label in dataloader:
                     training_iter_counter += 1
                     data, label = data.to(device, non_blocking=True), label.to(device, non_blocking=True)
@@ -729,6 +732,8 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
                         optimizer.step()
                     training_loss_val = training_loss.item()
                     moving_average.add(training_loss_val)
+                    training_correct_val += (outputs == label).sum().item()
+                    training_total_val += label.size(0)
 
                     if runtime_parameter.verbose:
                         if training_iter_counter % 10 == 0:
@@ -741,6 +746,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
                     if moving_average.get_average() <= parameter_train.train_until_loss and training_iter_counter >= parameter_train.train_for_min_rounds:
                         exit_training = True
                         break
+                training_accuracy_val = training_correct_val / training_total_val
                 if exit_training:
                     child_logger.info(f"current tick: {runtime_parameter.current_tick}, training {training_iter_counter} rounds(final), loss = {moving_average.get_average():.3f}")
                     # training_loss_val = moving_average.get_average()
@@ -788,7 +794,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
                 if record_flag:
                     record_model_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, [0], [target_model_stat_dict])
             record_test_accuracy_loss_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, {0: target_model_stat_dict})
-            record_training_loss_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, {0: training_loss_val})
+            record_training_loss_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, {0: training_loss_val}, {0: training_accuracy_val})
             record_consecutive_points_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, SimulationPhase.END_OF_TICK, target_model.state_dict())
         # update tick
         runtime_parameter.current_tick += 1
