@@ -59,7 +59,8 @@ def main():
 
     model.to(device)
     target_layers = [model.encoder.layers[-1].ln_1]
-    output_folder = Path(f"{dataset_path}_attention_mask")
+    dataset_root = Path(imagenet1k_path).expanduser().resolve()
+    output_folder = (dataset_root.parent / f"{dataset_root.name}_attention_mask")
 
     def run_cam(engine, x, targets):
         try:
