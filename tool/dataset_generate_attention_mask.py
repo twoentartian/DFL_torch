@@ -3,6 +3,7 @@ from PIL import Image
 from pathlib import Path
 import numpy as np
 
+import torch
 import torch.cuda
 from torchvision import models, transforms
 from torch.utils.data import DataLoader
@@ -77,14 +78,22 @@ def main():
                 with torch.no_grad():
                     probs = torch.softmax(model(x), dim=1)
 
-                targets_list = []
-                for i in range(probs.shape[0]):
-                    k = min(args.topk, probs.shape[1])
-                    topk = torch.topk(probs[i], k=k).indices
-                    targets_list.append([ClassifierOutputTarget(int(c)) for c in topk])
-
                 # Compute CAMs (B, Hc, Wc)
-                grayscale_cam = run_cam(cam_engine, x, targets_list)
+                B, C = probs.shape
+                if args.topk == 1:
+                    top1_idx = torch.argmax(probs, dim=1)  # (B,)
+                    targets_flat = [ClassifierOutputTarget(int(top1_idx[i])) for i in range(B)]
+                    grayscale_cam = run_cam(cam_engine, x, targets_flat)  # shape (B, Hc, Wc)
+                else:
+                    # top-k: run CAM k times and average (API only accepts 1 target per sample per pass)
+                    k = min(args.topk, C)
+                    topk_idx = torch.topk(probs, k=k, dim=1).indices  # (B, k)
+                    cams_accum = None
+                    for j in range(k):
+                        tj = [ClassifierOutputTarget(int(topk_idx[i, j])) for i in range(B)]
+                        cam_j = run_cam(cam_engine, x, tj)  # (B, Hc, Wc)
+                        cams_accum = cam_j if cams_accum is None else (cams_accum + cam_j)
+                    grayscale_cam = cams_accum / float(k)
 
                 # Save each item in the batch
                 for i in range(grayscale_cam.shape[0]):
