@@ -19,7 +19,7 @@ def load_model_dataloader(model_name, device, dataset_path):
     model_name_type = ModelType[model_name]
     if model_name_type == ModelType.vit_b_16:
         model = models.vit_b_16(progress=False, weights=models.ViT_B_16_Weights.IMAGENET1K_SWAG_E2E_V1, num_classes=1000)
-        dataset = ImageFolderWithMeta(root=f'{dataset_path}/train', transform=models.ViT_B_16_Weights.IMAGENET1K_SWAG_E2E_V1.transforms)
+        dataset = ImageFolderWithMeta(root=f'{dataset_path}/train', transform=models.ViT_B_16_Weights.IMAGENET1K_SWAG_E2E_V1.transforms())
         dataloader = DataLoader(dataset, batch_size=100, shuffle=False,num_workers=8, pin_memory=device)
     else:
         raise NotImplementedError
@@ -81,8 +81,8 @@ def main():
                 # Save each item in the batch
                 for i in range(grayscale_cam.shape[0]):
                     mask = grayscale_cam[i] if args.topk == 1 else np.mean(grayscale_cam[i], axis=0)
-                    rel = Path(paths[i]).relative_to(args.train_root)
-                    out_path = args.out_root / rel.with_suffix(".png")
+                    rel = Path(paths[i]).relative_to(dataset_path)
+                    out_path = f"{dataset_path}_attention_mask" / rel.with_suffix(".png")
                     save_mask(mask, out_path, out_size=orig_sizes[i])
 
             except Exception as e:
