@@ -67,8 +67,9 @@ def calculate_mean_std(dataset):
     return mean, std
 
 """ MNIST """
+default_path_mnist = '~/dataset/mnist'
 def dataset_mnist(rescale_to_224=False, random_rotation=5):
-    dataset_path = '~/dataset/mnist'
+    dataset_path = default_path_mnist
     mnist_train = datasets.MNIST(root=dataset_path, train=True, download=True)
     mean = mnist_train.data.float().mean() / 255
     std = mnist_train.data.float().std() / 255
@@ -95,8 +96,9 @@ def dataset_mnist(rescale_to_224=False, random_rotation=5):
     return DatasetSetup(dataset_name, train_data, test_data, labels=set(range(10)))
 
 """ Random MNIST """
+default_path_random_mnist = '~/dataset/random_mnist'
 def dataset_random_mnist():
-    dataset_path = '~/dataset/random_mnist'
+    dataset_path = default_path_random_mnist
     dataset_name = str(DatasetType.random_mnist.name)
     mnist_train = datasets.ImageFolder(os.path.join(dataset_path, "train"), transform=transforms.Compose([transforms.ToTensor()]))
     mean, std = calculate_mean_std(mnist_train)
@@ -109,8 +111,9 @@ def dataset_random_mnist():
 
 
 """ CIFAR10 """
+default_path_cifar10 = '~/dataset/cifar10'
 def dataset_cifar10(rescale_to_224=False, transforms_training=None, transforms_testing=None, mean_std=None):
-    dataset_path = '~/dataset/cifar10'
+    dataset_path = default_path_cifar10
     if rescale_to_224:
         dataset_name = str(DatasetType.cifar10_224.name)
     else:
@@ -145,8 +148,9 @@ def dataset_cifar10(rescale_to_224=False, transforms_training=None, transforms_t
     return DatasetSetup(dataset_name, cifar10_train, cifar10_test, labels=set(range(10)))
 
 """ CIFAR100 """
+default_path_cifar100 = '~/dataset/cifar100'
 def dataset_cifar100(rescale_to_224=False, transforms_training=None, transforms_testing=None, mean_std=None):
-    dataset_path = '~/dataset/cifar100'
+    dataset_path = default_path_cifar100
     if rescale_to_224:
         dataset_name = str(DatasetType.cifar100_224.name)
     else:
@@ -225,11 +229,11 @@ def get_pytorch_preprocessing(version=2, train_crop_size=None, val_resize_size=N
     else:
         raise NotImplementedError
 
-
+default_path_imagenet1k = '~/dataset/imagenet1k'
 def dataset_imagenet1k(pytorch_preset_version: int, transforms_training=None, transforms_testing=None,
                        train_crop_size=None, val_resize_size=None, val_crop_size=None,
                        random_erasing=None, enable_memory_cache=False):
-    dataset_path = '~/dataset/imagenet1k' if imagenet1k_path is None else imagenet1k_path
+    dataset_path = default_path_imagenet1k if imagenet1k_path is None else imagenet1k_path
     dataset_name = str(DatasetType.imagenet1k.name)
 
     if transforms_testing is None and transforms_training is None:
@@ -247,9 +251,10 @@ def dataset_imagenet1k(pytorch_preset_version: int, transforms_training=None, tr
         imagenet_test = datasets.ImageNet(root=dataset_path, split='val', transform=transforms_test)
     return DatasetSetup(dataset_name, imagenet_train, imagenet_test, labels=set(range(0, 1000)))
 
+default_path_imagenet100 = '~/dataset/imagenet100'
 def dataset_imagenet100(pytorch_preset_version: int, transforms_training=None, transforms_testing=None,
                         train_crop_size=None, val_resize_size=None, val_crop_size=None, random_erasing=None, enable_memory_cache=False):
-    dataset_path = '~/dataset/imagenet100' if imagenet100_path is None else imagenet100_path
+    dataset_path = default_path_imagenet100 if imagenet100_path is None else imagenet100_path
     dataset_name = str(DatasetType.imagenet100.name)
 
     if transforms_testing is None and transforms_training is None:
@@ -268,9 +273,10 @@ def dataset_imagenet100(pytorch_preset_version: int, transforms_training=None, t
 
     return DatasetSetup(dataset_name, imagenet_train, imagenet_test, labels=set(range(0, 100)))
 
+default_path_imagenet10 = '~/dataset/imagenet10'
 def dataset_imagenet10(pytorch_preset_version: int, transforms_training=None, transforms_testing=None,
                        train_crop_size=None, val_resize_size=None, val_crop_size=None, random_erasing=None, enable_memory_cache=False):
-    dataset_path = '~/dataset/imagenet10' if imagenet10_path is None else imagenet10_path
+    dataset_path = default_path_imagenet10 if imagenet10_path is None else imagenet10_path
     dataset_name = str(DatasetType.imagenet10.name)
 
     if transforms_testing is None and transforms_training is None:
@@ -289,12 +295,13 @@ def dataset_imagenet10(pytorch_preset_version: int, transforms_training=None, tr
 
     return DatasetSetup(dataset_name, imagenet_train, imagenet_test, labels=set(range(0, 10)))
 
+
 def dataset_imagenet1k_custom(train_crop_size=224, val_resize_size=256, val_crop_size=224,
                               interpolation=transforms.InterpolationMode.BILINEAR, auto_augment_policy=None,
                               random_erase_prob=0.0, ra_magnitude=9, augmix_severity=3,
                               backend='pil', use_v2=False):
     dataset_name = str(DatasetType.imagenet1k.name)
-    dataset_path = '~/dataset/imagenet1k/train' if imagenet1k_path is None else f"{imagenet1k_path}/train"
+    dataset_path = f'{default_path_imagenet1k}/train' if imagenet1k_path is None else f"{imagenet1k_path}/train"
     dataset_train = datasets.ImageFolder(
         dataset_path,
         presets.ClassificationPresetTrain(
@@ -308,7 +315,7 @@ def dataset_imagenet1k_custom(train_crop_size=224, val_resize_size=256, val_crop
             use_v2=use_v2,
         ),
     )
-    dataset_path = '~/dataset/imagenet1k/val' if imagenet1k_path is None else f"{imagenet1k_path}/val"
+    dataset_path = f'{default_path_imagenet1k}/val' if imagenet1k_path is None else f"{imagenet1k_path}/val"
     transforms_test = transforms.Compose([
         transforms.Resize(val_resize_size),
         transforms.CenterCrop(val_crop_size),
