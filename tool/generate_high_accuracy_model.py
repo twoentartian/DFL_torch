@@ -147,9 +147,9 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
     log_file.close()
 
     util.save_model_state(os.path.join(output_folder, f"{str(index).zfill(digit_number_of_models)}.model.pt"),
-                          model.state_dict(), arg_ml_setup.model_name)
+                          model.state_dict(), arg_ml_setup.model_name, arg_ml_setup.dataset_name)
     util.save_optimizer_state(os.path.join(output_folder, f"{str(index).zfill(digit_number_of_models)}.optimizer.pt"),
-                              optimizer.state_dict(), arg_ml_setup.model_name)
+                              optimizer.state_dict(), arg_ml_setup.model_name, arg_ml_setup.dataset_name)
 
     del model, dataset, dataloader, criterion, optimizer, log_file
     torch.cuda.empty_cache()

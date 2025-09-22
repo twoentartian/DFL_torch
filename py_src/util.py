@@ -76,37 +76,31 @@ def expand_int_args(input_int_str: str):
 def load_model_state_file(path: str):
     cpu_device = torch.device("cpu")
     raw_model_state = torch.load(path, map_location=cpu_device)
-    if raw_model_state["state_dict"] is not None:
-        # this is a model state with model name
-        model_state = raw_model_state["state_dict"]
-        model_name = raw_model_state["model_name"]
-    else:
-        model_state = raw_model_state["state_dict"]
-        model_name = None
-    return model_state, model_name
+    model_state = raw_model_state["state_dict"]
+    model_name = None if raw_model_state["model_name"] is None else raw_model_state["model_name"]
+    dataset_name = None if raw_model_state["dataset_name"] is None else raw_model_state["dataset_name"]
+    return model_state, model_name, dataset_name
 
 def load_optimizer_state_file(path: str):
     cpu_device = torch.device("cpu")
     raw_optimizer_state = torch.load(path, map_location=cpu_device)
-    if raw_optimizer_state["state_dict"] is not None:
-        # this is a model state with model name
-        optimizer_state = raw_optimizer_state["state_dict"]
-        model_name = raw_optimizer_state["model_name"]
-    else:
-        optimizer_state = raw_optimizer_state["state_dict"]
-        model_name = None
-    return optimizer_state, model_name
+    optimizer_state = raw_optimizer_state["state_dict"]
+    model_name = None if raw_optimizer_state["model_name"] is None else raw_optimizer_state["model_name"]
+    dataset_name = None if raw_optimizer_state["dataset_name"] is None else raw_optimizer_state["dataset_name"]
+    return optimizer_state, model_name, dataset_name
 
-def save_model_state(path, model_state, model_name=None):
+def save_model_state(path, model_state, model_name, dataset_name):
     info = {}
     info["state_dict"] = model_state
     info["model_name"] = model_name
+    info["dataset_name"] = dataset_name
     torch.save(info, path)
 
-def save_optimizer_state(path, optimizer_state, model_name=None):
+def save_optimizer_state(path, optimizer_state, model_name, dataset_name):
     info = {}
     info["state_dict"] = optimizer_state
     info["model_name"] = model_name
+    info["dataset_name"] = dataset_name
     torch.save(info, path)
 
 def assert_if_both_not_none(a, b):

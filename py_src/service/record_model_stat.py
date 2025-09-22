@@ -10,7 +10,7 @@ from py_src.simulation_runtime_parameters import RuntimeParameters, SimulationPh
 
 
 class ModelStatRecorder(Service):
-    def __init__(self, interval, phase=SimulationPhase.END_OF_TICK, record_node=None, record_at_tick: Optional[List[int]] = None) -> None:
+    def __init__(self, interval, model_name, dataset_name, phase=SimulationPhase.END_OF_TICK, record_node=None, record_at_tick: Optional[List[int]] = None) -> None:
         super().__init__()
         if record_at_tick is None:
             self.record_at_tick = []
@@ -23,6 +23,8 @@ class ModelStatRecorder(Service):
         self.save_format = None
         self.save_lmdb = None
         self.write_count = 0
+        self.model_name = model_name
+        self.dataset_name = dataset_name
 
     @staticmethod
     def get_service_name() -> str:
@@ -93,7 +95,7 @@ class ModelStatRecorder(Service):
                 save_path_for_this_node = self.save_path_for_each_node[node_name]
                 model_stat = model_stats[index]
                 current_node_output_path = os.path.join(save_path_for_this_node, f"{tick}.model.pt")
-                util.save_model_state(current_node_output_path, model_stat)
+                util.save_model_state(current_node_output_path, model_stat, self.model_name, self.dataset_name)
 
     def continue_from_checkpoint(self, checkpoint_folder_path: str, restore_until_tick: int, lmdb_db_name=None, *args, **kwargs):
         if self.save_format is None:

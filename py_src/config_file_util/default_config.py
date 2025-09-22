@@ -41,7 +41,6 @@ preset_averaging_on_cpu = False
 """"""""" Global Machine learning related parameters """""""""""
 """ predefined: """
 
-
 def get_ml_setup():
     get_ml_setup.__ml_setup = None
     if get_ml_setup.__ml_setup is None:
@@ -210,11 +209,12 @@ def get_label_distribution(target_node: node.Node, parameters: RuntimeParameters
 
 
 def get_service_list():
+    ml_setup = get_ml_setup()
     service_list = []
 
     service_list.append(ServiceVarianceRecorder(100, phase=[SimulationPhase.AFTER_AVERAGING]))
     service_list.append(ServiceTrainingLossRecorder(100))
-    service_list.append(ServiceTestAccuracyLossRecorder(100, 100))
+    service_list.append(ServiceTestAccuracyLossRecorder(100, 100, ml_setup.model_name, ml_setup.dataset_name))
     service_list.append(ServiceWeightsDifferenceRecorder(100))
 
     return service_list

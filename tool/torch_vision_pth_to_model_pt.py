@@ -27,5 +27,5 @@ if __name__ == '__main__':
     current_ml_setup = ml_setup.get_ml_setup_from_config(args.model_type, args.dataset_type)
     model = current_ml_setup.model
     model.load_state_dict(model_stat_dict)
-    util.save_model_state(output_path, model_stat_dict, model_name=current_ml_setup.model_name)
+    util.save_model_state(output_path, model_stat_dict, current_ml_setup.model_name, current_ml_setup.dataset_name)
 

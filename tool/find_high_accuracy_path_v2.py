@@ -18,18 +18,73 @@ from torch.utils.data.dataloader import default_collate
 
 from find_high_accuracy_path_v2.runtime_parameters import RuntimeParameters, WorkMode, Checkpoint
 from find_high_accuracy_path_v2.find_parameters import ParameterGeneral, ParameterMove, ParameterTrain, ParameterRebuildNorm
-from find_high_accuracy_path import set_logging, get_files_to_process
+from find_high_accuracy_path_v2.functions import rebuild_norm_layer_function
 from py_src.simulation_runtime_parameters import SimulationPhase
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from py_src import ml_setup, model_average, model_variance_correct, special_torch_layers, cuda, util, configuration_file
 from py_src.service import record_weights_difference, record_test_accuracy_loss, record_variance, record_model_stat, record_training_loss_accuracy, record_consecutive_linear_interpolation
-from py_src.ml_setup import MlSetup
 
 logger = logging.getLogger("find_high_accuracy_path_v2")
 
 REPORT_FINISH_TIME_PER_TICK = 100
 ENABLE_REBUILD_NORM = False
+
+def set_logging(target_logger, task_name, log_file_path=None):
+    class ExitOnExceptionHandler(logging.StreamHandler):
+        def emit(self, record):
+            if record.levelno == logging.CRITICAL:
+                raise SystemExit(-1)
+
+    formatter = logging.Formatter(f"[%(asctime)s] [%(levelname)8s] [{task_name}] --- %(message)s (%(filename)s:%(lineno)s)")
+
+    console = logging.StreamHandler(sys.stdout)
+    console.setLevel(logging.INFO)
+    console.setFormatter(formatter)
+
+    target_logger.setLevel(logging.DEBUG)
+    target_logger.addHandler(console)
+    target_logger.addHandler(ExitOnExceptionHandler())
+
+    if log_file_path is not None:
+        file = logging.FileHandler(log_file_path)
+        file.setLevel(logging.DEBUG)
+        file.setFormatter(formatter)
+        target_logger.addHandler(file)
+
+    del console, formatter
+
+def get_files_to_process(arg_start_folder, arg_end_folder, arg_mode):
+    if not os.path.isdir(arg_start_folder):
+        logger.critical(f"{arg_start_folder} does not exist")
+    if not os.path.isdir(arg_end_folder):
+        logger.critical(f"{arg_end_folder} does not exist")
+
+    files_in_start_folder = sorted(set(temp_file for temp_file in os.listdir(arg_start_folder) if temp_file.endswith('model.pt')))
+    files_in_end_folder = sorted(set(temp_file for temp_file in os.listdir(arg_end_folder) if temp_file.endswith('model.pt')))
+    if arg_mode == "auto":
+        if len(files_in_start_folder) == len(files_in_end_folder):
+            arg_mode = "each_to_each"
+        else:
+            arg_mode = "all_to_all"
+
+    output_paths = []
+    if arg_mode == "all_to_all":
+        for start_file in files_in_start_folder:
+            for end_file in files_in_end_folder:
+                output_paths.append((os.path.join(arg_start_folder, start_file), os.path.join(arg_end_folder, end_file)))
+
+    elif arg_mode == "each_to_each":
+        if len(files_in_start_folder) != len(files_in_end_folder):
+            logger.critical(f"file counts mismatch: {len(files_in_start_folder)} != {len(files_in_end_folder)}")
+        if files_in_start_folder != files_in_end_folder:
+            logger.critical(f"file names mismatch: {files_in_start_folder} != {files_in_end_folder}")
+        for file in files_in_start_folder:
+            output_paths.append((os.path.join(arg_start_folder, file), os.path.join(arg_end_folder, file)))
+    else:
+        logger.critical(f"mode {arg_mode} not recognized")
+
+    return sorted(output_paths)
 
 def load_existing_optimizer_stat(optimizer, optimizer_stat_dict_path, logger=None):
     assert os.path.exists(optimizer_stat_dict_path), f'starting optimizer {optimizer_stat_dict_path} is missing'
@@ -84,85 +139,6 @@ def pre_train(model, optimizer, criterion, dataloader, device, train_iteration=0
             logger.info(f"pre training done, load old optimizer state")
     model.to(device)
 
-
-def rebuild_norm_layer_function(model: torch.nn.Module, initial_model_state, start_model_state, rebuild_norm_optimizer: torch.optim.Optimizer,
-                                training_optimizer_state, norm_layers, ml_setup: MlSetup,
-                                dataloader, parameter_rebuild_norm, runtime_parameter: RuntimeParameters, rebuild_on_device=None, logger=None):
-    model_stat = model.state_dict()
-
-    """reset the weights of norm layers"""
-    assert sum([int(i) for i in [parameter_rebuild_norm.rebuild_norm_use_initial_norm_weights,
-            parameter_rebuild_norm.rebuild_norm_use_start_model_norm_weights]]) <= 1, \
-        "only rebuild_norm_use_start_model_norm_weights or rebuild_norm_use_initial_norm_weights can be set to True"
-    rebuild_norm_layer_function.__reset_info_print = False
-    for layer_name, layer_weights in model_stat.items():
-        if layer_name in norm_layers:
-            if parameter_rebuild_norm.rebuild_norm_use_initial_norm_weights:
-                if not rebuild_norm_layer_function.__reset_info_print:
-                    logger.info(f"reset norm weights to initial model weights")
-                    rebuild_norm_layer_function.__reset_info_print = True
-                model_stat[layer_name] = initial_model_state[layer_name].detach().clone()
-            if parameter_rebuild_norm.rebuild_norm_use_start_model_norm_weights:
-                if not rebuild_norm_layer_function.__reset_info_print:
-                    logger.info(f"reset norm weights to starting model weights")
-                    rebuild_norm_layer_function.__reset_info_print = True
-                model_stat[layer_name] = start_model_state[layer_name].detach().clone()
-
-    model.load_state_dict(model_stat)
-
-    if rebuild_on_device is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    else:
-        device = rebuild_on_device
-
-    model.train()
-    model.to(device)
-    criterion = ml_setup.criterion
-    rebuild_norm_optimizer.load_state_dict(training_optimizer_state)
-    cuda.CudaEnv.optimizer_to(rebuild_norm_optimizer, device)
-
-    if runtime_parameter.use_amp:
-        scaler = torch.cuda.amp.GradScaler()
-
-    training_iter_counter = 0
-    moving_average = util.MovingAverage(parameter_rebuild_norm.rebuild_norm_for_min_rounds)
-    while True:
-        exit_training = False
-        for data, label in dataloader:
-            training_iter_counter += 1
-            data, label = data.to(device), label.to(device)
-            rebuild_norm_optimizer.zero_grad(set_to_none=True)
-            if runtime_parameter.use_amp:
-                with torch.cuda.amp.autocast():
-                    outputs = model(data)
-                    training_loss = criterion(outputs, label)
-                    scaler.scale(training_loss).backward()
-                    scaler.step(rebuild_norm_optimizer)
-                    scaler.update()
-            else:
-                outputs = model(data)
-                training_loss = criterion(outputs, label)
-                training_loss.backward()
-                rebuild_norm_optimizer.step()
-
-            if runtime_parameter.verbose:
-                if training_iter_counter % 10 == 0:
-                    logger.info(f"current tick: {runtime_parameter.current_tick}, rebuilding norm for {training_iter_counter} rounds, loss = {moving_average.get_average():.3f}")
-
-            training_loss_val = training_loss.item()
-            moving_average.add(training_loss_val)
-            if training_iter_counter == parameter_rebuild_norm.rebuild_norm_for_max_rounds:
-                exit_training = True
-                break
-            if moving_average.get_average() <= parameter_rebuild_norm.rebuild_norm_until_loss and training_iter_counter >= parameter_rebuild_norm.rebuild_norm_for_min_rounds:
-                exit_training = True
-                break
-        if exit_training:
-            if logger is not None:
-                logger.info(f"current tick: {runtime_parameter.current_tick}, rebuilding norm for {training_iter_counter} rounds(final), loss = {moving_average.get_average():.3f}")
-            break
-
-
 def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_file_path=None):
     config_file = configuration_file.load_configuration(runtime_parameter.config_file_path)
     checkpoint_content: Optional[Checkpoint] = None
@@ -213,12 +189,14 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
     cpu_device = torch.device("cpu")
     if checkpoint_file_path is None:
         # normal mode
-        start_model_stat_dict, start_model_name = util.load_model_state_file(start_point)
+        start_model_stat_dict, start_model_name, dataset_name_in_model_state = util.load_model_state_file(start_point)
         child_logger.info(f"loading start model at {start_point}")
         if runtime_parameter.dataset_name is not None:
+            assert dataset_name_in_model_state == runtime_parameter.dataset_name, "dataset name in cli mismatch the dataset name in model state file"
             current_ml_setup = ml_setup.get_ml_setup_from_config(start_model_name, dataset_type=runtime_parameter.dataset_name, pytorch_preset_version=runtime_parameter.pytorch_preset_version)
         else:
-            current_ml_setup = ml_setup.get_ml_setup_from_config(start_model_name, pytorch_preset_version=runtime_parameter.pytorch_preset_version)
+            dataset_name = 'default' if dataset_name_in_model_state is None else dataset_name_in_model_state
+            current_ml_setup = ml_setup.get_ml_setup_from_config(start_model_name, dataset_type=dataset_name, pytorch_preset_version=runtime_parameter.pytorch_preset_version)
         runtime_parameter.model_name = current_ml_setup.model_name
         runtime_parameter.dataset_name = current_ml_setup.dataset_name
         child_logger.info(f"find model type is {start_model_name}")
@@ -237,7 +215,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             end_model_stat_dict = {k: torch.full_like(v, v.float().mean()) for k, v in start_model_stat_dict.items() }
             child_logger.info(f"work mode: to_mean")
         elif runtime_parameter.work_mode == WorkMode.to_certain_model:
-            end_model_stat_dict, end_model_name = util.load_model_state_file(end_point)
+            end_model_stat_dict, end_model_name, _ = util.load_model_state_file(end_point)
             child_logger.info(f"work mode: to_certain_model at {end_point}")
             assert end_model_name == start_model_name, f"start({start_model_name}) != end({end_model_name})"
         elif runtime_parameter.work_mode == WorkMode.to_vs:
@@ -341,10 +319,10 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
     if runtime_parameter.save_format != 'none':
         if not runtime_parameter.save_ticks:
             child_logger.info(f"record_model_service is ON at every {runtime_parameter.save_interval} tick")
-            record_model_service = record_model_stat.ModelStatRecorder(sys.maxsize)  # the interval here has no effect
+            record_model_service = record_model_stat.ModelStatRecorder(sys.maxsize, current_ml_setup.model_name, current_ml_setup.dataset_name)  # the interval here has no effect
         else:
             child_logger.info("record_model_service is ON at certain ticks")
-            record_model_service = record_model_stat.ModelStatRecorder(sys.maxsize)  # we don't set the interval here because only certain ticks should be recorded
+            record_model_service = record_model_stat.ModelStatRecorder(sys.maxsize, current_ml_setup.model_name, current_ml_setup.dataset_name)  # we don't set the interval here because only certain ticks should be recorded
         record_model_service.initialize_without_runtime_parameters([0], arg_output_folder_path, save_format=runtime_parameter.save_format)
     else:
         child_logger.info("record_model_service is OFF")
@@ -353,8 +331,9 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
 
     record_test_accuracy_loss_service = record_test_accuracy_loss.ServiceTestAccuracyLossRecorder(runtime_parameter.service_test_accuracy_loss_interval,
                                                                                                   runtime_parameter.service_test_accuracy_loss_batch_size,
+                                                                                                  current_ml_setup.model_name,
+                                                                                                  current_ml_setup.dataset_name,
                                                                                                   store_top_accuracy_model_count=runtime_parameter.store_top_accuracy_model_count,
-                                                                                                  model_name=current_ml_setup.model_name,
                                                                                                   use_fixed_testing_dataset=True,
                                                                                                   test_whole_dataset=runtime_parameter.test_dataset_use_whole)
     record_test_accuracy_loss_service.initialize_without_runtime_parameters(arg_output_folder_path, [0], target_model, criterion, current_ml_setup.testing_data,
@@ -584,8 +563,8 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
 
         """if parameter updated"""
         if parameter_updated:
-            util.save_model_state(os.path.join(arg_output_folder_path, f"{runtime_parameter.current_tick}.model.pt"), target_model.state_dict(), current_ml_setup.model_name)
-            util.save_optimizer_state(os.path.join(arg_output_folder_path, f"{runtime_parameter.current_tick}.optimizer.pt"), optimizer.state_dict(), current_ml_setup.model_name)
+            util.save_model_state(os.path.join(arg_output_folder_path, f"{runtime_parameter.current_tick}.model.pt"), target_model.state_dict(), current_ml_setup.model_name, current_ml_setup.dataset_name)
+            util.save_optimizer_state(os.path.join(arg_output_folder_path, f"{runtime_parameter.current_tick}.optimizer.pt"), optimizer.state_dict(), current_ml_setup.model_name, current_ml_setup.dataset_name)
 
         """service"""
         run_service = True
@@ -801,8 +780,8 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
         runtime_parameter.current_tick += 1
 
     # save final model and optimizer
-    util.save_model_state(os.path.join(arg_output_folder_path, f"{runtime_parameter.current_tick}.model.pt"), target_model.state_dict(), current_ml_setup.model_name)
-    util.save_optimizer_state(os.path.join(arg_output_folder_path, f"{runtime_parameter.current_tick}.optimizer.pt"), optimizer.state_dict(), current_ml_setup.model_name)
+    util.save_model_state(os.path.join(arg_output_folder_path, f"{runtime_parameter.current_tick}.model.pt"), target_model.state_dict(), current_ml_setup.model_name, current_ml_setup.dataset_name)
+    util.save_optimizer_state(os.path.join(arg_output_folder_path, f"{runtime_parameter.current_tick}.optimizer.pt"), optimizer.state_dict(), current_ml_setup.model_name, current_ml_setup.dataset_name)
 
 
 

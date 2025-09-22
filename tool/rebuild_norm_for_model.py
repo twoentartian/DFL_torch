@@ -10,7 +10,7 @@ import random
 from datetime import datetime
 from typing import Final
 
-import find_high_accuracy_path
+import find_high_accuracy_path_v2
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from py_src import ml_setup, util
 
@@ -128,7 +128,7 @@ if __name__ == '__main__':
     for rebuild_count_index in range(rebuild_count):
         existing_optimizer_state, optimizer_model_type = util.load_optimizer_state_file(optimizer_stat_path)
         assert optimizer_model_type == model_type
-        final_state, rebuild_states, rebuild_layers = find_high_accuracy_path.rebuild_norm_layer_function(target_model, starting_model_stat, current_ml_setup,
+        final_state, rebuild_states, rebuild_layers = find_high_accuracy_path_v2.rebuild_norm_layer_function(target_model, starting_model_stat, current_ml_setup,
                                                                                                           epoch_for_rebuilding_norm, dataloader_for_rebuilding_norm, rebuild_round, existing_optimizer_state,
                                                                                                           rebuild_on_device=device, initial_model_stat=initial_model_stat, reset_norm_to_initial=False, display=True)
         rebuild_iter, rebuilding_loss_val = rebuild_states[-1]

@@ -13,7 +13,7 @@ from py_src.node import Node
 import py_src.util as util
 
 class ServiceTestAccuracyLossRecorder(Service):
-    def __init__(self, interval, test_batch_size, phase_to_record=(SimulationPhase.END_OF_TICK,), model_name=None, use_fixed_testing_dataset=True, store_top_accuracy_model_count = 0,
+    def __init__(self, interval, test_batch_size, model_name, dataset_name, phase_to_record=(SimulationPhase.END_OF_TICK,), use_fixed_testing_dataset=True, store_top_accuracy_model_count = 0,
                  accuracy_file_name="accuracy.csv", loss_file_name="loss.csv", output_var_file_name="output_var.csv", test_whole_dataset=False,):
         super().__init__()
         self.accuracy_file = None
@@ -30,6 +30,7 @@ class ServiceTestAccuracyLossRecorder(Service):
         self.store_top_accuracy_model_path = None
         self.store_top_accuracy_model_buffer = None
         self.model_name = model_name
+        self.dataset_name = dataset_name
 
         self.test_model = None
         self.criterion = None
@@ -253,7 +254,7 @@ class ServiceTestAccuracyLossRecorder(Service):
                 if accuracy not in buffer:
                     if len(buffer) < self.store_top_accuracy_model_count:
                         buffer[accuracy] = save_path
-                        util.save_model_state(save_path, model, model_name=self.model_name)
+                        util.save_model_state(save_path, model, model_name=self.model_name, dataset_name=self.dataset_name)
                         buffer_changed = True
                     else:
                         smallest_accuracy, smallest_accuracy_path = next(iter(buffer.items()))
@@ -262,7 +263,7 @@ class ServiceTestAccuracyLossRecorder(Service):
                             buffer.pop(smallest_accuracy)
                             os.remove(smallest_accuracy_path)
                             buffer[accuracy] = save_path
-                            util.save_model_state(save_path, model, model_name=self.model_name)
+                            util.save_model_state(save_path, model, model_name=self.model_name, dataset_name=self.dataset_name)
                             buffer_changed = True
                 if buffer_changed:
                     buffer = OrderedDict(sorted(buffer.items()))

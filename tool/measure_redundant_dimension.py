@@ -62,9 +62,9 @@ def train_model(model, optimizer, dataloader, criterion, training_round, model_n
 
 def train_all_models(model_start, models_end, step_size, adoptive_step_size, existing_output=None):
     """train the starting model"""
-    model_state_dict, model_name = util.load_model_state_file(model_start)
+    model_state_dict, model_name, dataset_name = util.load_model_state_file(model_start)
     print(f"starting model type: {model_name}")
-    current_ml_setup = ml_setup.get_ml_setup_from_config(model_name)
+    current_ml_setup = ml_setup.get_ml_setup_from_config(model_name, dataset_type=dataset_name)
     model = copy.deepcopy(current_ml_setup.model)
 
 
@@ -83,7 +83,7 @@ def train_all_models(model_start, models_end, step_size, adoptive_step_size, exi
         train_model(model, optimizer, dataloader, criterion, training_round, model_name='start')
         start_model_state = model.state_dict()
         cuda.CudaEnv.model_state_dict_to(start_model_state, cpu_device)
-        util.save_model_state(os.path.join(output_folder_path, start_model_save_name), start_model_state)
+        util.save_model_state(os.path.join(output_folder_path, start_model_save_name), start_model_state, model_name, dataset_name)
 
     """load destination models"""
     end_model_states = []
@@ -108,7 +108,7 @@ def train_all_models(model_start, models_end, step_size, adoptive_step_size, exi
         train_model(model, optimizer, dataloader, criterion, training_round, model_name=f"{end_file_name}")
         end_model_state = model.state_dict()
         cuda.CudaEnv.model_state_dict_to(end_model_state, cpu_device)
-        util.save_model_state(os.path.join(output_folder_path, end_file_save_name), end_model_state)
+        util.save_model_state(os.path.join(output_folder_path, end_file_save_name), end_model_state, model_name, dataset_name)
         end_model_states.append(end_model_state)
 
     return start_model_state, end_model_states
