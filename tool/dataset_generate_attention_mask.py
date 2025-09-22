@@ -60,6 +60,7 @@ def main():
     model.to(device)
     target_layers = [model.encoder.layers[-1].ln_1]
     dataset_root = Path(imagenet1k_path).expanduser().resolve()
+    train_root = (dataset_root / "train").resolve()
     output_folder = (dataset_root.parent / f"{dataset_root.name}_attention_mask")
 
     def run_cam(engine, x, targets):
@@ -99,7 +100,7 @@ def main():
                 # Save each item in the batch
                 for i in range(grayscale_cam.shape[0]):
                     mask = grayscale_cam[i] if args.topk == 1 else np.mean(grayscale_cam[i], axis=0)
-                    rel = Path(paths[i]).relative_to(Path(dataset_path)/"train")
+                    rel = Path(paths[i]).relative_to(train_root)
                     out_path = output_folder / rel.with_suffix(".png")
                     save_mask(mask, out_path, out_size=orig_sizes[i])
 
