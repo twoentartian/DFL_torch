@@ -69,6 +69,21 @@ def main():
         except TypeError:
             return engine(input_tensor=x, targets=targets)  # keyword (newer API)
 
+    def _to_wh(size_item):
+        # Accept (W,H), torch tensors, numpy, etc.; raise if not per-sample
+        try:
+            import torch as _torch
+            if isinstance(size_item, _torch.Tensor):
+                size_item = size_item.detach().cpu().tolist()
+        except Exception:
+            pass
+        if isinstance(size_item, np.ndarray):
+            size_item = size_item.tolist()
+        if isinstance(size_item, (list, tuple)) and len(size_item) == 2:
+            return (int(size_item[0]), int(size_item[1]))
+        # If we somehow got the whole batch (len == B), bail out clearly:
+        raise ValueError(f"Expected per-sample (W,H), got: {type(size_item)} len={getattr(size_item, '__len__', lambda: 'NA')()} -> {size_item}")
+
     with GradCAM(model=model, target_layers=target_layers, reshape_transform=vit_reshape_transform) as cam_engine:
         from tqdm import tqdm
         for batch in tqdm(dataloader, desc="Processing"):
@@ -99,10 +114,11 @@ def main():
 
                 # Save each item in the batch
                 for i in range(grayscale_cam.shape[0]):
-                    mask = grayscale_cam[i] if args.topk == 1 else np.mean(grayscale_cam[i], axis=0)
+                    mask = grayscale_cam[i]
                     rel = Path(paths[i]).relative_to(train_root)
                     out_path = output_folder / rel.with_suffix(".png")
-                    save_mask(mask, out_path, out_size=orig_sizes[i])
+                    out_size = _to_wh(orig_sizes[i])  # <-- normalize
+                    save_mask(mask, out_path, out_size=out_size)
 
             except Exception as e:
                 sys.stderr.write(f"\n[WARN] batch failed: {e}\n")
