@@ -56,6 +56,7 @@ def main():
     model, dataloader = load_model_dataloader(args.model, device, dataset_path)
     print(f"model name: {model.__class__.__name__}")
 
+    model.to(device)
     target_layers = [model.encoder.layers[-1].ln_1]
 
     with GradCAM(model=model, target_layers=target_layers, reshape_transform=vit_reshape_transform) as cam:
