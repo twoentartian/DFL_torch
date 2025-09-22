@@ -8,6 +8,14 @@ from py_src.torch_vision_train import presets
 from torchvision.transforms.autoaugment import TrivialAugmentWide
 from torchvision.transforms.v2 import RandAugment
 
+default_path_mnist = '~/dataset/mnist'
+default_path_random_mnist = '~/dataset/random_mnist'
+default_path_cifar10 = '~/dataset/cifar10'
+default_path_cifar100 = '~/dataset/cifar100'
+default_path_imagenet1k = '~/dataset/imagenet1k'
+default_path_imagenet100 = '~/dataset/imagenet100'
+default_path_imagenet10 = '~/dataset/imagenet10'
+
 """ Load env override file """
 imagenet1k_path = None
 imagenet100_path = None
@@ -29,7 +37,12 @@ if os.path.exists(dataset_env_file_path):
     if hasattr(env, "imagenet10_path"):
         imagenet10_path = env.imagenet10_path
         print("override imagenet10_path: ", env.imagenet10_path)
-
+if imagenet1k_path is None:
+    imagenet1k_path = default_path_imagenet1k
+if imagenet100_path is None:
+    imagenet100_path = default_path_imagenet100
+if imagenet10_path is None:
+    imagenet10_path = default_path_imagenet10
 
 """ Dataset Enum """
 class DatasetType(Enum):
@@ -67,7 +80,6 @@ def calculate_mean_std(dataset):
     return mean, std
 
 """ MNIST """
-default_path_mnist = '~/dataset/mnist'
 def dataset_mnist(rescale_to_224=False, random_rotation=5):
     dataset_path = default_path_mnist
     mnist_train = datasets.MNIST(root=dataset_path, train=True, download=True)
@@ -96,7 +108,6 @@ def dataset_mnist(rescale_to_224=False, random_rotation=5):
     return DatasetSetup(dataset_name, train_data, test_data, labels=set(range(10)))
 
 """ Random MNIST """
-default_path_random_mnist = '~/dataset/random_mnist'
 def dataset_random_mnist():
     dataset_path = default_path_random_mnist
     dataset_name = str(DatasetType.random_mnist.name)
@@ -111,7 +122,6 @@ def dataset_random_mnist():
 
 
 """ CIFAR10 """
-default_path_cifar10 = '~/dataset/cifar10'
 def dataset_cifar10(rescale_to_224=False, transforms_training=None, transforms_testing=None, mean_std=None):
     dataset_path = default_path_cifar10
     if rescale_to_224:
@@ -148,7 +158,6 @@ def dataset_cifar10(rescale_to_224=False, transforms_training=None, transforms_t
     return DatasetSetup(dataset_name, cifar10_train, cifar10_test, labels=set(range(10)))
 
 """ CIFAR100 """
-default_path_cifar100 = '~/dataset/cifar100'
 def dataset_cifar100(rescale_to_224=False, transforms_training=None, transforms_testing=None, mean_std=None):
     dataset_path = default_path_cifar100
     if rescale_to_224:
@@ -229,7 +238,6 @@ def get_pytorch_preprocessing(version=2, train_crop_size=None, val_resize_size=N
     else:
         raise NotImplementedError
 
-default_path_imagenet1k = '~/dataset/imagenet1k'
 def dataset_imagenet1k(pytorch_preset_version: int, transforms_training=None, transforms_testing=None,
                        train_crop_size=None, val_resize_size=None, val_crop_size=None,
                        random_erasing=None, enable_memory_cache=False):
@@ -251,7 +259,6 @@ def dataset_imagenet1k(pytorch_preset_version: int, transforms_training=None, tr
         imagenet_test = datasets.ImageNet(root=dataset_path, split='val', transform=transforms_test)
     return DatasetSetup(dataset_name, imagenet_train, imagenet_test, labels=set(range(0, 1000)))
 
-default_path_imagenet100 = '~/dataset/imagenet100'
 def dataset_imagenet100(pytorch_preset_version: int, transforms_training=None, transforms_testing=None,
                         train_crop_size=None, val_resize_size=None, val_crop_size=None, random_erasing=None, enable_memory_cache=False):
     dataset_path = default_path_imagenet100 if imagenet100_path is None else imagenet100_path
@@ -273,7 +280,6 @@ def dataset_imagenet100(pytorch_preset_version: int, transforms_training=None, t
 
     return DatasetSetup(dataset_name, imagenet_train, imagenet_test, labels=set(range(0, 100)))
 
-default_path_imagenet10 = '~/dataset/imagenet10'
 def dataset_imagenet10(pytorch_preset_version: int, transforms_training=None, transforms_testing=None,
                        train_crop_size=None, val_resize_size=None, val_crop_size=None, random_erasing=None, enable_memory_cache=False):
     dataset_path = default_path_imagenet10 if imagenet10_path is None else imagenet10_path
