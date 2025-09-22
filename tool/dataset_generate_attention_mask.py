@@ -20,7 +20,7 @@ def load_model_dataloader(model_name, device, dataset_path):
     if model_name_type == ModelType.vit_b_16:
         model = models.vit_b_16(progress=False, weights=models.ViT_B_16_Weights.IMAGENET1K_SWAG_E2E_V1, num_classes=1000)
         dataset = ImageFolderWithMeta(root=f'{dataset_path}/train', transform=models.ViT_B_16_Weights.IMAGENET1K_SWAG_E2E_V1.transforms())
-        dataloader = DataLoader(dataset, batch_size=100, shuffle=False,num_workers=8, pin_memory=device)
+        dataloader = DataLoader(dataset, batch_size=10, shuffle=False,num_workers=8, pin_memory=(device.type == "cuda"))
     else:
         raise NotImplementedError
 
@@ -58,8 +58,15 @@ def main():
 
     model.to(device)
     target_layers = [model.encoder.layers[-1].ln_1]
+    output_folder = Path(f"{dataset_path}_attention_mask")
 
-    with GradCAM(model=model, target_layers=target_layers, reshape_transform=vit_reshape_transform) as cam:
+    def run_cam(engine, x, targets):
+        try:
+            return engine(x, targets)  # positional (older API)
+        except TypeError:
+            return engine(input_tensor=x, targets=targets)  # keyword (newer API)
+
+    with GradCAM(model=model, target_layers=target_layers, reshape_transform=vit_reshape_transform) as cam_engine:
         from tqdm import tqdm
         for batch in tqdm(dataloader, desc="Processing"):
             try:
@@ -77,13 +84,13 @@ def main():
                     targets_list.append([ClassifierOutputTarget(int(c)) for c in topk])
 
                 # Compute CAMs (B, Hc, Wc)
-                grayscale_cam = cam(input_tensor=x, targets=targets_list)  # numpy float32 in [0,1]
+                grayscale_cam = run_cam(cam_engine, x, targets_list)
 
                 # Save each item in the batch
                 for i in range(grayscale_cam.shape[0]):
                     mask = grayscale_cam[i] if args.topk == 1 else np.mean(grayscale_cam[i], axis=0)
-                    rel = Path(paths[i]).relative_to(dataset_path)
-                    out_path = f"{dataset_path}_attention_mask" / rel.with_suffix(".png")
+                    rel = Path(paths[i]).relative_to(Path(dataset_path)/"train")
+                    out_path = output_folder / rel.with_suffix(".png")
                     save_mask(mask, out_path, out_size=orig_sizes[i])
 
             except Exception as e:
@@ -91,7 +98,7 @@ def main():
                 traceback.print_exc(limit=1, file=sys.stderr)
                 continue
 
-    print(f"Done. Masks saved under: {args.out_root}")
+    print(f"Done. Masks saved under {output_folder}")
 
 
 if __name__ == '__main__':
