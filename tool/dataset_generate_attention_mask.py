@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 
 import torch.cuda
-from torchvision import models, transforms, datasets
+from torchvision import models, transforms
 from torch.utils.data import DataLoader
 from pytorch_grad_cam import GradCAM
 from pytorch_grad_cam.utils.model_targets import ClassifierOutputTarget
@@ -13,12 +13,13 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import py_src.ml_setup as ml_setup
 from py_src.ml_setup import ModelType
 from py_src.ml_setup_base.dataset import imagenet1k_path
+from py_src.dataset import ImageFolderWithMeta
 
 def load_model_dataloader(model_name, device, dataset_path):
     model_name_type = ModelType[model_name]
     if model_name_type == ModelType.vit_b_16:
         model = models.vit_b_16(progress=False, weights=models.ViT_B_16_Weights.IMAGENET1K_SWAG_E2E_V1, num_classes=1000)
-        dataset = datasets.ImageNet(root=dataset_path, split='train', transform=models.ViT_B_16_Weights.IMAGENET1K_SWAG_E2E_V1.transforms)
+        dataset = ImageFolderWithMeta(root=f'{dataset_path}/train', transform=models.ViT_B_16_Weights.IMAGENET1K_SWAG_E2E_V1.transforms)
         dataloader = DataLoader(dataset, batch_size=100, shuffle=False,num_workers=8, pin_memory=device)
     else:
         raise NotImplementedError

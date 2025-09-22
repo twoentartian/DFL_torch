@@ -7,7 +7,7 @@ import io
 import logging
 from multiprocessing import shared_memory
 from torch.utils.data import Dataset, DataLoader, Sampler
-from torchvision import transforms
+from torchvision import transforms, datasets
 from PIL import Image
 
 from py_src import internal_names, util
@@ -357,3 +357,17 @@ class ImageDatasetWithCachedInputInSharedMem(Dataset):
             existing_shm.unlink()
         except FileNotFoundError:
             pass  # Already unlinked
+
+
+class ImageFolderWithMeta(datasets.ImageFolder):
+    """Returns (tensor, label, path, orig_size) so we can resize CAMs back to the source size."""
+    def __getitem__(self, index):
+        path, target = self.samples[index]
+        with Image.open(path) as img:
+            img = img.convert("RGB")
+            orig_size = img.size  # (W, H)
+            if self.transform is not None:
+                img_t = self.transform(img)
+            else:
+                img_t = img
+        return img_t, target, path, orig_size
