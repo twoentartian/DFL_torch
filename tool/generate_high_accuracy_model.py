@@ -93,7 +93,7 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
 
     # services
     if arg_save_format != 'none':
-        record_model_service = record_model_stat.ModelStatRecorder(1)
+        record_model_service = record_model_stat.ModelStatRecorder(1, arg_ml_setup.model_name, arg_ml_setup.dataset_name)
         record_model_service.initialize_without_runtime_parameters([0], output_folder, save_format=arg_save_format, lmdb_db_name=f"{str(index).zfill(digit_number_of_models)}")
     else:
         record_model_service = None
