@@ -83,7 +83,7 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
     model.to(device)
     dataset = copy.deepcopy(arg_ml_setup.training_data)
     batch_size = arg_ml_setup.training_batch_size
-    num_worker = 4 if thread_per_process > 4 else thread_per_process
+    num_worker = 16 if thread_per_process > 16 else thread_per_process
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers=num_worker, persistent_workers=True)
     criterion = arg_ml_setup.criterion
 
