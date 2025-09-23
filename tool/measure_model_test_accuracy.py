@@ -79,14 +79,18 @@ if __name__ == "__main__":
     model_file_path = args.model_file
     model_type_from_cli = args.model_type
 
-    model_stat, model_name = util.load_model_state_file(model_file_path)
+    model_stat, model_name, dataset_name = util.load_model_state_file(model_file_path)
     if model_type_from_cli == "auto":
         model_type = model_name
     else:
         model_type = model_type_from_cli
     assert model_type is not None, "model_type is None"
 
-    current_ml_setup = ml_setup.get_ml_setup_from_config(model_type, dataset_type=args.dataset_type, pytorch_preset_version=args.torch_preset_version)
+    if args.dataset_type == "default":
+        current_ml_setup = ml_setup.get_ml_setup_from_config(model_type, dataset_type=args.dataset_type, pytorch_preset_version=args.torch_preset_version)
+    else:
+        assert dataset_name == args.dataset_type, f"dataset_name in CLI({args.dataset_type}) and in model state file ({dataset_name}) mismatch."
+        current_ml_setup = ml_setup.get_ml_setup_from_config(model_type, dataset_type=dataset_name, pytorch_preset_version=args.torch_preset_version)
 
     if not os.path.exists(model_file_path):
         print(f"file not found. {model_file_path}")
