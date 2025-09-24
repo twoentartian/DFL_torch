@@ -86,6 +86,8 @@ if __name__ == "__main__":
         model_type = model_type_from_cli
     assert model_type is not None, "model_type is None"
 
+    if dataset_name is None:
+        dataset_name = args.dataset_type
     if args.dataset_type == "default":
         current_ml_setup = ml_setup.get_ml_setup_from_config(model_type, dataset_type=args.dataset_type, pytorch_preset_version=args.torch_preset_version)
     else:

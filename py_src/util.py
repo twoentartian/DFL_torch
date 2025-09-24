@@ -77,8 +77,8 @@ def load_model_state_file(path: str):
     cpu_device = torch.device("cpu")
     raw_model_state = torch.load(path, map_location=cpu_device)
     model_state = raw_model_state["state_dict"]
-    model_name = None if raw_model_state["model_name"] is None else raw_model_state["model_name"]
-    dataset_name = None if raw_model_state["dataset_name"] is None else raw_model_state["dataset_name"]
+    model_name = None if "model_name" not in raw_model_state else raw_model_state["model_name"]
+    dataset_name = None if "dataset_name" not in raw_model_state else raw_model_state["dataset_name"]
     return model_state, model_name, dataset_name
 
 def load_optimizer_state_file(path: str):
