@@ -190,6 +190,8 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
     if checkpoint_file_path is None:
         # normal mode
         start_model_stat_dict, start_model_name, dataset_name_in_model_state = util.load_model_state_file(start_point)
+        if dataset_name_in_model_state is None:
+            dataset_name_in_model_state = runtime_parameter.dataset_name
         child_logger.info(f"loading start model at {start_point}")
         if runtime_parameter.dataset_name is not None:
             assert dataset_name_in_model_state == runtime_parameter.dataset_name, "dataset name in cli mismatch the dataset name in model state file"
