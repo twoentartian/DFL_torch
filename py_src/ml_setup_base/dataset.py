@@ -8,6 +8,8 @@ from py_src.torch_vision_train import presets
 from torchvision.transforms.autoaugment import TrivialAugmentWide
 from torchvision.transforms.v2 import RandAugment
 
+from dataset_masked import MaskedImageDataset
+
 default_path_mnist = '~/dataset/mnist'
 default_path_random_mnist = '~/dataset/random_mnist'
 default_path_cifar10 = '~/dataset/cifar10'
@@ -57,6 +59,7 @@ class DatasetType(Enum):
     imagenet10 = auto()
     imagenet100 = auto()
     imagenet1k = auto()
+    imagenet1k_sam_mask = auto()
 
 """ Helper functions """
 def calculate_mean_std(dataset):
@@ -330,3 +333,39 @@ def dataset_imagenet1k_custom(train_crop_size=224, val_resize_size=256, val_crop
     ])
     dataset_test = datasets.ImageFolder(dataset_path, transforms_test)
     return DatasetSetup(dataset_name, dataset_train, dataset_test, labels=set(range(0, 1000)))
+
+
+def dataset_imagenet1k_mask(train_crop_size=224, val_resize_size=256, val_crop_size=224,
+                            interpolation=transforms.InterpolationMode.BILINEAR, auto_augment_policy=None,
+                            random_erase_prob=0.0, ra_magnitude=9, augmix_severity=3,
+                            backend='pil', use_v2=False):
+    dataset_name = str(DatasetType.imagenet1k_sam_mask.name)
+    transforms_train = transforms.Compose([
+        transforms.RandomResizedCrop(train_crop_size, interpolation=transforms.InterpolationMode.BILINEAR),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
+    dataset_train = datasets.MaskedImageDataset(image_root='~/dataset/imagenet1k/train', mask_root='~/dataset/imagenet1k/train_sam_mask', transform=transforms_train)
+
+    dataset_path = f'{default_path_imagenet1k}/val' if imagenet1k_path is None else f"{imagenet1k_path}/val"
+    transforms_test = transforms.Compose([
+        transforms.Resize(val_resize_size),
+        transforms.CenterCrop(val_crop_size),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
+    dataset_test = datasets.ImageFolder(dataset_path, transforms_test)
+    return DatasetSetup(dataset_name, dataset_train, dataset_test, labels=set(range(0, 1000)))
+
+
+
+# helper functions
+name_to_dataset = {
+    'mnist': dataset_mnist,
+    'random_mnist': dataset_random_mnist,
+    'cifar10': dataset_cifar10,
+    'cifar100': dataset_cifar100,
+    'imagenet1k': dataset_imagenet1k_custom,
+    'imagenet1k_mask': dataset_imagenet1k_mask,
+}
