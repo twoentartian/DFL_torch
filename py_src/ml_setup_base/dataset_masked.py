@@ -63,7 +63,8 @@ class MaskedImageDataset(Dataset):
                 self.samples = pickle.load(mm)
                 mm.close()
         else:
-            print("generating mask_list and save to pickle.")
+            if ENABLE_FILE_CACHE:
+                print("generating mask_list and save to pickle.")
             for cls in self.classes:
                 img_dir = self.image_root / cls
                 msk_dir = self.mask_root / cls
