@@ -8,7 +8,7 @@ from py_src.torch_vision_train import presets
 from torchvision.transforms.autoaugment import TrivialAugmentWide
 from torchvision.transforms.v2 import RandAugment
 
-from dataset_masked import MaskedImageDataset
+from .dataset_masked import MaskedImageDataset
 
 default_path_mnist = '~/dataset/mnist'
 default_path_random_mnist = '~/dataset/random_mnist'
