@@ -346,7 +346,7 @@ def dataset_imagenet1k_mask(train_crop_size=224, val_resize_size=256, val_crop_s
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
-    dataset_train = datasets.MaskedImageDataset(image_root='~/dataset/imagenet1k/train', mask_root='~/dataset/imagenet1k/train_sam_mask', transform=transforms_train)
+    dataset_train = MaskedImageDataset(image_root='~/dataset/imagenet1k/train', mask_root='~/dataset/imagenet1k/train_sam_mask', transform=transforms_train)
 
     dataset_path = f'{default_path_imagenet1k}/val' if imagenet1k_path is None else f"{imagenet1k_path}/val"
     transforms_test = transforms.Compose([
