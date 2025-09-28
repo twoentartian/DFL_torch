@@ -10,7 +10,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from py_src.ml_setup_base import dataset as dfl_dataset
 
 
-def show_batch(images, labels, idx_to_class, cols=8, save_path=None):
+def show_batch(images, labels, cols=8, save_path=None):
     """Visualize a batch of CHW images in [0,1]."""
     n = images.size(0)
     rows = math.ceil(n / cols)
@@ -19,10 +19,10 @@ def show_batch(images, labels, idx_to_class, cols=8, save_path=None):
     for i in range(n):
         img = images[i].detach().cpu()          # C,H,W
         img = img.permute(1, 2, 0).clamp(0, 1)  # H,W,C
-        cls = idx_to_class[int(labels[i])]
+        label = int(labels[i])
         ax = plt.subplot(rows, cols, i + 1)
         ax.imshow(img.numpy())
-        ax.set_title(cls, fontsize=10)
+        ax.set_title(f"label: {label}", fontsize=10)
         ax.axis("off")
 
     plt.tight_layout()
@@ -53,9 +53,6 @@ def main():
         print(f"dataset name {args.dataset} not found, available: {dfl_dataset.name_to_dataset.keys()}")
         exit(-1)
 
-    # Map back from label index to class name for titles
-    idx_to_class = {v: k for k, v in ds.training_data.class_to_idx.items()}
-
     dl = DataLoader(
         ds,
         batch_size=args.batch_size,
@@ -66,7 +63,7 @@ def main():
 
     # Grab one batch
     images, labels = next(iter(dl))
-    show_batch(images, labels, idx_to_class, cols=args.cols, save_path=(args.save or None))
+    show_batch(images, labels, cols=args.cols, save_path=(args.save or None))
 
 
 if __name__ == "__main__":
