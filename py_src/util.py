@@ -295,3 +295,9 @@ def calculate_layer_wise_projection_to_variance_sphere(A, B, strict=True):
 
     return target
 
+
+def expand_path(p):
+    # keep None as None; convert to Path and expand ~, then resolve to absolute
+    if p is None:
+        return None
+    return Path(str(p)).expanduser().resolve()

@@ -1,4 +1,4 @@
-import os
+import os, sys
 from enum import Enum, auto
 from torchvision import transforms, datasets
 from torch.utils.data import DataLoader
@@ -10,13 +10,16 @@ from torchvision.transforms.v2 import RandAugment
 
 from .dataset_masked import MaskedImageDataset
 
-default_path_mnist = '~/dataset/mnist'
-default_path_random_mnist = '~/dataset/random_mnist'
-default_path_cifar10 = '~/dataset/cifar10'
-default_path_cifar100 = '~/dataset/cifar100'
-default_path_imagenet1k = '~/dataset/imagenet1k'
-default_path_imagenet100 = '~/dataset/imagenet100'
-default_path_imagenet10 = '~/dataset/imagenet10'
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from py_src.util import expand_path
+
+default_path_mnist = expand_path('~/dataset/mnist')
+default_path_random_mnist = expand_path('~/dataset/random_mnist')
+default_path_cifar10 = expand_path('~/dataset/cifar10')
+default_path_cifar100 = expand_path('~/dataset/cifar100')
+default_path_imagenet1k = expand_path('~/dataset/imagenet1k')
+default_path_imagenet100 = expand_path('~/dataset/imagenet100')
+default_path_imagenet10 = expand_path('~/dataset/imagenet10')
 
 """ Load env override file """
 imagenet1k_path = None

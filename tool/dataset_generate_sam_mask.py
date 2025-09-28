@@ -14,7 +14,7 @@ python imagenet_sam_batch.py \
 
 """
 
-import argparse
+import argparse, os, sys
 from pathlib import Path
 import xml.etree.ElementTree as ET
 import cv2
@@ -22,6 +22,9 @@ import numpy as np
 from tqdm import tqdm
 import torch
 from segment_anything import sam_model_registry, SamPredictor
+
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from py_src.util import expand_path
 
 def find_xml_for_image(img_path: Path, annotations_root: Path):
     # Try same folder first (img.jpg -> img.xml)
@@ -108,11 +111,6 @@ def overlay_and_save(img, mask, save_path_mask, save_overlay=False):
         out_overlay = save_path_mask.with_name(save_path_mask.stem + "_overlay.png")
         cv2.imwrite(str(out_overlay), overlay)
 
-def _expand_path(p):
-    # keep None as None; convert to Path and expand ~, then resolve to absolute
-    if p is None:
-        return None
-    return Path(str(p)).expanduser().resolve()
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -126,10 +124,10 @@ if __name__ == "__main__":
     parser.add_argument('--ext', default='.JPEG', help='image extension to search for (.JPEG or .jpg)')
     args = parser.parse_args()
 
-    args.train_root = _expand_path(args.train_root)
-    args.annotations_root = _expand_path(args.annotations_root)
-    args.out_root = _expand_path(args.out_root)
-    args.sam_ckpt = _expand_path(args.sam_ckpt)
+    args.train_root = expand_path(args.train_root)
+    args.annotations_root = expand_path(args.annotations_root)
+    args.out_root = expand_path(args.out_root)
+    args.sam_ckpt = expand_path(args.sam_ckpt)
 
     if torch.cuda.is_available():
         device = torch.device('cuda')
