@@ -54,7 +54,7 @@ def main():
         exit(-1)
 
     # Map back from label index to class name for titles
-    idx_to_class = {v: k for k, v in ds.class_to_idx.items()}
+    idx_to_class = {v: k for k, v in ds.training_data.class_to_idx.items()}
 
     dl = DataLoader(
         ds,

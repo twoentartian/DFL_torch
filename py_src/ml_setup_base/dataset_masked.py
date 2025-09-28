@@ -56,7 +56,7 @@ class MaskedImageDataset(Dataset):
         pickle_cache_path = f"{self.mask_root}/mask_list.pickle"
         if os.path.exists(pickle_cache_path):
             print("find mask_list.pickle file in mask folder.")
-            with open(pickle_cache_path, "wb") as f:
+            with open(pickle_cache_path, "rb") as f:
                 self.samples = pickle.load(f)
         else:
             print("generating mask_list and save to pickle.")
