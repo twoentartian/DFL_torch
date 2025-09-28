@@ -47,14 +47,14 @@ def main():
     random.seed(args.seed)
     torch.manual_seed(args.seed)
 
-    if args.dataset in dfl_dataset.name_to_dataset:
-        ds = dfl_dataset.name_to_dataset[args.dataset]()
+    if args.dataset in dfl_dataset.name_to_dataset_setup:
+        ds = dfl_dataset.name_to_dataset_setup[args.dataset]()
     else:
-        print(f"dataset name {args.dataset} not found, available: {dfl_dataset.name_to_dataset.keys()}")
+        print(f"dataset name {args.dataset} not found, available: {dfl_dataset.name_to_dataset_setup.keys()}")
         exit(-1)
 
     dl = DataLoader(
-        ds,
+        ds.training_data,
         batch_size=args.batch_size,
         shuffle=True,
         num_workers=args.num_workers,

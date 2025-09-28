@@ -366,7 +366,7 @@ def dataset_imagenet1k_mask(train_crop_size=224, val_resize_size=256, val_crop_s
 
 
 # helper functions
-name_to_dataset = {
+name_to_dataset_setup = {
     'mnist': dataset_mnist,
     'random_mnist': dataset_random_mnist,
     'cifar10': dataset_cifar10,
