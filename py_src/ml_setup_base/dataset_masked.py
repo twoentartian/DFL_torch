@@ -1,4 +1,4 @@
-import os
+import os, pickle
 from pathlib import Path
 from typing import Callable, List, Optional, Tuple, Dict
 
@@ -52,29 +52,38 @@ class MaskedImageDataset(Dataset):
 
         # Build index: only common stems per class (uses the smaller side implicitly)
         self.samples: List[Tuple[Path, Path, int]] = []
-        for cls in self.classes:
-            img_dir = self.image_root / cls
-            msk_dir = self.mask_root / cls
-            if not img_dir.is_dir() or not msk_dir.is_dir():
-                continue
 
-            # Map stem -> path
-            img_map: Dict[str, Path] = {}
-            for p in img_dir.iterdir():
-                if p.is_file() and p.suffix.lower() in self.image_exts:
-                    img_map[p.stem] = p
-            msk_map: Dict[str, Path] = {}
-            for p in msk_dir.iterdir():
-                if p.is_file() and p.suffix.lower() in self.mask_exts:
-                    msk_map[p.stem] = p
+        pickle_cache_path = f"{self.mask_root}/mask_list.pickle"
+        if os.path.exists(pickle_cache_path):
+            print("find mask_list.pickle file in mask folder.")
+            with open(pickle_cache_path, "wb") as f:
+                self.samples = pickle.load(f)
+        else:
+            print("generating mask_list and save to pickle.")
+            for cls in self.classes:
+                img_dir = self.image_root / cls
+                msk_dir = self.mask_root / cls
+                if not img_dir.is_dir() or not msk_dir.is_dir():
+                    continue
 
-            common_stems = sorted(set(img_map.keys()) & set(msk_map.keys()))
-            # Only pairs that exist on both sides (this naturally equals the smaller count)
-            for stem in common_stems:
-                self.samples.append((img_map[stem], msk_map[stem], self.class_to_idx[cls]))
+                # Map stem -> path
+                img_map: Dict[str, Path] = {}
+                for p in img_dir.iterdir():
+                    if p.is_file() and p.suffix.lower() in self.image_exts:
+                        img_map[p.stem] = p
+                msk_map: Dict[str, Path] = {}
+                for p in msk_dir.iterdir():
+                    if p.is_file() and p.suffix.lower() in self.mask_exts:
+                        msk_map[p.stem] = p
 
-        if not self.samples:
-            raise RuntimeError("Found no matching (image, mask) pairs.")
+                common_stems = sorted(set(img_map.keys()) & set(msk_map.keys()))
+                # Only pairs that exist on both sides (this naturally equals the smaller count)
+                for stem in common_stems:
+                    self.samples.append((img_map[stem], msk_map[stem], self.class_to_idx[cls]))
+            if not self.samples:
+                raise RuntimeError("Found no matching (image, mask) pairs.")
+            with open(pickle_cache_path, "wb") as f:
+                pickle.dump(self.samples, f, protocol=pickle.HIGHEST_PROTOCOL)
 
     def __len__(self) -> int:
         return len(self.samples)
