@@ -1,4 +1,4 @@
-import os, pickle
+import os, pickle, mmap
 from pathlib import Path
 from typing import Callable, List, Optional, Tuple, Dict
 
@@ -57,7 +57,9 @@ class MaskedImageDataset(Dataset):
         if os.path.exists(pickle_cache_path):
             print("find mask_list.pickle file in mask folder.")
             with open(pickle_cache_path, "rb") as f:
-                self.samples = pickle.load(f)
+                mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
+                self.samples = pickle.load(mm)
+                mm.close()
         else:
             print("generating mask_list and save to pickle.")
             for cls in self.classes:
