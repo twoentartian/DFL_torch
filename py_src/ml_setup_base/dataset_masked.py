@@ -7,6 +7,8 @@ from PIL import Image
 import torch
 from torch.utils.data import Dataset
 
+ENABLE_FILE_CACHE = False
+
 class MaskedImageDataset(Dataset):
     """
     Pairs images from `image_root` with PNG masks from `mask_root`.
@@ -54,7 +56,7 @@ class MaskedImageDataset(Dataset):
         self.samples: List[Tuple[Path, Path, int]] = []
 
         pickle_cache_path = f"{self.mask_root}/mask_list.pickle"
-        if os.path.exists(pickle_cache_path):
+        if ENABLE_FILE_CACHE and os.path.exists(pickle_cache_path):
             print("find mask_list.pickle file in mask folder.")
             with open(pickle_cache_path, "rb") as f:
                 mm = mmap.mmap(f.fileno(), 0, access=mmap.ACCESS_READ)
@@ -84,8 +86,9 @@ class MaskedImageDataset(Dataset):
                     self.samples.append((img_map[stem], msk_map[stem], self.class_to_idx[cls]))
             if not self.samples:
                 raise RuntimeError("Found no matching (image, mask) pairs.")
-            with open(pickle_cache_path, "wb") as f:
-                pickle.dump(self.samples, f, protocol=pickle.HIGHEST_PROTOCOL)
+            if ENABLE_FILE_CACHE:
+                with open(pickle_cache_path, "wb") as f:
+                    pickle.dump(self.samples, f, protocol=pickle.HIGHEST_PROTOCOL)
 
     def __len__(self) -> int:
         return len(self.samples)
