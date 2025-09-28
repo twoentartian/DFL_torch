@@ -107,7 +107,7 @@ class MaskedImageDataset(Dataset):
         masked = (mask_arr == 0)  # H x W boolean
         if masked.any():
             noise = np.random.randint(0, 256, size=img_arr.shape, dtype=np.uint8)
-            img_arr = np.where(masked[..., None], img_arr, noise)
+            img_arr = np.where(masked[..., None], noise, img_arr)
 
         return Image.fromarray(img_arr, mode="RGB")
 
