@@ -45,8 +45,9 @@ def show_batch(dl, dataset_name, cols=8, save_path=None):
                 Path(save_path).parent.mkdir(parents=True, exist_ok=True)
                 fig.savefig(save_path, dpi=150, bbox_inches="tight")
                 print(f"Saved to {save_path}")
+                input("Press Enter to continue...")
             else:
-                fig.show()
+                fig.show(block=True)
         else:
             images, labels = target
             n = images.size(0)
@@ -69,8 +70,9 @@ def show_batch(dl, dataset_name, cols=8, save_path=None):
                 Path(save_path).parent.mkdir(parents=True, exist_ok=True)
                 fig.savefig(save_path, dpi=150, bbox_inches="tight")
                 print(f"Saved to {save_path}")
+                input("Press Enter to continue...")
             else:
-                fig.show()
+                fig.show(block=True)
         plt.close(fig)
 
 
