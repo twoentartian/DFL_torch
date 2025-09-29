@@ -339,9 +339,7 @@ def dataset_imagenet1k_custom(train_crop_size=224, val_resize_size=256, val_crop
 
 
 def dataset_imagenet1k_mask(train_crop_size=224, val_resize_size=256, val_crop_size=224,
-                            interpolation=transforms.InterpolationMode.BILINEAR, auto_augment_policy=None,
-                            random_erase_prob=0.0, ra_magnitude=9, augmix_severity=3,
-                            backend='pil', use_v2=False):
+                            return_path=False):
     dataset_name = str(DatasetType.imagenet1k_sam_mask.name)
     transforms_train = transforms.Compose([
         transforms.RandomResizedCrop(train_crop_size, interpolation=transforms.InterpolationMode.BILINEAR),
@@ -351,7 +349,7 @@ def dataset_imagenet1k_mask(train_crop_size=224, val_resize_size=256, val_crop_s
     ])
     dataset_train = MaskedImageDataset(image_root=expand_path('~/dataset/imagenet1k/train'),
                                        mask_root=expand_path('~/dataset/imagenet1k/train_sam_mask'),
-                                       transform=transforms_train)
+                                       transform=transforms_train, return_paths=return_path)
 
     dataset_path = f'{default_path_imagenet1k}/val' if imagenet1k_path is None else f"{imagenet1k_path}/val"
     transforms_test = transforms.Compose([
@@ -373,4 +371,13 @@ name_to_dataset_setup = {
     'cifar100': dataset_cifar100,
     'imagenet1k': dataset_imagenet1k_custom,
     'imagenet1k_mask': dataset_imagenet1k_mask,
+}
+
+is_masked_dataset = {
+    'mnist': False,
+    'random_mnist': False,
+    'cifar10': False,
+    'cifar100': False,
+    'imagenet1k': False,
+    'imagenet1k_mask': True,
 }
