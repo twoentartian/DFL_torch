@@ -29,6 +29,7 @@ def show_batch(dl, dataset_name, cols=8, save_path=None):
             ax = plt.subplot(rows*2, cols, i + 1 + n)
             raw_img = plt.imread(path_img[i])
             ax.imshow(raw_img)
+            ax.set_title(f"label: {label} (raw image)", fontsize=10)
             ax.axis('off')
 
         plt.tight_layout()
