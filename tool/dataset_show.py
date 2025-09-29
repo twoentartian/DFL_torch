@@ -30,11 +30,11 @@ def show_batch(dl, dataset_name, cols=8, save_path=None):
                 img = images[i].detach().cpu()          # C,H,W
                 img = img.permute(1, 2, 0).clamp(0, 1)  # H,W,C
                 label = int(labels[i])
-                ax = axes[i_row, i_col]
+                ax: plt.Axes = axes[i_row, i_col]
                 ax.imshow(img.numpy())
                 ax.set_title(f"label: {label}", fontsize=10)
                 ax.axis("off")
-                ax = axes[i_row+rows, i_col]
+                ax: plt.Axes = axes[i_row+rows, i_col]
                 raw_img = plt.imread(path_img[i])
                 ax.imshow(raw_img)
                 ax.set_title(f"label: {label} (raw image)", fontsize=10)
@@ -60,7 +60,7 @@ def show_batch(dl, dataset_name, cols=8, save_path=None):
                 img = images[i].detach().cpu()          # C,H,W
                 img = img.permute(1, 2, 0).clamp(0, 1)  # H,W,C
                 label = int(labels[i])
-                ax = axes[i_row, i_col]
+                ax: plt.Axes = axes[i_row, i_col]
                 ax.imshow(img.numpy())
                 ax.set_title(f"label: {label}", fontsize=10)
                 ax.axis("off")
