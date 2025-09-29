@@ -11,56 +11,67 @@ from py_src.ml_setup_base import dataset as dfl_dataset
 
 
 def show_batch(dl, dataset_name, cols=8, save_path=None):
-    """Visualize a batch of CHW images in [0,1]."""
-    if dfl_dataset.is_masked_dataset[dataset_name]:
-        images, labels, path_img, path_mask = next(iter(dl))
-        n = images.size(0)
-        rows = math.ceil(n / cols)
-        plt.figure(figsize=(cols * 2, rows * 4))
+    it = iter(dl)
 
-        for i in range(n):
-            img = images[i].detach().cpu()          # C,H,W
-            img = img.permute(1, 2, 0).clamp(0, 1)  # H,W,C
-            label = int(labels[i])
-            ax = plt.subplot(rows*2, cols, i + 1)
-            ax.imshow(img.numpy())
-            ax.set_title(f"label: {label}", fontsize=10)
-            ax.axis("off")
-            ax = plt.subplot(rows*2, cols, i + 1 + n)
-            raw_img = plt.imread(path_img[i])
-            ax.imshow(raw_img)
-            ax.set_title(f"label: {label} (raw image)", fontsize=10)
-            ax.axis('off')
+    while True:
+        target = next(it)
+        if target is None:
+            break
+        """Visualize a batch of CHW images in [0,1]."""
+        if dfl_dataset.is_masked_dataset[dataset_name]:
+            images, labels, path_img, path_mask = target
+            n = images.size(0)
+            rows = math.ceil(n / cols)
+            fig, axes = plt.subplots(rows*2, cols, figsize=(cols * 2, rows * 4), squeeze=False)
 
-        plt.tight_layout()
-        if save_path:
-            Path(save_path).parent.mkdir(parents=True, exist_ok=True)
-            plt.savefig(save_path, dpi=150, bbox_inches="tight")
-            print(f"Saved to {save_path}")
+            for i in range(n):
+                i_row = i // cols
+                i_col = i % cols
+                img = images[i].detach().cpu()          # C,H,W
+                img = img.permute(1, 2, 0).clamp(0, 1)  # H,W,C
+                label = int(labels[i])
+                ax = axes[i_row, i_col]
+                ax.imshow(img.numpy())
+                ax.set_title(f"label: {label}", fontsize=10)
+                ax.axis("off")
+                ax = axes[i_row+n, i_col]
+                raw_img = plt.imread(path_img[i])
+                ax.imshow(raw_img)
+                ax.set_title(f"label: {label} (raw image)", fontsize=10)
+                ax.axis('off')
+
+            fig.tight_layout()
+            if save_path:
+                Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+                fig.savefig(save_path, dpi=150, bbox_inches="tight")
+                print(f"Saved to {save_path}")
+            else:
+                fig.show()
         else:
-            plt.show()
-    else:
-        images, labels = next(iter(dl))
-        n = images.size(0)
-        rows = math.ceil(n / cols)
-        plt.figure(figsize=(cols * 2, rows * 2))
+            images, labels = target
+            n = images.size(0)
+            rows = math.ceil(n / cols)
+            fig, axes = plt.subplots(rows, cols, figsize=(cols * 2, rows * 2), squeeze=False)
 
-        for i in range(n):
-            img = images[i].detach().cpu()          # C,H,W
-            img = img.permute(1, 2, 0).clamp(0, 1)  # H,W,C
-            label = int(labels[i])
-            ax = plt.subplot(rows, cols, i + 1)
-            ax.imshow(img.numpy())
-            ax.set_title(f"label: {label}", fontsize=10)
-            ax.axis("off")
+            for i in range(n):
+                i_row = i // cols
+                i_col = i % cols
+                img = images[i].detach().cpu()          # C,H,W
+                img = img.permute(1, 2, 0).clamp(0, 1)  # H,W,C
+                label = int(labels[i])
+                ax = axes[i_row+n, i_col]
+                ax.imshow(img.numpy())
+                ax.set_title(f"label: {label}", fontsize=10)
+                ax.axis("off")
 
-        plt.tight_layout()
-        if save_path:
-            Path(save_path).parent.mkdir(parents=True, exist_ok=True)
-            plt.savefig(save_path, dpi=150, bbox_inches="tight")
-            print(f"Saved to {save_path}")
-        else:
-            plt.show()
+            fig.tight_layout()
+            if save_path:
+                Path(save_path).parent.mkdir(parents=True, exist_ok=True)
+                fig.savefig(save_path, dpi=150, bbox_inches="tight")
+                print(f"Saved to {save_path}")
+            else:
+                fig.show()
+        plt.close(fig)
 
 
 def main():
