@@ -84,7 +84,7 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
     dataset = copy.deepcopy(arg_ml_setup.training_data)
     batch_size = arg_ml_setup.training_batch_size
     num_worker = 16 if thread_per_process > 16 else thread_per_process
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers=num_worker, persistent_workers=True)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers=num_worker, persistent_workers=True, prefetch_factor=4)
     criterion = arg_ml_setup.criterion
 
     optimizer, lr_scheduler, epochs = manually_define_optimizer(arg_ml_setup, model)
