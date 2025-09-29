@@ -75,13 +75,14 @@ def main():
     random.seed(args.seed)
     torch.manual_seed(args.seed)
 
-    if args.dataset in dfl_dataset.name_to_dataset_setup:
-        if args.dataset == "imagenet1k_mask":
-            ds = dfl_dataset.name_to_dataset_setup[args.dataset](return_path=True)
+    dataset_name = args.dataset
+    if dataset_name in dfl_dataset.name_to_dataset_setup:
+        if dataset_name == "imagenet1k_mask":
+            ds = dfl_dataset.name_to_dataset_setup[dataset_name](return_path=True)
         else:
-            ds = dfl_dataset.name_to_dataset_setup[args.dataset]()
+            ds = dfl_dataset.name_to_dataset_setup[dataset_name]()
     else:
-        print(f"dataset name {args.dataset} not found, available: {dfl_dataset.name_to_dataset_setup.keys()}")
+        print(f"dataset name {dataset_name} not found, available: {dfl_dataset.name_to_dataset_setup.keys()}")
         exit(-1)
 
     dl = DataLoader(
@@ -92,7 +93,7 @@ def main():
         pin_memory=True,
     )
 
-    show_batch(dl, cols=args.cols, save_path=(args.save or None))
+    show_batch(dl, dataset_name, cols=args.cols, save_path=(args.save or None))
 
 
 if __name__ == "__main__":
