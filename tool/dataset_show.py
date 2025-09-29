@@ -47,7 +47,7 @@ def show_batch(dl, dataset_name, cols=8, save_path=None):
                 print(f"Saved to {save_path}")
                 input("Press Enter to continue...")
             else:
-                fig.show(block=True)
+                plt.show(block=True)
         else:
             images, labels = target
             n = images.size(0)
@@ -72,7 +72,7 @@ def show_batch(dl, dataset_name, cols=8, save_path=None):
                 print(f"Saved to {save_path}")
                 input("Press Enter to continue...")
             else:
-                fig.show(block=True)
+                plt.show(block=True)
         plt.close(fig)
 
 
