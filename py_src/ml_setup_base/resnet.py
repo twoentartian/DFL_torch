@@ -92,7 +92,7 @@ def resnet18_imagenet1k(pytorch_preset_version=2, enable_replace_bn_with_group_n
 
 def resnet18_imagenet1k_sam_mask(pytorch_preset_version=2, enable_replace_bn_with_group_norm=False):
     output_ml_setup = MlSetup()
-    dataset = ml_setup_dataset.dataset_imagenet1k(pytorch_preset_version)
+    dataset = ml_setup_dataset.dataset_imagenet1k_sam_mask()
 
     if enable_replace_bn_with_group_norm:
         output_ml_setup.model = models.resnet18(progress=False, num_classes=1000, norm_layer=GroupNorm)

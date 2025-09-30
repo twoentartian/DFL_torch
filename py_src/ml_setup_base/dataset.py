@@ -338,8 +338,8 @@ def dataset_imagenet1k_custom(train_crop_size=224, val_resize_size=256, val_crop
     return DatasetSetup(dataset_name, dataset_train, dataset_test, labels=set(range(0, 1000)))
 
 
-def dataset_imagenet1k_mask(train_crop_size=224, val_resize_size=256, val_crop_size=224,
-                            return_path=False):
+def dataset_imagenet1k_sam_mask(train_crop_size=224, val_resize_size=256, val_crop_size=224,
+                                return_path=False):
     dataset_name = str(DatasetType.imagenet1k_sam_mask.name)
     transforms_train = transforms.Compose([
         transforms.RandomResizedCrop(train_crop_size, interpolation=transforms.InterpolationMode.BILINEAR),
@@ -370,7 +370,7 @@ name_to_dataset_setup = {
     'cifar10': dataset_cifar10,
     'cifar100': dataset_cifar100,
     'imagenet1k': dataset_imagenet1k_custom,
-    'imagenet1k_mask': dataset_imagenet1k_mask,
+    'imagenet1k_mask': dataset_imagenet1k_sam_mask,
 }
 
 is_masked_dataset = {
