@@ -111,7 +111,7 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
     model.train()
     child_logger.info(f"begin training")
     if arg_amp:
-        scaler = torch.cuda.amp.GradScaler()
+        scaler = torch.amp.GradScaler('cuda')
     for epoch in range(epochs):
         train_loss = 0
         count = 0
@@ -119,7 +119,7 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
             data, label = data.to(device), label.to(device)
             optimizer.zero_grad()
             if arg_amp:
-                with torch.cuda.amp.autocast():
+                with torch.amp.autocast('cuda'):
                     outputs = model(data)
                     loss = criterion(outputs, label)
                     scaler.scale(loss).backward()
