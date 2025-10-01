@@ -371,3 +371,31 @@ class ImageFolderWithMeta(datasets.ImageFolder):
             else:
                 img_t = img
         return img_t, target, path, orig_size
+
+
+class ImageNetSubset(Dataset):
+    def __init__(self, root, split, keep_wnids, transform):
+        base = datasets.ImageNet(root=root, split=split, transform=transform)
+        wnids = getattr(base, "wnids", base.classes)          # torchvision exposes WNIDs
+        # map wnid -> original class id
+        class_id_by_wnid = {w: i for i, w in enumerate(wnids)}
+        keep_class_ids = {class_id_by_wnid[w] for w in keep_wnids}
+
+        # indices we keep + new label mapping (old 0..999 -> new 0..len-1)
+        kept = [(i, y) for i, (_, y) in enumerate(base.samples) if y in keep_class_ids]
+        old_ids_sorted = sorted(keep_class_ids)
+        new_label_of = {old: new for new, old in enumerate(old_ids_sorted)}
+
+        self.base = base
+        self.indices = [i for i, _ in kept]
+        self.new_targets = [new_label_of[y] for _, y in kept]
+        self.transform = transform
+        self.classes = sorted(keep_wnids)                     # 100 WNIDs in new label order
+        self.class_to_idx = {w: i for i, w in enumerate(self.classes)}
+
+    def __len__(self):
+        return len(self.indices)
+
+    def __getitem__(self, idx):
+        x, _old = self.base[self.indices[idx]]                # loads + applies transforms
+        return x, self.new_targets[idx]

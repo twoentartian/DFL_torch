@@ -9,7 +9,7 @@ from py_src.ml_setup_base.regnet import regnet_y_400mf_imagenet1k, regnet_x_200m
 from py_src.ml_setup_base.squeezenet import squeezenet1_1_imagenet1k
 from py_src.ml_setup_base.vgg import vgg11_mnist, vgg11_cifar10, vgg11_bn_cifar10, vgg11_bn_imagenet1k
 from py_src.ml_setup_base.resnet import resnet18_cifar10, resnet18_cifar100, resnet18_imagenet100, resnet18_imagenet1k, \
-    resnet18_imagenet1k_sam_mask, resnet50_imagenet1k, resnet34_imagenet1k
+    resnet18_imagenet1k_sam_mask, resnet50_imagenet1k, resnet34_imagenet1k, resnet18_imagenet1k_sam_mask_random_noise, resnet18_imagenet1k_sam_mask_black
 from py_src.ml_setup_base.simplenet import simplenet_cifar10, simplenet_cifar100
 from py_src.ml_setup_base.mobilenet import mobilenet_v2_cifar10, mobilenet_v3_large_imagenet1k
 from py_src.ml_setup_base.cct import cct7_3x1_cifar10, cct7_3x1_cifar100, cct7_7x2_imagenet10, cct7_7x2_imagenet100, cct7_7x2_imagenet1k, cct14_7x2_imagenet1k
@@ -47,13 +47,13 @@ __all__ = [ 'MlSetup', 'ModelType', 'DatasetType',
 
 
 """ Helper function """
-def get_ml_setup_from_config(model_type: str, dataset_type: str = 'default', pytorch_preset_version=None, unmasked_area_type="random"):
+def get_ml_setup_from_config(model_type: str, dataset_type: str = 'default', pytorch_preset_version=None):
     model_type = ModelType[model_type]
     dataset_type_enum = DatasetType[dataset_type]
-    output_ml_setup = get_ml_setup_from_model_type(model_type, dataset_type=dataset_type_enum, pytorch_preset_version=pytorch_preset_version, unmasked_area_type=unmasked_area_type)
+    output_ml_setup = get_ml_setup_from_model_type(model_type, dataset_type=dataset_type_enum, pytorch_preset_version=pytorch_preset_version)
     return output_ml_setup
 
-def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default, pytorch_preset_version=None, unmasked_area_type="random"):
+def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default, pytorch_preset_version=None):
     if model_name == ModelType.lenet5:
         if dataset_type in [dataset_type.default, dataset_type.mnist]:
             output_ml_setup = lenet5_mnist()
@@ -74,8 +74,10 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default, p
             output_ml_setup = resnet18_imagenet100(enable_replace_bn_with_group_norm=enable_replace_bn_with_group_norm)
         elif dataset_type in [dataset_type.imagenet1k]:
             output_ml_setup = resnet18_imagenet1k(enable_replace_bn_with_group_norm=enable_replace_bn_with_group_norm)
-        elif dataset_type in [dataset_type.imagenet1k_sam_mask]:
-            output_ml_setup = resnet18_imagenet1k_sam_mask(enable_replace_bn_with_group_norm=enable_replace_bn_with_group_norm, unmasked_area_type=unmasked_area_type)
+        elif dataset_type in [dataset_type.imagenet1k_sam_mask_random_noise]:
+            output_ml_setup = resnet18_imagenet1k_sam_mask_random_noise(enable_replace_bn_with_group_norm=enable_replace_bn_with_group_norm)
+        elif dataset_type in [dataset_type.imagenet1k_sam_mask_black]:
+            output_ml_setup = resnet18_imagenet1k_sam_mask_black(enable_replace_bn_with_group_norm=enable_replace_bn_with_group_norm)
         else:
             raise NotImplementedError
     elif model_name == ModelType.resnet34:

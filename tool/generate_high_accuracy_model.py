@@ -175,7 +175,6 @@ if __name__ == "__main__":
     parser.add_argument("-i", "--start_index", type=int, default=0, help='specify the start index for model names')
     parser.add_argument("-p", "--preset", type=int, default=0, help='specify the preset training hyperparameters')
     parser.add_argument("-e", "--epoch", type=int, default=None, help='override the epoch')
-    parser.add_argument("--unmasked_area_type", default="random", help="optional arg pass to masked dataset")
 
     args = parser.parse_args()
 
@@ -198,7 +197,7 @@ if __name__ == "__main__":
     logger.info("logging setup complete")
 
     # prepare model and dataset
-    current_ml_setup = ml_setup.get_ml_setup_from_config(model_type, dataset_type=dataset_type, unmasked_area_type=args.unmasked_area_type)
+    current_ml_setup = ml_setup.get_ml_setup_from_config(model_type, dataset_type=dataset_type)
     output_model_name = current_ml_setup.model_name
     logger.info(f"model name: {output_model_name}")
 

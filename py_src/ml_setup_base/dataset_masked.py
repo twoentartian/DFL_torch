@@ -1,4 +1,4 @@
-import os, pickle, mmap
+import os, pickle, mmap, json
 from pathlib import Path
 from typing import Callable, List, Optional, Tuple, Dict
 
@@ -8,6 +8,13 @@ import torch
 from torch.utils.data import Dataset
 
 ENABLE_FILE_CACHE = False
+
+def load_torchvision_imagenet_wnid_to_idx() -> Dict[str, int]:
+    """
+    Builds wnid->idx from torchvision's imagenet_class_index.json (0..999).
+    """
+    class_index = json.load(open("./imagenet_class_index.json", "r", encoding="utf-8"))
+    return {wnid: int(k) for k, (wnid, _) in class_index.items()}
 
 class MaskedImageDataset(Dataset):
     """
@@ -29,6 +36,7 @@ class MaskedImageDataset(Dataset):
         mask_exts: Tuple[str, ...] = (".png",),
         return_paths: bool = False,
         unmasked_area_type: str = "random",
+        use_imagenet_label: bool = False,
     ):
         self.image_root = Path(image_root)
         self.mask_root = Path(mask_root)
@@ -52,7 +60,10 @@ class MaskedImageDataset(Dataset):
             raise RuntimeError("No shared class subfolders between image_root and mask_root.")
 
         self.classes: List[str] = shared_classes
-        self.class_to_idx: Dict[str, int] = {c: i for i, c in enumerate(self.classes)}
+        if use_imagenet_label:
+            self.class_to_idx = load_torchvision_imagenet_wnid_to_idx()
+        else:
+            self.class_to_idx: Dict[str, int] = {c: i for i, c in enumerate(self.classes)}
 
         # Build index: only common stems per class (uses the smaller side implicitly)
         self.samples: List[Tuple[Path, Path, int]] = []

@@ -62,7 +62,8 @@ class DatasetType(Enum):
     imagenet10 = auto()
     imagenet100 = auto()
     imagenet1k = auto()
-    imagenet1k_sam_mask = auto()
+    imagenet1k_sam_mask_random_noise = auto()
+    imagenet1k_sam_mask_black = auto()
 
 """ Helper functions """
 def calculate_mean_std(dataset):
@@ -338,9 +339,9 @@ def dataset_imagenet1k_custom(train_crop_size=224, val_resize_size=256, val_crop
     return DatasetSetup(dataset_name, dataset_train, dataset_test, labels=set(range(0, 1000)))
 
 
-def dataset_imagenet1k_sam_mask(train_crop_size=224, val_resize_size=256, val_crop_size=224,
-                                return_path=False, unmasked_area_type="random"):
-    dataset_name = str(DatasetType.imagenet1k_sam_mask.name)
+def dataset_imagenet1k_sam_mask_random_noise(train_crop_size=224, val_resize_size=256, val_crop_size=224,
+                                return_path=False):
+    dataset_name = str(DatasetType.imagenet1k_sam_mask_random_noise.name)
     transforms_train = transforms.Compose([
         transforms.RandomResizedCrop(train_crop_size, interpolation=transforms.InterpolationMode.BILINEAR),
         transforms.RandomHorizontalFlip(),
@@ -349,7 +350,8 @@ def dataset_imagenet1k_sam_mask(train_crop_size=224, val_resize_size=256, val_cr
     ])
     dataset_train = MaskedImageDataset(image_root=expand_path('~/dataset/imagenet1k/train'),
                                        mask_root=expand_path('~/dataset/imagenet1k/train_sam_mask'),
-                                       transform=transforms_train, return_paths=return_path, unmasked_area_type=unmasked_area_type)
+                                       transform=transforms_train, return_paths=return_path,
+                                       unmasked_area_type="random", use_imagenet_label=True)
 
     dataset_path = f'{default_path_imagenet1k}/val' if imagenet1k_path is None else f"{imagenet1k_path}/val"
     transforms_test = transforms.Compose([
@@ -358,9 +360,33 @@ def dataset_imagenet1k_sam_mask(train_crop_size=224, val_resize_size=256, val_cr
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
-    dataset_test = datasets.ImageFolder(dataset_path, transforms_test)
+    dataset_test = datasets.ImageNet(root=dataset_path, split='val', transform=transforms_test)
     return DatasetSetup(dataset_name, dataset_train, dataset_test, labels=set(range(0, 1000)))
 
+
+def dataset_imagenet1k_sam_mask_black(train_crop_size=224, val_resize_size=256, val_crop_size=224,
+                                return_path=False):
+    dataset_name = str(DatasetType.imagenet1k_sam_mask_black.name)
+    transforms_train = transforms.Compose([
+        transforms.RandomResizedCrop(train_crop_size, interpolation=transforms.InterpolationMode.BILINEAR),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
+    dataset_train = MaskedImageDataset(image_root=expand_path('~/dataset/imagenet1k/train'),
+                                       mask_root=expand_path('~/dataset/imagenet1k/train_sam_mask'),
+                                       transform=transforms_train, return_paths=return_path,
+                                       unmasked_area_type="zero", use_imagenet_label=True)
+
+    dataset_path = f'{default_path_imagenet1k}/val' if imagenet1k_path is None else f"{imagenet1k_path}/val"
+    transforms_test = transforms.Compose([
+        transforms.Resize(val_resize_size),
+        transforms.CenterCrop(val_crop_size),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
+    dataset_test = datasets.ImageNet(root=dataset_path, split='val', transform=transforms_test)
+    return DatasetSetup(dataset_name, dataset_train, dataset_test, labels=set(range(0, 1000)))
 
 
 # helper functions
@@ -370,7 +396,8 @@ name_to_dataset_setup = {
     'cifar10': dataset_cifar10,
     'cifar100': dataset_cifar100,
     'imagenet1k': dataset_imagenet1k_custom,
-    'imagenet1k_sam_mask': dataset_imagenet1k_sam_mask,
+    'imagenet1k_sam_mask_random_noise': dataset_imagenet1k_sam_mask_random_noise,
+    'imagenet1k_sam_mask_black': dataset_imagenet1k_sam_mask_black,
 }
 
 is_masked_dataset = {
@@ -379,5 +406,6 @@ is_masked_dataset = {
     'cifar10': False,
     'cifar100': False,
     'imagenet1k': False,
-    'imagenet1k_sam_mask': True,
+    'imagenet1k_sam_mask_random_noise': True,
+    'imagenet1k_sam_mask_black': True,
 }
