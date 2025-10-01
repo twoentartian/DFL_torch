@@ -1,4 +1,6 @@
-import os, pickle, mmap, json
+import os, pickle, mmap
+import json, importlib.resources as ir
+p = ir.files("torchvision.datasets").joinpath("imagenet_class_index.json")
 from pathlib import Path
 from typing import Callable, List, Optional, Tuple, Dict
 
@@ -13,7 +15,9 @@ def load_torchvision_imagenet_wnid_to_idx() -> Dict[str, int]:
     """
     Builds wnid->idx from torchvision's imagenet_class_index.json (0..999).
     """
-    class_index = json.load(open("./imagenet_class_index.json", "r", encoding="utf-8"))
+    p = ir.files("torchvision.datasets").joinpath("imagenet_class_index.json")
+    with p.open("r") as f:
+        class_index = json.load(f)
     return {wnid: int(k) for k, (wnid, _) in class_index.items()}
 
 class MaskedImageDataset(Dataset):
