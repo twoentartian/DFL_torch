@@ -34,11 +34,11 @@ class FastTrainingSetup(object):
             optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
             return optimizer, None, epochs
         elif arg_ml_setup.model_name == str(ModelType.resnet18_bn.name) or arg_ml_setup.model_name == str(ModelType.resnet18_gn.name):
-            if "imagenet" in arg_ml_setup.dataset_name:
+            if arg_ml_setup.dataset_name in [str(DatasetType.imagenet1k.name), str(DatasetType.imagenet100.name), str(DatasetType.imagenet10.name)]:
                 epochs = 100
                 optimizer = torch.optim.SGD(model.parameters(), lr=1e-1, weight_decay=1e-4, momentum=0.9)
                 steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
-                lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs * steps_per_epoch)
+                lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs * steps_per_epoch, eta_min=0.001)
                 return optimizer, lr_scheduler, epochs
             elif str(DatasetType.cifar10.name) == arg_ml_setup.dataset_name:
                 lr = 0.1

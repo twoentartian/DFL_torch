@@ -370,7 +370,7 @@ name_to_dataset_setup = {
     'cifar10': dataset_cifar10,
     'cifar100': dataset_cifar100,
     'imagenet1k': dataset_imagenet1k_custom,
-    'imagenet1k_mask': dataset_imagenet1k_sam_mask,
+    'imagenet1k_sam_mask': dataset_imagenet1k_sam_mask,
 }
 
 is_masked_dataset = {
@@ -379,5 +379,5 @@ is_masked_dataset = {
     'cifar10': False,
     'cifar100': False,
     'imagenet1k': False,
-    'imagenet1k_mask': True,
+    'imagenet1k_sam_mask': True,
 }

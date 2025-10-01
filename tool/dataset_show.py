@@ -91,7 +91,7 @@ def main():
 
     dataset_name = args.dataset
     if dataset_name in dfl_dataset.name_to_dataset_setup:
-        if dataset_name == "imagenet1k_mask":
+        if dfl_dataset.is_masked_dataset[dataset_name]:
             ds = dfl_dataset.name_to_dataset_setup[dataset_name](return_path=True)
         else:
             ds = dfl_dataset.name_to_dataset_setup[dataset_name]()
