@@ -248,7 +248,6 @@ def get_pytorch_preprocessing(version=2, train_crop_size=None, val_resize_size=N
 def dataset_imagenet1k(pytorch_preset_version: int, transforms_training=None, transforms_testing=None,
                        train_crop_size=None, val_resize_size=None, val_crop_size=None,
                        random_erasing=None, enable_memory_cache=False):
-    dataset_path = default_path_imagenet1k if imagenet1k_path is None else imagenet1k_path
     dataset_name = str(DatasetType.imagenet1k.name)
 
     if transforms_testing is None and transforms_training is None:
@@ -259,11 +258,11 @@ def dataset_imagenet1k(pytorch_preset_version: int, transforms_training=None, tr
         transforms_train, transforms_test = transforms_training, transforms_testing
 
     if enable_memory_cache:
-        imagenet_train = ImageDatasetWithCachedInputInSharedMem(os.path.join(dataset_path, "train"), "imagenet1k_train", transform=transforms_train)
-        imagenet_test = ImageDatasetWithCachedInputInSharedMem(os.path.join(dataset_path, "val"), "imagenet1k_test", transform=transforms_test)
+        imagenet_train = ImageDatasetWithCachedInputInSharedMem(os.path.join(imagenet1k_path, "train"), "imagenet1k_train", transform=transforms_train)
+        imagenet_test = ImageDatasetWithCachedInputInSharedMem(os.path.join(imagenet1k_path, "val"), "imagenet1k_test", transform=transforms_test)
     else:
-        imagenet_train = datasets.ImageNet(root=dataset_path, split='train', transform=transforms_train)
-        imagenet_test = datasets.ImageNet(root=dataset_path, split='val', transform=transforms_test)
+        imagenet_train = datasets.ImageNet(root=imagenet1k_path, split='train', transform=transforms_train)
+        imagenet_test = datasets.ImageNet(root=imagenet1k_path, split='val', transform=transforms_test)
     return DatasetSetup(dataset_name, imagenet_train, imagenet_test, labels=set(range(0, 1000)))
 
 def dataset_imagenet100(pytorch_preset_version: int, transforms_training=None, transforms_testing=None,
@@ -353,14 +352,13 @@ def dataset_imagenet1k_sam_mask_random_noise(train_crop_size=224, val_resize_siz
                                        transform=transforms_train, return_paths=return_path,
                                        unmasked_area_type="random", use_imagenet_label=True)
 
-    dataset_path = f'{default_path_imagenet1k}/val' if imagenet1k_path is None else f"{imagenet1k_path}/val"
     transforms_test = transforms.Compose([
         transforms.Resize(val_resize_size),
         transforms.CenterCrop(val_crop_size),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
-    dataset_test = datasets.ImageNet(root=dataset_path, split='val', transform=transforms_test)
+    dataset_test = datasets.ImageNet(root=imagenet1k_path, split='val', transform=transforms_test)
     return DatasetSetup(dataset_name, dataset_train, dataset_test, labels=set(range(0, 1000)))
 
 
@@ -378,14 +376,13 @@ def dataset_imagenet1k_sam_mask_black(train_crop_size=224, val_resize_size=256, 
                                        transform=transforms_train, return_paths=return_path,
                                        unmasked_area_type="zero", use_imagenet_label=True)
 
-    dataset_path = f'{default_path_imagenet1k}/val' if imagenet1k_path is None else f"{imagenet1k_path}/val"
     transforms_test = transforms.Compose([
         transforms.Resize(val_resize_size),
         transforms.CenterCrop(val_crop_size),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
-    dataset_test = datasets.ImageNet(root=dataset_path, split='val', transform=transforms_test)
+    dataset_test = datasets.ImageNet(root=imagenet1k_path, split='val', transform=transforms_test)
     return DatasetSetup(dataset_name, dataset_train, dataset_test, labels=set(range(0, 1000)))
 
 
