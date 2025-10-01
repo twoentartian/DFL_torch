@@ -91,7 +91,8 @@ if __name__ == "__main__":
     if args.dataset_type == "default":
         current_ml_setup = ml_setup.get_ml_setup_from_config(model_type, dataset_type=args.dataset_type, pytorch_preset_version=args.torch_preset_version)
     else:
-        assert dataset_name == args.dataset_type, f"dataset_name in CLI({args.dataset_type}) and in model state file ({dataset_name}) mismatch."
+        if dataset_name != args.dataset_type:
+            print("WARNING: dataset_name in CLI({args.dataset_type}) and in model state file ({dataset_name}) mismatch.")
         current_ml_setup = ml_setup.get_ml_setup_from_config(model_type, dataset_type=dataset_name, pytorch_preset_version=args.torch_preset_version)
 
     if not os.path.exists(model_file_path):
