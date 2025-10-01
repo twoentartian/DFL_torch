@@ -339,7 +339,7 @@ def dataset_imagenet1k_custom(train_crop_size=224, val_resize_size=256, val_crop
 
 
 def dataset_imagenet1k_sam_mask(train_crop_size=224, val_resize_size=256, val_crop_size=224,
-                                return_path=False):
+                                return_path=False, unmasked_area_type="random"):
     dataset_name = str(DatasetType.imagenet1k_sam_mask.name)
     transforms_train = transforms.Compose([
         transforms.RandomResizedCrop(train_crop_size, interpolation=transforms.InterpolationMode.BILINEAR),
@@ -349,7 +349,7 @@ def dataset_imagenet1k_sam_mask(train_crop_size=224, val_resize_size=256, val_cr
     ])
     dataset_train = MaskedImageDataset(image_root=expand_path('~/dataset/imagenet1k/train'),
                                        mask_root=expand_path('~/dataset/imagenet1k/train_sam_mask'),
-                                       transform=transforms_train, return_paths=return_path)
+                                       transform=transforms_train, return_paths=return_path, unmasked_area_type=unmasked_area_type)
 
     dataset_path = f'{default_path_imagenet1k}/val' if imagenet1k_path is None else f"{imagenet1k_path}/val"
     transforms_test = transforms.Compose([

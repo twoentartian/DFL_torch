@@ -28,6 +28,7 @@ class MaskedImageDataset(Dataset):
         image_exts: Tuple[str, ...] = (".jpg", ".jpeg", ".png", ".bmp", ".tif", ".tiff", ".jpeg", ".JPEG", ".JPG", ".PNG"),
         mask_exts: Tuple[str, ...] = (".png",),
         return_paths: bool = False,
+        unmasked_area_type: str = "random",
     ):
         self.image_root = Path(image_root)
         self.mask_root = Path(mask_root)
@@ -36,6 +37,7 @@ class MaskedImageDataset(Dataset):
         self.image_exts = tuple(set(e.lower() for e in image_exts))
         self.mask_exts = tuple(set(e.lower() for e in mask_exts))
         self.return_paths = return_paths
+        self.unmasked_area_type = unmasked_area_type
 
         if not self.image_root.is_dir():
             raise FileNotFoundError(f"image_root not found: {self.image_root}")
@@ -94,8 +96,7 @@ class MaskedImageDataset(Dataset):
     def __len__(self) -> int:
         return len(self.samples)
 
-    @staticmethod
-    def _apply_mask_with_noise(img: Image.Image, mask: Image.Image) -> Image.Image:
+    def _apply_mask_with_noise(self, img: Image.Image, mask: Image.Image) -> Image.Image:
         """Replace pixels where mask==0 (black) with random noise."""
         # Ensure sizes match (keep NN to respect hard mask edges)
         if mask.size != img.size:
@@ -107,8 +108,13 @@ class MaskedImageDataset(Dataset):
         # Masked area definition: exactly black (0)
         masked = (mask_arr == 0)  # H x W boolean
         if masked.any():
-            noise = np.random.randint(0, 256, size=img_arr.shape, dtype=np.uint8)
-            img_arr = np.where(masked[..., None], noise, img_arr)
+            if self.unmasked_area_type == "random":
+                unmasked = np.random.randint(0, 256, size=img_arr.shape, dtype=np.uint8)
+            elif self.unmasked_area_type == "zero":
+                unmasked = np.full_like(img_arr, fill_value=0, dtype=np.uint8)
+            else:
+                raise NotImplementedError
+            img_arr = np.where(masked[..., None], unmasked, img_arr)
 
         return Image.fromarray(img_arr, mode="RGB")
 

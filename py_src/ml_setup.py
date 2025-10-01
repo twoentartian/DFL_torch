@@ -47,13 +47,13 @@ __all__ = [ 'MlSetup', 'ModelType', 'DatasetType',
 
 
 """ Helper function """
-def get_ml_setup_from_config(model_type: str, dataset_type: str = 'default', pytorch_preset_version=None):
+def get_ml_setup_from_config(model_type: str, dataset_type: str = 'default', pytorch_preset_version=None, unmasked_area_type="random"):
     model_type = ModelType[model_type]
     dataset_type_enum = DatasetType[dataset_type]
-    output_ml_setup = get_ml_setup_from_model_type(model_type, dataset_type=dataset_type_enum, pytorch_preset_version=pytorch_preset_version)
+    output_ml_setup = get_ml_setup_from_model_type(model_type, dataset_type=dataset_type_enum, pytorch_preset_version=pytorch_preset_version, unmasked_area_type=unmasked_area_type)
     return output_ml_setup
 
-def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default, pytorch_preset_version=None):
+def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default, pytorch_preset_version=None, unmasked_area_type="random"):
     if model_name == ModelType.lenet5:
         if dataset_type in [dataset_type.default, dataset_type.mnist]:
             output_ml_setup = lenet5_mnist()
@@ -75,7 +75,7 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default, p
         elif dataset_type in [dataset_type.imagenet1k]:
             output_ml_setup = resnet18_imagenet1k(enable_replace_bn_with_group_norm=enable_replace_bn_with_group_norm)
         elif dataset_type in [dataset_type.imagenet1k_sam_mask]:
-            output_ml_setup = resnet18_imagenet1k_sam_mask(enable_replace_bn_with_group_norm=enable_replace_bn_with_group_norm)
+            output_ml_setup = resnet18_imagenet1k_sam_mask(enable_replace_bn_with_group_norm=enable_replace_bn_with_group_norm, unmasked_area_type=unmasked_area_type)
         else:
             raise NotImplementedError
     elif model_name == ModelType.resnet34:

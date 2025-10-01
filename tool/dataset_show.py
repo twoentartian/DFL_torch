@@ -84,6 +84,8 @@ def main():
     ap.add_argument("--cols", type=int, default=8, help="number of columns in the grid")
     ap.add_argument("--seed", type=int, default=0)
     ap.add_argument("--save", default="", help="optional path to save the grid as an image")
+    ap.add_argument("--unmasked_area_type", default="random", help="optional arg pass to masked dataset")
+
     args = ap.parse_args()
 
     random.seed(args.seed)
@@ -92,7 +94,7 @@ def main():
     dataset_name = args.dataset
     if dataset_name in dfl_dataset.name_to_dataset_setup:
         if dfl_dataset.is_masked_dataset[dataset_name]:
-            ds = dfl_dataset.name_to_dataset_setup[dataset_name](return_path=True)
+            ds = dfl_dataset.name_to_dataset_setup[dataset_name](return_path=True, unmasked_area_type=args.unmasked_area_type)
         else:
             ds = dfl_dataset.name_to_dataset_setup[dataset_name]()
     else:
