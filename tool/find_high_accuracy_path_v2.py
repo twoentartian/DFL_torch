@@ -269,11 +269,12 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
     training_dataset = current_ml_setup.training_data
     train_collate_fn = default_collate if current_ml_setup.collate_fn is None else current_ml_setup.collate_fn
     dataloader_worker = 0 if general_parameter.dataloader_worker is None else general_parameter.dataloader_worker
+    dataloader_prefetch_factor = 4 if general_parameter.dataloader_prefetch_factor is None else general_parameter.dataloader_prefetch_factor
     persistent_workers = False if dataloader_worker == 0 else True
     sampler_fn = None if current_ml_setup.sampler_fn is None else current_ml_setup.sampler_fn(training_dataset)
     dataloader = DataLoader(training_dataset, batch_size=current_ml_setup.training_batch_size, shuffle=True if sampler_fn is None else None,
                             pin_memory=True, num_workers=dataloader_worker, persistent_workers=persistent_workers,
-                            collate_fn=train_collate_fn, sampler=sampler_fn, prefetch_factor=runtime_parameter.prefetch_factor)
+                            collate_fn=train_collate_fn, sampler=sampler_fn, prefetch_factor=dataloader_prefetch_factor)
     criterion = current_ml_setup.criterion
 
     """get optimizer"""
@@ -822,7 +823,6 @@ if __name__ == '__main__':
     parser.add_argument("-S", "--silence", action='store_true', help='enable silence mode, do not interact with users, all checks will be bypassed')
     parser.add_argument("--linear_interpolation_points_size", type=int, default=0, help='specify the size of linear interpolation points between two consecutive points')
     parser.add_argument("--linear_interpolation_dataset_size", type=int, default=1000, help='specify the size of linear interpolation dataset size')
-    parser.add_argument("--prefetch_factor", type=int, default=4, help='specify the prefetch factor for dataloader')
 
     args = parser.parse_args()
 
@@ -839,7 +839,6 @@ if __name__ == '__main__':
 
     runtime_parameter.use_cpu = args.cpu
     runtime_parameter.use_amp = args.amp
-    runtime_parameter.prefetch_factor = args.prefetch_factor
     runtime_parameter.save_ticks = args.save_ticks
     runtime_parameter.save_interval = args.save_interval
     runtime_parameter.save_format = args.save_format

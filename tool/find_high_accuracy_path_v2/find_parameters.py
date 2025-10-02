@@ -5,6 +5,7 @@ class Parameter(object):
 class ParameterGeneral(Parameter):
     max_tick = None
     dataloader_worker = None
+    dataloader_prefetch_factor = None
     test_dataset_use_whole = None   # False by default
 
 class ParameterMove(Parameter):
