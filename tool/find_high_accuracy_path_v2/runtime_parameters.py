@@ -18,6 +18,7 @@ class RuntimeParameters(object):
     output_folder_path = None
     total_cpu_count = None
     worker_count = None
+    prefetch_factor = None
 
     save_ticks = None
     save_interval = None
