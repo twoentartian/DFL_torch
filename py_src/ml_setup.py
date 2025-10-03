@@ -3,6 +3,7 @@ import torch.nn as nn
 from py_src.ml_setup_base.model import ModelType
 from py_src.ml_setup_base.dataset import DatasetType
 from py_src.ml_setup_base.base import MlSetup
+from py_src.ml_setup_base.dataset import imagenet1k_path
 
 from py_src.ml_setup_base.mnist_models import lenet4_mnist, lenet5_mnist, lenet5_random_mnist, lenet5_large_fc_mnist
 from py_src.ml_setup_base.regnet import regnet_y_400mf_imagenet1k, regnet_x_200mf_cifar10
@@ -24,7 +25,7 @@ from py_src.ml_setup_base.vit import vit_b_32_imagenet1k
 from py_src.ml_setup_base.wide_resnet50_2 import wide_resnet50_2_imagenet1k
 from py_src.ml_setup_base.dla import dla_cifar10, dla_cifar100
 
-__all__ = [ 'MlSetup', 'ModelType', 'DatasetType',
+__all__ = [ 'MlSetup', 'ModelType', 'DatasetType', 'imagenet1k_path',
             'lenet4_mnist', 'lenet5_mnist', 'lenet5_random_mnist', 'lenet5_large_fc_mnist',
             'regnet_y_400mf_imagenet1k', 'regnet_x_200mf_cifar10',
             'vgg11_mnist', 'vgg11_cifar10', 'vgg11_bn_cifar10', 'vgg11_bn_imagenet1k',
