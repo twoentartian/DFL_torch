@@ -1,5 +1,6 @@
 import os
 import networkx as nx
+import matplotlib.pyplot as plt
 from networkx.algorithms.community import kernighan_lin_bisection
 
 def split_to_equal_size_communities(topology: nx.Graph, num_of_communities):
@@ -73,3 +74,62 @@ def load_topology_from_edge_list_file(file_path):
             node1, node2 = map(int, line.split())
             graph.add_edge(node1, node2)
     return graph
+
+
+def display_graph(G, layout=None, node_color='lightblue',
+                  node_size=500, with_labels=True, title='Network Graph',
+                  figsize=(10, 8), edge_color='gray', font_size=10):
+    """
+    Display a NetworkX graph using matplotlib.
+
+    Parameters:
+    -----------
+    G : networkx.Graph
+        The graph to display
+    layout : str
+        Layout algorithm: 'spring', 'circular', 'random', 'kamada_kawai', 'shell'
+    node_color : str or list
+        Color(s) for nodes
+    node_size : int or list
+        Size(s) of nodes
+    with_labels : bool
+        Whether to show node labels
+    title : str
+        Title of the plot
+    figsize : tuple
+        Figure size (width, height)
+    edge_color : str
+        Color of edges
+    font_size : int
+        Font size for labels
+    """
+    # Create figure
+    plt.figure(figsize=figsize)
+
+    # Choose layout
+    layouts = {
+        'spring': nx.spring_layout,
+        'circular': nx.circular_layout,
+        'random': nx.random_layout,
+        'kamada_kawai': nx.kamada_kawai_layout,
+        'shell': nx.shell_layout
+    }
+    if layout is None:
+        pos = nx.nx_agraph.graphviz_layout(G)
+    elif layout in layouts:
+        pos = layouts[layout](G, seed=42) if layout == 'spring' else layouts[layout](G)
+    else:
+        raise ValueError('Invalid layout')
+    # Draw the graph
+    nx.draw(G, pos,
+            with_labels=with_labels,
+            node_color=node_color,
+            node_size=node_size,
+            edge_color=edge_color,
+            font_size=font_size,
+            font_weight='bold')
+
+    plt.title(title)
+    plt.axis('off')
+    plt.tight_layout()
+    plt.show()
