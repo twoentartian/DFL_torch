@@ -147,7 +147,10 @@ class Point:
 
     def __repr__(self) -> str:
         """String representation of the Point."""
-        return f"Point(N={self.D}, location={self.location})"
+        if self.D <= 10:
+            return f"Point(N={self.D}, location={self.location})"
+        else:
+            return f"Point(N={self.D}, location={self.location[:10]}.......)"
 
 
 # Example usage
@@ -157,8 +160,8 @@ if __name__ == "__main__":
     p2 = Point(torch.tensor([0.0, 0.0, 0.0]))
 
     # Create a point using dimensionality
-    p_empty = Point(D=5)
-    print(f"Empty 5D point: {p_empty}")
+    p_empty = Point(D=100)
+    print(f"Empty 100D point: {p_empty}")
 
     # Create random normalized points
     p_random = Point.random(D=3, norm=1.0)
