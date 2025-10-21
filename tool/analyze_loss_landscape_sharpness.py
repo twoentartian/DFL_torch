@@ -188,12 +188,14 @@ if __name__ == '__main__':
     parser.add_argument("--cpu", action="store_true", help="force using CPU for training")
     parser.add_argument("-r", "--change_ratio", type=float, default=[0.001, 0.002, 0.004, 0.008, 0.016, 0.032, 0.064, 0.128], nargs="+", help="specify the list of change ratio")
     parser.add_argument("-s", "--sample_count", type=int, default=100, help="specify the number of samples")
+    parser.add_argument("-c", '--core', type=int, default=os.cpu_count(), help='specify the number of CPU cores to use')
 
     args = parser.parse_args()
     model_name_arg = args.model
     dataset_name_arg = args.dataset
     change_ratio = args.change_ratio
     sample_count = args.sample_count
+    number_of_core = args.core
 
     if args.cpu:
         device = torch.device("cpu")
@@ -212,7 +214,7 @@ if __name__ == '__main__':
     dataset_name = dataset_name_from_model if dataset_name_from_model is not None else dataset_name_arg
 
     current_ml_setup = ml_setup.get_ml_setup_from_config(model_name, dataset_type=dataset_name)
-    dataloader_worker = 2
+    dataloader_worker = 8 if number_of_core > 8 else args.core
     dataloader_prefetch_factor = 4
     dataloader = DataLoader(current_ml_setup.training_data, batch_size=current_ml_setup.training_batch_size, shuffle=False,
                             pin_memory=True, num_workers=dataloader_worker, persistent_workers=True,
