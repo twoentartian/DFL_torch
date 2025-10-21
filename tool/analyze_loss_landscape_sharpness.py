@@ -6,6 +6,8 @@ import io
 from typing import List, Iterable, Optional, Union, Callable, Tuple
 from pathlib import Path
 from copy import deepcopy
+import numpy as np
+import matplotlib.pyplot as plt
 
 import torch
 from torch.utils.data import DataLoader
@@ -184,7 +186,7 @@ def get_model_weights_from_file(path, tick=None):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Calculate the sharpness of loss landscape by sampling several points. ')
-    parser.add_argument("model_weights_path", type=str, help="file containing the model weights, can be a .model.pt file or a lmdb directory.")
+    parser.add_argument("model_weights_path", type=str, nargs="?", default=None, help="file containing the model weights, can be a .model.pt file or a lmdb directory.")
     parser.add_argument("-t", "--tick", type=int, help="specify the model weights tick index for a lmdb file.")
     parser.add_argument("-m", "--model", type=str, default=None, help='specify the model name')
     parser.add_argument("-d", "--dataset", type=str, default=None, help='specify the dataset name')
@@ -193,12 +195,38 @@ if __name__ == '__main__':
     parser.add_argument("-s", "--sample_count", type=int, default=100, help="specify the number of samples")
     parser.add_argument("-c", '--core', type=int, default=os.cpu_count(), help='specify the number of CPU cores to use')
 
+    parser.add_argument("--draw", type=str, help="plot the result file")
+
     args = parser.parse_args()
     model_name_arg = args.model
     dataset_name_arg = args.dataset
     change_ratio = args.change_ratio
     sample_count = args.sample_count
     number_of_core = args.core
+
+    if args.draw is not None:
+        df = pd.read_csv(args.draw)
+        data = df.iloc[:, 1:].values
+        x_values = df.columns[1:].astype(float)
+        mean_values = np.mean(data, axis=0)
+        std_values = np.std(data, axis=0)
+        plt.figure(figsize=(12, 6))
+        plt.plot(x_values, mean_values, 'b-', linewidth=2, label='Mean')
+        plt.fill_between(x_values,mean_values - std_values,mean_values + std_values,alpha=0.3,color='blue',label='±1 Std Dev')
+
+        # Formatting
+        plt.xlabel('change ratio', fontsize=12)
+        plt.ylabel('delta loss', fontsize=12)
+        plt.title('Loss landscape sharpness', fontsize=14)
+        plt.legend(fontsize=10)
+        plt.grid(True, alpha=0.3)
+        plt.xscale('log')  # Using log scale for x-axis since values increase exponentially
+        plt.tight_layout()
+
+        # Save the plot
+        plt.savefig(f'{args.draw}.pdf', bbox_inches='tight')
+        print(f"Plot saved as '{args.draw}.pdf'")
+        exit(0)
 
     if args.cpu:
         device = torch.device("cpu")
