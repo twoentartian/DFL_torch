@@ -49,7 +49,9 @@ __all__ = [ 'MlSetup', 'ModelType', 'DatasetType', 'imagenet1k_path',
 
 
 """ Helper function """
-def get_ml_setup_from_config(model_type: str, dataset_type: str = 'default', pytorch_preset_version=None):
+def get_ml_setup_from_config(model_type: str, dataset_type: str = None, pytorch_preset_version=None):
+    if dataset_type is None:
+        dataset_type = 'default'
     model_type = ModelType[model_type]
     dataset_type_enum = DatasetType[dataset_type]
     output_ml_setup = get_ml_setup_from_model_type(model_type, dataset_type=dataset_type_enum, pytorch_preset_version=pytorch_preset_version)
