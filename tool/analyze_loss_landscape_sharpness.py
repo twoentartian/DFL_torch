@@ -145,9 +145,11 @@ def get_model_weights_from_file(path, tick=None):
     model_weights = None
     model_name = None
     dataset_name = None
+    output_name = None
     if model_weight_file_path.is_file():
         print(f"[info] '{model_weight_file_path}' is a file.")
         model_weights, model_name, dataset_name = util.load_model_state_file(path)
+        output_name = path
     elif model_weight_file_path.is_dir():
         print(f"[info] '{model_weight_file_path}' is a folder.")
         lmdb_data_path = model_weight_file_path / "data.mdb"
@@ -173,10 +175,11 @@ def get_model_weights_from_file(path, tick=None):
             if model_weights is None:
                 print(f"[error] tick is not in the lmdb, all ticks: {all_keys}", file=sys.stderr)
                 sys.exit(1)
+        output_name = f"{model_weight_file_path}_tick{tick}"
     else:
         print(f"[error] Path does not exist: {model_weight_file_path}", file=sys.stderr)
         sys.exit(1)
-    return model_weights, model_name, dataset_name
+    return model_weights, model_name, dataset_name, output_name
 
 
 if __name__ == '__main__':
@@ -204,7 +207,7 @@ if __name__ == '__main__':
 
     model_weight_file_path = Path(args.model_weights_path).expanduser().resolve()
     tick = None if args.tick is None else int(args.tick)
-    model_weights, model_name_from_model, dataset_name_from_model = get_model_weights_from_file(model_weight_file_path, tick)
+    model_weights, model_name_from_model, dataset_name_from_model, output_name = get_model_weights_from_file(model_weight_file_path, tick)
 
     if model_name_from_model is not None and model_name_arg is not None:
         assert model_name_from_model == model_name_arg, f"model name mismatch {model_name_from_model} != {model_name_arg}"
@@ -229,4 +232,4 @@ if __name__ == '__main__':
 
     data = {k: [float(x) for x in v] for k, v in result.items()}
     result_df = pd.DataFrame(data)
-    result_df.to_csv(f"{model_weight_file_path}.loss_sharpness.csv")
+    result_df.to_csv(f"{output_name}.loss_sharpness.csv")
