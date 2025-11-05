@@ -50,6 +50,23 @@ def resnet18_cifar100(enable_replace_bn_with_group_norm=False):
     output_ml_setup.has_normalization_layer = True
     return output_ml_setup
 
+def resnet18_svhn(enable_replace_bn_with_group_norm=False, use_extra=False):
+    output_ml_setup = MlSetup()
+    dataset = ml_setup_dataset.dataset_svhn(use_extra=use_extra)
+    if enable_replace_bn_with_group_norm:
+        output_ml_setup.model = models.resnet18(progress=False, num_classes=10, zero_init_residual=False, groups=1, width_per_group=64, replace_stride_with_dilation=None, norm_layer=GroupNorm)
+        output_ml_setup.model_name = str(ModelType.resnet18_gn.name)
+    else:
+        output_ml_setup.model = models.resnet18(progress=False, num_classes=10, zero_init_residual=False, groups=1, width_per_group=64, replace_stride_with_dilation=None)
+        output_ml_setup.model_name = str(ModelType.resnet18_bn.name)
+    output_ml_setup.model.conv1 = nn.Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)  # change for cifar100 resolution
+    output_ml_setup.model.maxpool = nn.Identity()
+    output_ml_setup.get_info_from_dataset(dataset)
+    output_ml_setup.criterion = nn.CrossEntropyLoss()
+    output_ml_setup.training_batch_size = 256
+    output_ml_setup.has_normalization_layer = True
+    return output_ml_setup
+
 def resnet18_imagenet100(pytorch_preset_version=2, enable_replace_bn_with_group_norm=False):
     output_ml_setup = MlSetup()
     dataset = ml_setup_dataset.dataset_imagenet100(pytorch_preset_version)

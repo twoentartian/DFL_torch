@@ -1,7 +1,7 @@
 import os, sys
 from enum import Enum, auto
 from torchvision import transforms, datasets
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, ConcatDataset
 from py_src.dataset import DatasetWithCachedOutputInSharedMem, DatasetWithCachedOutputInMem, ImageDatasetWithCachedInputInSharedMem
 from py_src.ml_setup_base.base import DatasetSetup
 from py_src.torch_vision_train import presets
@@ -17,6 +17,7 @@ default_path_mnist = expand_path('~/dataset/mnist')
 default_path_random_mnist = expand_path('~/dataset/random_mnist')
 default_path_cifar10 = expand_path('~/dataset/cifar10')
 default_path_cifar100 = expand_path('~/dataset/cifar100')
+default_path_svhn = expand_path('~/dataset/svhn')
 default_path_imagenet1k = expand_path('~/dataset/imagenet1k')
 default_path_imagenet100 = expand_path('~/dataset/imagenet100')
 default_path_imagenet10 = expand_path('~/dataset/imagenet10')
@@ -64,6 +65,7 @@ class DatasetType(Enum):
     imagenet1k = auto()
     imagenet1k_sam_mask_random_noise = auto()
     imagenet1k_sam_mask_black = auto()
+    svhn = auto()
 
 """ Helper functions """
 def calculate_mean_std(dataset):
@@ -198,6 +200,35 @@ def dataset_cifar100(rescale_to_224=False, transforms_training=None, transforms_
     else:
         cifar100_test = datasets.CIFAR100(root=dataset_path, train=False, download=True, transform=transforms_testing)
     return DatasetSetup(dataset_name, cifar100_train, cifar100_test)
+
+""" SVHN """
+def dataset_svhn(transforms_training=None, transforms_testing=None, mean_std=None, use_extra=False):
+    dataset_path = default_path_svhn
+    if mean_std is None:
+        mean_std = ((0.4377, 0.4438, 0.4728), (0.1980, 0.2010, 0.1970))
+    dataset_name = DatasetType.svhn.name
+
+    if transforms_training is None:
+        train_transforms = [
+            transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
+            transforms.RandomHorizontalFlip(p=0.5),
+            transforms.ToTensor(),
+            transforms.Normalize(*mean_std),
+        ]
+        transforms_training = transforms.Compose(train_transforms)
+    svhn_train = datasets.SVHN(root=dataset_path, split='train', download=True, transform=transforms_training)
+    if transforms_testing is None:
+        test_transforms = [
+            transforms.Resize(32),
+            transforms.ToTensor(),
+            transforms.Normalize(*mean_std),
+        ]
+        transforms_testing = transforms.Compose(test_transforms)
+    svhn_test = datasets.SVHN(root=dataset_path, split='test', download=True, transform=transforms_testing)
+    if use_extra:
+        extra = datasets.SVHN(root=dataset_path, split='extra', download=True, transform=transforms_training)
+        svhn_train = ConcatDataset([svhn_train, extra])
+    return DatasetSetup(dataset_name, svhn_train, svhn_test)
 
 """ ImageNet """
 

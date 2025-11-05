@@ -10,7 +10,8 @@ from py_src.ml_setup_base.regnet import regnet_y_400mf_imagenet1k, regnet_x_200m
 from py_src.ml_setup_base.squeezenet import squeezenet1_1_imagenet1k
 from py_src.ml_setup_base.vgg import vgg11_mnist, vgg11_cifar10, vgg11_bn_cifar10, vgg11_bn_imagenet1k
 from py_src.ml_setup_base.resnet import resnet18_cifar10, resnet18_cifar100, resnet18_imagenet100, resnet18_imagenet1k, \
-    resnet50_imagenet1k, resnet34_imagenet1k, resnet18_imagenet1k_sam_mask_random_noise, resnet18_imagenet1k_sam_mask_black
+    resnet50_imagenet1k, resnet34_imagenet1k, resnet18_imagenet1k_sam_mask_random_noise, resnet18_imagenet1k_sam_mask_black, \
+    resnet18_svhn
 from py_src.ml_setup_base.simplenet import simplenet_cifar10, simplenet_cifar100
 from py_src.ml_setup_base.mobilenet import mobilenet_v2_cifar10, mobilenet_v3_large_imagenet1k
 from py_src.ml_setup_base.cct import cct7_3x1_cifar10, cct7_3x1_cifar100, cct7_7x2_imagenet10, cct7_7x2_imagenet100, cct7_7x2_imagenet1k, cct14_7x2_imagenet1k
@@ -29,7 +30,7 @@ __all__ = [ 'MlSetup', 'ModelType', 'DatasetType', 'imagenet1k_path',
             'lenet4_mnist', 'lenet5_mnist', 'lenet5_random_mnist', 'lenet5_large_fc_mnist',
             'regnet_y_400mf_imagenet1k', 'regnet_x_200mf_cifar10',
             'vgg11_mnist', 'vgg11_cifar10', 'vgg11_bn_cifar10', 'vgg11_bn_imagenet1k',
-            'resnet18_cifar10', 'resnet18_cifar100', 'resnet18_imagenet100', 'resnet18_imagenet1k',
+            'resnet18_cifar10', 'resnet18_cifar100', 'resnet18_imagenet100', 'resnet18_imagenet1k', 'resnet18_svhn'
             'resnet18_imagenet1k_sam_mask_black', 'resnet18_imagenet1k_sam_mask_random_noise',
             'resnet34_imagenet1k', 'resnet50_imagenet1k',
             'simplenet_cifar10', 'simplenet_cifar100',
@@ -82,6 +83,8 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default, p
             output_ml_setup = resnet18_imagenet1k_sam_mask_random_noise(enable_replace_bn_with_group_norm=enable_replace_bn_with_group_norm)
         elif dataset_type in [dataset_type.imagenet1k_sam_mask_black]:
             output_ml_setup = resnet18_imagenet1k_sam_mask_black(enable_replace_bn_with_group_norm=enable_replace_bn_with_group_norm)
+        elif dataset_type in [dataset_type.svhn]:
+            output_ml_setup = resnet18_svhn(enable_replace_bn_with_group_norm=enable_replace_bn_with_group_norm, use_extra=False)
         else:
             raise NotImplementedError
     elif model_name == ModelType.resnet34:
