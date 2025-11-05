@@ -209,21 +209,19 @@ def dataset_svhn(transforms_training=None, transforms_testing=None, mean_std=Non
     dataset_name = DatasetType.svhn.name
 
     if transforms_training is None:
-        train_transforms = [
+        transforms_training = transforms.Compose([
             transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
             transforms.RandomHorizontalFlip(p=0.5),
             transforms.ToTensor(),
             transforms.Normalize(*mean_std),
-        ]
-        transforms_training = transforms.Compose(train_transforms)
+        ])
     svhn_train = datasets.SVHN(root=dataset_path, split='train', download=True, transform=transforms_training)
     if transforms_testing is None:
-        test_transforms = [
+        transforms_testing = transforms.Compose([
             transforms.Resize(32),
             transforms.ToTensor(),
             transforms.Normalize(*mean_std),
-        ]
-        transforms_testing = transforms.Compose(test_transforms)
+        ])
     svhn_test = datasets.SVHN(root=dataset_path, split='test', download=True, transform=transforms_testing)
     if use_extra:
         extra = datasets.SVHN(root=dataset_path, split='extra', download=True, transform=transforms_training)
