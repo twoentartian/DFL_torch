@@ -262,19 +262,20 @@ class FastTrainingSetup(object):
 
 
 
-
-
 class TransferTrainingSetup(object):
     @staticmethod
-    def get_optimizer_lr_scheduler_epoch(arg_ml_setup: ml_setup, model, preset=0):
+    def get_optimizer_lr_scheduler_epoch(src_dataset_name: str, arg_ml_setup: ml_setup, model, preset=0):
         not_implemented_error_instance = NotImplementedError(f"cannot find optimizer and lr scheduler for {arg_ml_setup.model_name} @ {arg_ml_setup.dataset_name}")
         if arg_ml_setup.model_name in [str(ModelType.resnet18_bn.name)]:
             if arg_ml_setup.dataset_name in [DatasetType.svhn.name]:
-                lr = 0.01
-                epochs = 10
-                optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=5e-4)
-                steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
-                lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, lr, steps_per_epoch=steps_per_epoch, epochs=epochs)
+                if src_dataset_name in [DatasetType.cifar10.name]:
+                    lr = 0.01
+                    epochs = 30
+                    optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=5e-4)
+                    steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
+                    lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, lr, steps_per_epoch=steps_per_epoch, epochs=epochs)
+                else:
+                    raise not_implemented_error_instance
             else:
                 raise not_implemented_error_instance
             return optimizer, lr_scheduler, epochs

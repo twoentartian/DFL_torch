@@ -88,10 +88,6 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers=num_worker, persistent_workers=True, prefetch_factor=4)
     criterion = arg_ml_setup.criterion
 
-    optimizer, lr_scheduler, epochs = manually_define_optimizer(arg_ml_setup, model)
-    if optimizer is None:
-        optimizer, lr_scheduler, epochs = complete_ml_setup.FastTrainingSetup.get_optimizer_lr_scheduler_epoch(arg_ml_setup, model, arg_preset)
-
     if arg_epoch_override is not None:
         epochs = arg_epoch_override
 
@@ -102,16 +98,24 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
     else:
         record_model_service = None
 
-    # init weights
+    # init weights and optimizer
+    optimizer, lr_scheduler, epochs = manually_define_optimizer(arg_ml_setup, model)
+
     if transfer_learn_model_path is None:
         # reset random weights
         arg_ml_setup.re_initialize_model(model)
+        if optimizer is None:
+            child_logger.info(f"mode: ||||||||    TRAIN FROM INITIALIZATION    ||||||||")
+            optimizer, lr_scheduler, epochs = complete_ml_setup.FastTrainingSetup.get_optimizer_lr_scheduler_epoch(arg_ml_setup, model, arg_preset)
     else:
         # load model weights and apply it
         existing_model_state, existing_model_name, existing_dataset_name = util.load_model_state_file(transfer_learn_model_path)
         child_logger.info(f"load model weights for transfer learning, original model type: {existing_model_name}, dataset type: {existing_dataset_name}")
         model.load_state_dict(existing_model_state)
         model.to(device)
+        if optimizer is None:
+            child_logger.info(f"mode: ||||||||    TRANSFER TRAINING    ||||||||")
+            optimizer, lr_scheduler, epochs = complete_ml_setup.TransferTrainingSetup.get_optimizer_lr_scheduler_epoch(existing_dataset_name, arg_ml_setup, model, arg_preset)
 
     epoch_loss_lr_log_file = open(os.path.join(output_folder, f"{str(index).zfill(digit_number_of_models)}.log"), "w")
     epoch_loss_lr_log_file.write("epoch,loss,lrs" + "\n")
