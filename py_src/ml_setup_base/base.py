@@ -27,9 +27,9 @@ class DatasetSetup:
 
 class MlSetup:
     def __init__(self):
-        self.model = None
-        self.model_name = None
-        self.dataset_name = None
+        self.model: torch.nn.Module = None
+        self.model_name: str = None
+        self.dataset_name: str = None
         self.training_data = None
         self.testing_data = None
         self.criterion = None

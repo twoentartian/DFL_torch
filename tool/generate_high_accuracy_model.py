@@ -54,7 +54,7 @@ def set_seed(seed: int, logger=None) -> None:
     if logger is not None:
         logger.info(f"Random seed set as {seed}")
 
-def manually_define_optimizer(arg_ml_setup: ml_setup, model):
+def manually_define_optimizer(arg_ml_setup: ml_setup.MlSetup, model):
     # lr = 0.1
     # epochs = 50
     # optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=2e-4)
@@ -64,7 +64,8 @@ def manually_define_optimizer(arg_ml_setup: ml_setup, model):
 
     return None, None, None
 
-def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_setup, arg_use_cpu: bool, random_seed, arg_worker_count, arg_total_cpu_count, arg_save_format, arg_amp, arg_preset, arg_epoch_override):
+def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_setup.MlSetup, arg_use_cpu: bool, random_seed,
+                   arg_worker_count, arg_total_cpu_count, arg_save_format, arg_amp, arg_preset, arg_epoch_override, transfer_learn_model_path):
     thread_per_process = arg_total_cpu_count // arg_worker_count
     torch.set_num_threads(thread_per_process)
 
@@ -79,7 +80,7 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
     else:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     digit_number_of_models = len(str(arg_number_of_models))
-    model = copy.deepcopy(arg_ml_setup.model)
+    model: torch.nn.Module = copy.deepcopy(arg_ml_setup.model)
     model.to(device)
     dataset = copy.deepcopy(arg_ml_setup.training_data)
     batch_size = arg_ml_setup.training_batch_size
@@ -101,12 +102,20 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
     else:
         record_model_service = None
 
-    # reset random weights
-    arg_ml_setup.re_initialize_model(model)
+    # init weights
+    if transfer_learn_model_path is None:
+        # reset random weights
+        arg_ml_setup.re_initialize_model(model)
+    else:
+        # load model weights and apply it
+        existing_model_state, existing_model_name, existing_dataset_name = util.load_model_state_file(transfer_learn_model_path)
+        child_logger.info(f"load model weights for transfer learning, original model type: {existing_model_name}, dataset type: {existing_dataset_name}")
+        model.load_state_dict(existing_model_state)
+        model.to(device)
 
-    log_file = open(os.path.join(output_folder, f"{str(index).zfill(digit_number_of_models)}.log"), "w")
-    log_file.write("epoch,loss,lrs" + "\n")
-    log_file.flush()
+    epoch_loss_lr_log_file = open(os.path.join(output_folder, f"{str(index).zfill(digit_number_of_models)}.log"), "w")
+    epoch_loss_lr_log_file.write("epoch,loss,lrs" + "\n")
+    epoch_loss_lr_log_file.flush()
 
     model.train()
     child_logger.info(f"begin training")
@@ -138,23 +147,23 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
         for param_group in optimizer.param_groups:
             lrs.append(param_group['lr'])
         child_logger.info(f"epoch[{epoch}] loss={train_loss/count} lrs={lrs}")
-        log_file.write(f"{epoch},{train_loss/count},{lrs}" + "\n")
-        log_file.flush()
+        epoch_loss_lr_log_file.write(f"{epoch},{train_loss/count},{lrs}" + "\n")
+        epoch_loss_lr_log_file.flush()
 
         # services
         if record_model_service is not None:
             model_stat = model.state_dict()
             record_model_service.trigger_without_runtime_parameters(epoch, [0], [model_stat])
     child_logger.info(f"finish training")
-    log_file.flush()
-    log_file.close()
+    epoch_loss_lr_log_file.flush()
+    epoch_loss_lr_log_file.close()
 
     util.save_model_state(os.path.join(output_folder, f"{str(index).zfill(digit_number_of_models)}.model.pt"),
                           model.state_dict(), arg_ml_setup.model_name, arg_ml_setup.dataset_name)
     util.save_optimizer_state(os.path.join(output_folder, f"{str(index).zfill(digit_number_of_models)}.optimizer.pt"),
                               optimizer.state_dict(), arg_ml_setup.model_name, arg_ml_setup.dataset_name)
 
-    del model, dataset, dataloader, criterion, optimizer, log_file
+    del model, dataset, dataloader, criterion, optimizer, epoch_loss_lr_log_file
     torch.cuda.empty_cache()
 
 
@@ -175,6 +184,7 @@ if __name__ == "__main__":
     parser.add_argument("-i", "--start_index", type=int, default=0, help='specify the start index for model names')
     parser.add_argument("-p", "--preset", type=int, default=0, help='specify the preset training hyperparameters')
     parser.add_argument("-e", "--epoch", type=int, default=None, help='override the epoch')
+    parser.add_argument("-t", "--transfer_learn", type=str, default=None, help='specify a model weight file to perform transfer learning from.')
 
     args = parser.parse_args()
 
@@ -191,6 +201,7 @@ if __name__ == "__main__":
     start_index = args.start_index
     preset = args.preset
     epoch_override = args.epoch
+    transfer_learn_model_path = args.transfer_learn
 
     # logger
     set_logging(logger, "main")
@@ -221,7 +232,7 @@ if __name__ == "__main__":
     # training
     if worker_count > number_of_models:
         worker_count = number_of_models
-    args = [(output_folder_path, i, number_of_models, current_ml_setup, use_cpu, random_seed, worker_count, total_cpu_cores, save_format, amp, preset, epoch_override) for i in range(start_index, start_index+number_of_models, 1)]
+    args = [(output_folder_path, i, number_of_models, current_ml_setup, use_cpu, random_seed, worker_count, total_cpu_cores, save_format, amp, preset, epoch_override, transfer_learn_model_path) for i in range(start_index, start_index+number_of_models, 1)]
     if worker_count == 1:
         for arg in args:
             training_model(*arg)

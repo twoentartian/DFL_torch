@@ -30,7 +30,7 @@ __all__ = [ 'MlSetup', 'ModelType', 'DatasetType', 'imagenet1k_path',
             'lenet4_mnist', 'lenet5_mnist', 'lenet5_random_mnist', 'lenet5_large_fc_mnist',
             'regnet_y_400mf_imagenet1k', 'regnet_x_200mf_cifar10',
             'vgg11_mnist', 'vgg11_cifar10', 'vgg11_bn_cifar10', 'vgg11_bn_imagenet1k',
-            'resnet18_cifar10', 'resnet18_cifar100', 'resnet18_imagenet100', 'resnet18_imagenet1k', 'resnet18_svhn'
+            'resnet18_cifar10', 'resnet18_cifar100', 'resnet18_imagenet100', 'resnet18_imagenet1k', 'resnet18_svhn',
             'resnet18_imagenet1k_sam_mask_black', 'resnet18_imagenet1k_sam_mask_random_noise',
             'resnet34_imagenet1k', 'resnet50_imagenet1k',
             'simplenet_cifar10', 'simplenet_cifar100',
