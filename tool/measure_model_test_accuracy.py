@@ -69,7 +69,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Measure model test accuracy and loss.')
     parser.add_argument("model_file", type=str)
     parser.add_argument("-m", "--model_type", type=str, default="auto")
-    parser.add_argument("-d", "--dataset_type", type=str, default="default")
+    parser.add_argument("-d", "--dataset_type", type=str, default="auto")
     parser.add_argument("-t", "--training", action="store_true")
     parser.add_argument("-P", "--torch_preset_version", type=int, default=None, help='specify the pytorch data training preset version')
     parser.add_argument("-b", "--batch_size", type=int, default=100, help='batch size')
@@ -87,15 +87,18 @@ if __name__ == "__main__":
     assert model_type is not None, "model_type is None"
 
     if dataset_name is None:
-        dataset_name = args.dataset_type
-    if args.dataset_type == "default":
-        current_ml_setup = ml_setup.get_ml_setup_from_config(model_type, dataset_type=args.dataset_type, pytorch_preset_version=args.torch_preset_version)
+        if args.dataset_type == "auto":
+            current_ml_setup = ml_setup.get_ml_setup_from_config(model_type, dataset_type="default", pytorch_preset_version=args.torch_preset_version)
+        else:
+            current_ml_setup = ml_setup.get_ml_setup_from_config(model_type, dataset_type=args.dataset_type, pytorch_preset_version=args.torch_preset_version)
     else:
-        if dataset_name != args.dataset_type:
-            print(f"WARNING: dataset_name in CLI({args.dataset_type}) and in model state file ({dataset_name}) mismatch.")
-            print(f"dataset type override to {args.dataset_type}")
-            dataset_name = args.dataset_type
-        current_ml_setup = ml_setup.get_ml_setup_from_config(model_type, dataset_type=dataset_name, pytorch_preset_version=args.torch_preset_version)
+        if args.dataset_type == "auto":
+            current_ml_setup = ml_setup.get_ml_setup_from_config(model_type, dataset_type=dataset_name, pytorch_preset_version=args.torch_preset_version)
+        else:
+            if dataset_name != args.dataset_type:
+                print(f"WARNING: dataset_name in CLI({args.dataset_type}) and in model state file ({dataset_name}) mismatch.")
+                print(f"dataset type override to {args.dataset_type}")
+            current_ml_setup = ml_setup.get_ml_setup_from_config(model_type, dataset_type=args.dataset_type, pytorch_preset_version=args.torch_preset_version)
 
     if not os.path.exists(model_file_path):
         print(f"file not found. {model_file_path}")
