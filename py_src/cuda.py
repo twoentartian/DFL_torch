@@ -235,6 +235,8 @@ class CudaEnv:
 
     def submit_training_job(self, training_node, criterion, training_data: torch.Tensor, training_label: torch.Tensor, use_amp=True):
         lrs = []
+        training_correct_val = 0
+        training_total_val = 0
         if training_node.is_using_model_stat:
             """use model stat (share model on gpu)"""
             gpu = training_node.allocated_gpu
@@ -306,5 +308,9 @@ class CudaEnv:
                 optimizer.step()
             if lr_scheduler is not None:
                 lr_scheduler.step()
+        _, predicted = torch.max(outputs, 1)
+        training_correct_val += (predicted == labels).sum().item()
+        training_total_val += labels.size(0)
+        accuracy = training_correct_val / training_total_val
         loss_val = float(loss.item())
-        return loss_val, lrs
+        return loss_val, accuracy, lrs

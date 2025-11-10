@@ -35,10 +35,13 @@ class ServiceTrainingLossAccuracyRecorder(Service):
     def trigger(self, parameters: RuntimeParameters, *args, **kwargs):
         if (parameters.phase == SimulationPhase.AFTER_TRAINING) and (parameters.current_tick % self.interval == 0):
             node_name_and_loss = {}
+            node_name_and_accuracy = {}
             for node_name in self.node_order:
                 node_loss = parameters.node_container[node_name].most_recent_loss
+                node_accuracy = parameters.node_container[node_name].most_recent_accuracy
                 node_name_and_loss[node_name] = node_loss
-            self.trigger_without_runtime_parameters(parameters.current_tick, node_name_and_loss)
+                node_name_and_accuracy[node_name] = node_accuracy
+            self.trigger_without_runtime_parameters(parameters.current_tick, node_name_and_loss, node_name_and_accuracy)
 
     def trigger_without_runtime_parameters(self, tick, node_name_and_loss, node_name_and_accuracy):
         loss_row = []

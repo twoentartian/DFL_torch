@@ -14,4 +14,8 @@ def submit_training_job_cpu(training_node, criterion: torch.nn.CrossEntropyLoss,
         lrs.append(param_group['lr'])
     if lr_scheduler is not None:
         lr_scheduler.step()
-    return loss, lrs
+    _, predicted = torch.max(output, 1)
+    training_correct_val = (predicted == training_label).sum().item()
+    training_total_val = training_label.size(0)
+    accuracy = training_correct_val / training_total_val
+    return loss, accuracy, lrs

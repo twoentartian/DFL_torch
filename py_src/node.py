@@ -77,6 +77,7 @@ class Node:
         self.send_model_after_P_training = 1
         self._send_model_counter = 0
         self.most_recent_loss = 0
+        self.most_recent_accuracy = 0
         self.most_recent_lrs = []
 
         """enable all functions"""
@@ -177,12 +178,13 @@ class Node:
         if self.enable_training:
             if cuda_env is None:
                 # submit to cpu
-                loss, lrs = cpu.submit_training_job_cpu(self, criterion, data, label)
+                loss, accuracy, lrs = cpu.submit_training_job_cpu(self, criterion, data, label)
             else:
                 # submit to cuda
-                loss, lrs = cuda_env.submit_training_job(self, criterion, data, label)
+                loss, accuracy, lrs = cuda_env.submit_training_job(self, criterion, data, label)
             self.most_recent_loss = loss
             self.most_recent_lrs = lrs
+            self.most_recent_accuracy = accuracy
 
     def add_model_to_buffer(self, model_stat):
         if self.enable_receiving:
