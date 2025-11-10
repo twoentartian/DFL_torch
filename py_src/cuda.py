@@ -260,14 +260,14 @@ class CudaEnv:
             if use_amp:
                 scaler = torch.cuda.amp.GradScaler()
                 with torch.cuda.amp.autocast():
-                    outputs = shared_model_on_gpu(data)
-                    loss = criterion(outputs, labels)
+                    output = shared_model_on_gpu(data)
+                    loss = criterion(output, labels)
                     scaler.scale(loss).backward()
                     scaler.step(shared_optimizer_on_gpu)
                     scaler.update()
             else:
-                outputs = shared_model_on_gpu(data)
-                loss = criterion(outputs, labels)
+                output = shared_model_on_gpu(data)
+                loss = criterion(output, labels)
                 loss.backward()
                 shared_optimizer_on_gpu.step()
 
@@ -308,7 +308,7 @@ class CudaEnv:
                 optimizer.step()
             if lr_scheduler is not None:
                 lr_scheduler.step()
-        _, predicted = torch.max(outputs, 1)
+        _, predicted = torch.max(output, 1)
         training_correct_val += (predicted == labels).sum().item()
         training_total_val += labels.size(0)
         accuracy = training_correct_val / training_total_val
