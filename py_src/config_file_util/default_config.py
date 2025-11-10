@@ -11,7 +11,7 @@ from py_src.service.record_weights_difference import ServiceWeightsDifferenceRec
 from py_src.simulation_runtime_parameters import SimulationPhase, RuntimeParameters
 from py_src.config_file_util import label_distribution
 from py_src.service.record_variance import ServiceVarianceRecorder
-from py_src.service.record_training_loss_accuracy import ServiceTrainingLossRecorder
+from py_src.service.record_training_loss_accuracy import ServiceTrainingLossAccuracyRecorder
 from py_src.service.record_test_accuracy_loss import ServiceTestAccuracyLossRecorder
 from py_src.model_variance_correct import VarianceCorrector, VarianceCorrectionType
 
@@ -213,7 +213,7 @@ def get_service_list():
     service_list = []
 
     service_list.append(ServiceVarianceRecorder(100, phase=[SimulationPhase.AFTER_AVERAGING]))
-    service_list.append(ServiceTrainingLossRecorder(100))
+    service_list.append(ServiceTrainingLossAccuracyRecorder(100))
     service_list.append(ServiceTestAccuracyLossRecorder(100, 100, ml_setup.model_name, ml_setup.dataset_name))
     service_list.append(ServiceWeightsDifferenceRecorder(100))
 
