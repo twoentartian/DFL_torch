@@ -1,4 +1,5 @@
 import os
+import re
 import lmdb
 
 def store_folder_in_lmdb(root_folder, lmdb_path, map_size=1099511627776):
@@ -48,3 +49,14 @@ def load_folder_from_lmdb(lmdb_path, output_folder):
                 f.write(value)
 
     env.close()
+
+
+def generate_lmdb_index_from_node_name_and_tick(node_name: int, tick: int) -> str:
+    lmdb_tx_name = f"{node_name}/{tick}.model.pt"
+    return lmdb_tx_name
+
+def get_node_name_and_tick_from_lmdb_index(lmdb_index) -> (int, int):
+    match = re.match(rb"(\d+)/(\d+)\.model\.pt", lmdb_index)
+    node_name = int(match.group(1))
+    tick = int(match.group(2))
+    return node_name, tick

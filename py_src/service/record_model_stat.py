@@ -4,7 +4,7 @@ import io
 import re
 import lmdb
 from typing import Optional, List
-from py_src import util
+from py_src import util, lmdb_pack
 from py_src.service_base import Service
 from py_src.simulation_runtime_parameters import RuntimeParameters, SimulationPhase
 
@@ -81,7 +81,7 @@ class ModelStatRecorder(Service):
             lmdb_inst = self.save_lmdb
             with lmdb_inst.begin(write=True) as txn:
                 for index, node_name in enumerate(node_names):
-                    lmdb_tx_name = f"{node_name}/{tick}.model.pt"
+                    lmdb_tx_name = lmdb_pack.generate_lmdb_index_from_node_name_and_tick(node_name, tick)
                     model_stat = model_stats[index]
                     buffer = io.BytesIO()
                     torch.save(model_stat, buffer)
@@ -108,8 +108,7 @@ class ModelStatRecorder(Service):
                 with existing_lmdb.begin() as read_txn:
                     cursor = read_txn.cursor()
                     for key, value in cursor:
-                        match = re.match(rb"(\d+)/(\d+)\.model\.pt", key)
-                        tick = int(match.group(2))
+                        _, tick = lmdb_pack.get_node_name_and_tick_from_lmdb_index(key)
                         if tick < restore_until_tick:
                             write_txn.put(key, value)
         elif self.save_format == "file":

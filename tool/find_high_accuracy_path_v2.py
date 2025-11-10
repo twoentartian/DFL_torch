@@ -30,30 +30,6 @@ logger = logging.getLogger("find_high_accuracy_path_v2")
 REPORT_FINISH_TIME_PER_TICK = 100
 ENABLE_REBUILD_NORM = False
 
-def set_logging(target_logger, task_name, log_file_path=None):
-    class ExitOnExceptionHandler(logging.StreamHandler):
-        def emit(self, record):
-            if record.levelno == logging.CRITICAL:
-                raise SystemExit(-1)
-
-    formatter = logging.Formatter(f"[%(asctime)s] [%(levelname)8s] [{task_name}] --- %(message)s (%(filename)s:%(lineno)s)")
-
-    console = logging.StreamHandler(sys.stdout)
-    console.setLevel(logging.INFO)
-    console.setFormatter(formatter)
-
-    target_logger.setLevel(logging.DEBUG)
-    target_logger.addHandler(console)
-    target_logger.addHandler(ExitOnExceptionHandler())
-
-    if log_file_path is not None:
-        file = logging.FileHandler(log_file_path)
-        file.setLevel(logging.DEBUG)
-        file.setFormatter(formatter)
-        target_logger.addHandler(file)
-
-    del console, formatter
-
 def get_files_to_process(arg_start_folder, arg_end_folder, arg_mode):
     if not os.path.isdir(arg_start_folder):
         logger.critical(f"{arg_start_folder} does not exist")
@@ -165,7 +141,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
         runtime_parameter.task_name = checkpoint_content.current_runtime_parameter.task_name
 
     child_logger = logging.getLogger(f"find_high_accuracy_path.{runtime_parameter.task_name}")
-    set_logging(child_logger, runtime_parameter.task_name, log_file_path=os.path.join(runtime_parameter.output_folder_path, "info.log"))
+    util.set_logging(child_logger, runtime_parameter.task_name, log_file_path=os.path.join(runtime_parameter.output_folder_path, "info.log"))
     child_logger.info("logging setup complete")
 
     if runtime_parameter.use_cpu:
@@ -832,7 +808,7 @@ if __name__ == '__main__':
         config_file_path = args.config
     config_file = configuration_file.load_configuration(config_file_path)
 
-    set_logging(logger, "main")
+    util.set_logging(logger, "main")
     logger.info("logging setup complete")
 
     runtime_parameter = RuntimeParameters()

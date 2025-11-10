@@ -81,6 +81,9 @@ class MlSetup:
         else:
             model.apply(self.weights_init_func)
 
+    def get_brief_description(self) -> str:
+        return f"{self.model_name}@{self.dataset_name}"
+
 
 def replace_bn_with_ln(model):
     for name, module in model.named_children():
