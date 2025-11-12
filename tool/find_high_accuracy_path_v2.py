@@ -197,7 +197,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             child_logger.info(f"work mode: to_certain_model at {end_point}")
             assert end_model_name == start_model_name, f"start({start_model_name}) != end({end_model_name})"
         elif runtime_parameter.work_mode == WorkMode.to_vs:
-            runtime_parameter.variance_sphere_model, temp_model_name = util.load_model_state_file(runtime_parameter.variance_sphere_file_path)
+            runtime_parameter.variance_sphere_model, temp_model_name, _ = util.load_model_state_file(runtime_parameter.variance_sphere_file_path)
             assert temp_model_name == start_model_name, f"start({start_model_name}) != variance sphere({temp_model_name})"
             end_model_stat_dict = util.calculate_layer_wise_projection_to_variance_sphere(start_model_stat_dict, runtime_parameter.variance_sphere_model)
             child_logger.info(f"work mode: to_variance_sphere at {runtime_parameter.variance_sphere_file_path}")
