@@ -13,7 +13,7 @@ from py_src.ml_setup_base.resnet import resnet18_cifar10, resnet18_cifar100, res
     resnet50_imagenet1k, resnet34_imagenet1k, resnet18_imagenet1k_sam_mask_random_noise, resnet18_imagenet1k_sam_mask_black, \
     resnet18_svhn
 from py_src.ml_setup_base.simplenet import simplenet_cifar10, simplenet_cifar100
-from py_src.ml_setup_base.mobilenet import mobilenet_v2_cifar10, mobilenet_v3_large_imagenet1k
+from py_src.ml_setup_base.mobilenet import mobilenet_v2_cifar10, mobilenet_v2_cifar100, mobilenet_v3_large_imagenet1k
 from py_src.ml_setup_base.cct import cct7_3x1_cifar10, cct7_3x1_cifar100, cct7_7x2_imagenet10, cct7_7x2_imagenet100, cct7_7x2_imagenet1k, cct14_7x2_imagenet1k
 from py_src.ml_setup_base.shufflenet import shufflenet_v2_cifar10, shufflenet_v2_x2_0_imagenet1k
 from py_src.ml_setup_base.efficientnet import efficientnet_v2_s_imagenet1k, efficientnet_b1_imagenet1k, efficientnet_b0_cifar10
@@ -34,7 +34,7 @@ __all__ = [ 'MlSetup', 'ModelType', 'DatasetType', 'imagenet1k_path',
             'resnet18_imagenet1k_sam_mask_black', 'resnet18_imagenet1k_sam_mask_random_noise',
             'resnet34_imagenet1k', 'resnet50_imagenet1k',
             'simplenet_cifar10', 'simplenet_cifar100',
-            'mobilenet_v2_cifar10', 'mobilenet_v3_large_imagenet1k',
+            'mobilenet_v2_cifar10', 'mobilenet_v2_cifar100', 'mobilenet_v3_large_imagenet1k',
             'cct7_3x1_cifar10', 'cct7_3x1_cifar100', 'cct7_7x2_imagenet10', 'cct7_7x2_imagenet100', 'cct7_7x2_imagenet1k', 'cct14_7x2_imagenet1k',
             'shufflenet_v2_cifar10',
             'efficientnet_v2_s_imagenet1k', 'efficientnet_b1_imagenet1k', 'efficientnet_b0_cifar10',
@@ -133,6 +133,8 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default, p
     elif model_name == ModelType.mobilenet_v2:
         if dataset_type in [DatasetType.default, DatasetType.cifar10]:
             output_ml_setup = mobilenet_v2_cifar10()
+        elif dataset_type in [DatasetType.cifar100]:
+            output_ml_setup = mobilenet_v2_cifar100()
         else:
             raise NotImplementedError
     elif model_name == ModelType.vgg11_no_bn:
