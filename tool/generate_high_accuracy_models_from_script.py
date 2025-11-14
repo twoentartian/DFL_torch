@@ -71,7 +71,7 @@ if __name__ == "__main__":
         print(f"hash of init model: {hash_model_state_dict(model)}")
         model.to(device)
 
-        name = f"{value_ml_setup.model_name}_{value_ml_setup.dataset_name}_rs{random_seed}_wd{wd:.1e}"
+        name = f"{value_ml_setup.model_name}_{value_ml_setup.dataset_name}_rs{random_seed}_wd{wd:.e}"
         output_folder_path = os.path.join(main_output_folder_path, name)
         if not os.path.exists(output_folder_path):
             os.makedirs(output_folder_path)
