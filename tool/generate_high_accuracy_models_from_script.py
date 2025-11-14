@@ -98,7 +98,7 @@ if __name__ == "__main__":
             scaler = torch.cuda.amp.GradScaler()
 
         if save_model_stat_lmdb:
-            record_model_service = record_model_stat.ModelStatRecorder(1)
+            record_model_service = record_model_stat.ModelStatRecorder(1, value_ml_setup.model_name, value_ml_setup.dataset_name)
             record_model_service.initialize_without_runtime_parameters([0], output_folder_path, save_format='lmdb', lmdb_db_name=f"0")
         else:
             record_model_service = None
@@ -143,8 +143,8 @@ if __name__ == "__main__":
         log_file.close()
 
         util.save_model_state(os.path.join(output_folder_path, f"0.model.pt"),
-                              model.state_dict(), value_ml_setup.model_name)
+                              model.state_dict(), value_ml_setup.model_name, value_ml_setup.dataset_name)
         util.save_optimizer_state(os.path.join(output_folder_path, f"0.optimizer.pt"),
-                                  optimizer.state_dict(), value_ml_setup.model_name)
+                                  optimizer.state_dict(), value_ml_setup.model_name, value_ml_setup.dataset_name)
 
         torch.cuda.empty_cache()
