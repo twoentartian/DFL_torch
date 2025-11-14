@@ -6,7 +6,7 @@ from py_src.ml_setup_base.base import MlSetup
 from py_src.ml_setup_base.dataset import imagenet1k_path
 
 from py_src.ml_setup_base.mnist_models import lenet4_mnist, lenet5_mnist, lenet5_random_mnist, lenet5_large_fc_mnist
-from py_src.ml_setup_base.regnet import regnet_y_400mf_imagenet1k, regnet_x_200mf_cifar10
+from py_src.ml_setup_base.regnet import regnet_y_400mf_imagenet1k, regnet_x_200mf_cifar10, regnet_x_200mf_cifar100
 from py_src.ml_setup_base.squeezenet import squeezenet1_1_imagenet1k
 from py_src.ml_setup_base.vgg import vgg11_mnist, vgg11_cifar10, vgg11_bn_cifar10, vgg11_bn_imagenet1k
 from py_src.ml_setup_base.resnet import resnet18_cifar10, resnet18_cifar100, resnet18_imagenet100, resnet18_imagenet1k, \
@@ -28,7 +28,7 @@ from py_src.ml_setup_base.dla import dla_cifar10, dla_cifar100
 
 __all__ = [ 'MlSetup', 'ModelType', 'DatasetType', 'imagenet1k_path',
             'lenet4_mnist', 'lenet5_mnist', 'lenet5_random_mnist', 'lenet5_large_fc_mnist',
-            'regnet_y_400mf_imagenet1k', 'regnet_x_200mf_cifar10',
+            'regnet_y_400mf_imagenet1k', 'regnet_x_200mf_cifar10', 'regnet_x_200mf_cifar100',
             'vgg11_mnist', 'vgg11_cifar10', 'vgg11_bn_cifar10', 'vgg11_bn_imagenet1k',
             'resnet18_cifar10', 'resnet18_cifar100', 'resnet18_imagenet100', 'resnet18_imagenet1k', 'resnet18_svhn',
             'resnet18_imagenet1k_sam_mask_black', 'resnet18_imagenet1k_sam_mask_random_noise',
@@ -210,6 +210,8 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default, p
     elif model_name == ModelType.regnet_x_200mf:
         if dataset_type in [dataset_type.default, dataset_type.cifar10]:
             output_ml_setup = regnet_x_200mf_cifar10()
+        elif dataset_type in [dataset_type.cifar100]:
+            output_ml_setup = regnet_x_200mf_cifar100()
         else:
             raise NotImplementedError
     elif model_name == ModelType.regnet_y_400mf:

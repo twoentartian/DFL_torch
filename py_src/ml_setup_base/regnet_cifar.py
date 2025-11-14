@@ -109,7 +109,7 @@ class RegNet(nn.Module):
         return out
 
 
-def RegNetX_200MF():
+def RegNetX_200MF(num_classes=10):
     cfg = {
         'depths': [1, 1, 4, 7],
         'widths': [24, 56, 152, 368],
@@ -118,7 +118,7 @@ def RegNetX_200MF():
         'bottleneck_ratio': 1,
         'se_ratio': 0,
     }
-    return RegNet(cfg)
+    return RegNet(cfg, num_classes=num_classes)
 
 
 def RegNetX_400MF():

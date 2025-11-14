@@ -236,7 +236,7 @@ class FastTrainingSetup(object):
                 raise not_implemented_error_instance
             return optimizer, lr_scheduler, epochs
         elif arg_ml_setup.model_name == ModelType.regnet_x_200mf.name:
-            if arg_ml_setup.dataset_name == DatasetType.cifar10.name:
+            if arg_ml_setup.dataset_name in [DatasetType.cifar10.name, DatasetType.cifar100.name]:
                 epochs = 120
                 optimizer = torch.optim.SGD(model.parameters(), lr=1e-1, weight_decay=1e-4, momentum=0.9)
                 steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
