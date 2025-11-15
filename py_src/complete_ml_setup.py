@@ -187,13 +187,18 @@ class FastTrainingSetup(object):
             else:
                 raise not_implemented_error_instance
         elif arg_ml_setup.model_name == ModelType.efficientnet_b0.name:
-            if arg_ml_setup.dataset_name == DatasetType.cifar10.name:
+            if arg_ml_setup.dataset_name in [DatasetType.cifar10.name]:
                 epochs = 120
                 optimizer = torch.optim.SGD(model.parameters(), lr=1e-1, weight_decay=1e-4, momentum=0.9)
                 steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
                 milestones_epoch = [30, 60, 90]
                 milestones = [steps_per_epoch * i for i in milestones_epoch]
                 # lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones, gamma=0.1)
+                lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs * steps_per_epoch)
+            elif arg_ml_setup.dataset_name in [DatasetType.cifar100.name]:
+                epochs = 120
+                optimizer = torch.optim.SGD(model.parameters(), lr=1e-1, weight_decay=1e-4, momentum=0.9)
+                steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
                 lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs * steps_per_epoch)
             else:
                 raise not_implemented_error_instance

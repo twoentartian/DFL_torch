@@ -59,3 +59,13 @@ def efficientnet_b0_cifar10():
     output_ml_setup.criterion = nn.CrossEntropyLoss()
     return output_ml_setup
 
+def efficientnet_b0_cifar100():
+    output_ml_setup = MlSetup()
+    dataset = ml_setup_dataset.dataset_cifar100()
+    output_ml_setup.model = efficientnet_cifar.EfficientNetB0(num_classes=100)
+    output_ml_setup.model_name = str(ModelType.efficientnet_b0.name)
+    output_ml_setup.get_info_from_dataset(dataset)
+    output_ml_setup.training_batch_size = 256
+    output_ml_setup.has_normalization_layer = True
+    output_ml_setup.criterion = nn.CrossEntropyLoss()
+    return output_ml_setup
