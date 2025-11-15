@@ -58,6 +58,7 @@ class FastTrainingSetup(object):
                     lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, lr * 2, steps_per_epoch=steps_per_epoch, epochs=epochs)
                 else:
                     raise not_implemented_error_instance
+                return optimizer, lr_scheduler, epochs
             elif arg_ml_setup.dataset_name in [DatasetType.cifar100.name]:
                 lr = 0.1
                 epochs = 70
@@ -70,7 +71,7 @@ class FastTrainingSetup(object):
                     lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, lr * 2, steps_per_epoch=steps_per_epoch, epochs=epochs)
                 else:
                     raise not_implemented_error_instance
-
+                return optimizer, lr_scheduler, epochs
             elif arg_ml_setup.dataset_name in [DatasetType.svhn.name]:
                 lr = 0.1
                 epochs = 100
@@ -98,9 +99,9 @@ class FastTrainingSetup(object):
                 milestones = [steps_per_epoch * i for i in milestones_epoch]
                 # lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=milestones, gamma=0.1)
                 lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs * steps_per_epoch)
-                return optimizer, lr_scheduler, epochs
             else:
                 raise not_implemented_error_instance
+            return optimizer, lr_scheduler, epochs
         elif arg_ml_setup.model_name == ModelType.cct_7_3x1_32.name:
             if arg_ml_setup.dataset_name == str(DatasetType.cifar10.name):
                 steps_per_epoch = len(arg_ml_setup.training_data) // arg_ml_setup.training_batch_size + 1
@@ -178,7 +179,6 @@ class FastTrainingSetup(object):
                 milestones_epoch = [100]
                 milestones = [steps_per_epoch * i for i in milestones_epoch]
                 lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones, gamma=0.1)
-                return optimizer, lr_scheduler, epochs
             elif arg_ml_setup.dataset_name in [DatasetType.cifar100.name]:
                 epochs = 120
                 optimizer = torch.optim.SGD(model.parameters(), lr=1e-1, weight_decay=4e-5, momentum=0.9)
@@ -186,6 +186,7 @@ class FastTrainingSetup(object):
                 lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs*steps_per_epoch)
             else:
                 raise not_implemented_error_instance
+            return optimizer, lr_scheduler, epochs
         elif arg_ml_setup.model_name == ModelType.efficientnet_b0.name:
             if arg_ml_setup.dataset_name in [DatasetType.cifar10.name]:
                 epochs = 120
