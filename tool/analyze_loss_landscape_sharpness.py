@@ -148,22 +148,22 @@ def get_model_weights_from_file(path, tick=None):
     model_name = None
     dataset_name = None
     output_name = None
-    if model_weight_file_path.is_file():
-        print(f"[info] '{model_weight_file_path}' is a file.")
+    if path.is_file():
+        print(f"[info] '{path}' is a file.")
         model_weights, model_name, dataset_name = util.load_model_state_file(path)
         output_name = path
-    elif model_weight_file_path.is_dir():
-        print(f"[info] '{model_weight_file_path}' is a folder.")
-        lmdb_data_path = model_weight_file_path / "data.mdb"
-        lmdb_lock_path = model_weight_file_path / "lock.mdb"
+    elif path.is_dir():
+        print(f"[info] '{path}' is a folder.")
+        lmdb_data_path = path / "data.mdb"
+        lmdb_lock_path = path / "lock.mdb"
         if lmdb_data_path.exists() and lmdb_lock_path.exists():
-            print(f"[info] '{model_weight_file_path}' is a valid LMDB folder.")
+            print(f"[info] '{path}' is a valid LMDB folder.")
         else:
             print(f"[error] LMDB files are missing", file=sys.stderr)
             sys.exit(1)
-        assert args.tick is not None, "tick has to be provided in LMDB mode"
-        lmdb_index = int(args.tick)
-        env = lmdb.open(str(model_weight_file_path), readonly=True)
+        assert tick is not None, "tick has to be provided in LMDB mode"
+        lmdb_index = int(tick)
+        env = lmdb.open(str(path), readonly=True)
         with env.begin() as txn:
             cursor = txn.cursor()
             all_keys = set()
@@ -177,9 +177,9 @@ def get_model_weights_from_file(path, tick=None):
             if model_weights is None:
                 print(f"[error] tick is not in the lmdb, all ticks: {all_keys}", file=sys.stderr)
                 sys.exit(1)
-        output_name = f"{model_weight_file_path}_tick{tick}"
+        output_name = f"{path}_tick{tick}"
     else:
-        print(f"[error] Path does not exist: {model_weight_file_path}", file=sys.stderr)
+        print(f"[error] Path does not exist: {path}", file=sys.stderr)
         sys.exit(1)
     return model_weights, model_name, dataset_name, output_name
 
