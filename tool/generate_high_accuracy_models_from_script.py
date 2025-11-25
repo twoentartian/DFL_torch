@@ -7,6 +7,7 @@ import argparse
 import hashlib
 import numpy as np
 from datetime import datetime
+import time
 from torch.utils.data import DataLoader
 import logging
 
@@ -38,13 +39,13 @@ if __name__ == "__main__":
 
     # random_data = os.urandom(4)
     # random_seed = int.from_bytes(random_data, byteorder="big")
-    random_seed = datetime.now().timestamp()
+    random_seed = time.time_ns()
 
     """random seed"""
     np.random.seed(random_seed)
     random.seed(random_seed)
-    # torch.manual_seed(random_seed)
-    # torch.cuda.manual_seed(random_seed)
+    torch.manual_seed(random_seed)
+    torch.cuda.manual_seed(random_seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
     os.environ["PYTHONHASHSEED"] = str(random_seed)
