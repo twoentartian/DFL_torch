@@ -39,13 +39,14 @@ if __name__ == "__main__":
 
     # random_data = os.urandom(4)
     # random_seed = int.from_bytes(random_data, byteorder="big")
-    random_seed = np.int32(time.time_ns() & 0xFFFFFFFF)
+    random_seed = None
 
     """random seed"""
     np.random.seed(random_seed)
     random.seed(random_seed)
-    torch.manual_seed(random_seed)
-    torch.cuda.manual_seed(random_seed)
+    if random_seed is not None:
+        torch.manual_seed(random_seed)
+        torch.cuda.manual_seed(random_seed)
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
     os.environ["PYTHONHASHSEED"] = str(random_seed)
