@@ -35,7 +35,7 @@ if __name__ == "__main__":
 
 
     values_wd = [0, 1e-5, 2e-5, 4e-5, 8e-5, 16e-5, 32e-5, 64e-5, 128e-5, 256e-5, 512e-5, 1024e-5, 2048e-5, 4096e-5]
-    value_ml_setup = ml_setup.resnet18_cifar100()
+    value_ml_setup = ml_setup.resnet18_cifar10()
 
     # random_data = os.urandom(4)
     # random_seed = int.from_bytes(random_data, byteorder="big")
