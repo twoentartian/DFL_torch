@@ -3,6 +3,7 @@ import os
 import sys
 import random
 import copy
+import argparse
 import hashlib
 import numpy as np
 from datetime import datetime
@@ -14,7 +15,7 @@ from py_src import ml_setup, complete_ml_setup, util
 from py_src.service import record_model_stat
 
 logger = logging.getLogger("generate_high_accuracy_model_from_script")
-save_model_stat_lmdb = True
+save_model_stat_lmdb = False
 
 def hash_model_state_dict(model):
     state_dict = model.state_dict()
@@ -26,9 +27,17 @@ def hash_model_state_dict(model):
     return hasher.hexdigest()
 
 if __name__ == "__main__":
-    values_wd = [10e-4, 11e-4, 12e-4, 13e-4, 14e-4, 15e-4,16e-4,17e-4,18e-4,19e-4]
+    parser = argparse.ArgumentParser(description='Train models')
+    parser.add_argument("-o", "--output_folder_name", default=None, help='specify the output folder name')
+    args = parser.parse_args()
+
+
+
+    values_wd = [0, 1e-5, 2e-5, 4e-5, 8e-5, 16e-5, 32e-5, 64e-5, 128e-5, 256e-5, 512e-5, 1024e-5, 2048e-5, 4096e-5]
     value_ml_setup = ml_setup.resnet18_cifar100()
-    random_seed = 42
+
+    random_data = os.urandom(4)
+    random_seed = int.from_bytes(random_data, byteorder="big")
 
     """random seed"""
     np.random.seed(random_seed)
@@ -53,8 +62,11 @@ if __name__ == "__main__":
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=False, pin_memory=True, num_workers=num_worker, persistent_workers=True)
     criterion = value_ml_setup.criterion
 
-    time_now_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")
-    main_output_folder_path = os.path.join(os.curdir, f"{__file__}_{time_now_str}")
+    if args.output_folder_name is None:
+        time_now_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")
+        main_output_folder_path = os.path.join(os.curdir, f"{__file__}_{time_now_str}")
+    else:
+        main_output_folder_path = os.path.join(os.curdir, f"{args.output_folder_name}")
     os.makedirs(main_output_folder_path, exist_ok=True)
 
     for wd in values_wd:
