@@ -41,16 +41,6 @@ if __name__ == "__main__":
     # random_seed = int.from_bytes(random_data, byteorder="big")
     random_seed = None
 
-    """random seed"""
-    np.random.seed(random_seed)
-    random.seed(random_seed)
-    if random_seed is not None:
-        torch.manual_seed(random_seed)
-        torch.cuda.manual_seed(random_seed)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
-        os.environ["PYTHONHASHSEED"] = str(random_seed)
-
     use_amp = True
 
     # logger
@@ -76,11 +66,12 @@ if __name__ == "__main__":
         """random seed"""
         np.random.seed(random_seed)
         random.seed(random_seed)
-        torch.manual_seed(random_seed)
-        torch.cuda.manual_seed(random_seed)
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
-        os.environ["PYTHONHASHSEED"] = str(random_seed)
+        if random_seed is not None:
+            torch.manual_seed(random_seed)
+            torch.cuda.manual_seed(random_seed)
+            torch.backends.cudnn.deterministic = True
+            torch.backends.cudnn.benchmark = False
+            os.environ["PYTHONHASHSEED"] = str(random_seed)
 
         model = copy.deepcopy(value_ml_setup.model)
         print(f"hash of init model: {hash_model_state_dict(model)}")
