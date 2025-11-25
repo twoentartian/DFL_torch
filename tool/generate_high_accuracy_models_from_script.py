@@ -47,9 +47,9 @@ if __name__ == "__main__":
     if random_seed is not None:
         torch.manual_seed(random_seed)
         torch.cuda.manual_seed(random_seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-    os.environ["PYTHONHASHSEED"] = str(random_seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+        os.environ["PYTHONHASHSEED"] = str(random_seed)
 
     use_amp = True
 
