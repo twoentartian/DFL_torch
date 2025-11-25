@@ -39,7 +39,7 @@ if __name__ == "__main__":
 
     # random_data = os.urandom(4)
     # random_seed = int.from_bytes(random_data, byteorder="big")
-    random_seed = time.time_ns()
+    random_seed = np.uint32(time.time_ns() & 0xFFFFFFFF)
 
     """random seed"""
     np.random.seed(random_seed)
