@@ -13,6 +13,7 @@ def mobilenet_v2_cifar10():
 
     output_ml_setup.model = mobilenet.MobileNetV2(10)
     output_ml_setup.model_name = str(ModelType.mobilenet_v2.name)
+    output_ml_setup.model_type = ModelType.mobilenet_v2
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.criterion = nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 128
@@ -25,6 +26,7 @@ def mobilenet_v2_cifar100():
 
     output_ml_setup.model = mobilenet.MobileNetV2(100)
     output_ml_setup.model_name = str(ModelType.mobilenet_v2.name)
+    output_ml_setup.model_type = ModelType.mobilenet_v2
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.criterion = nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 128
@@ -43,6 +45,7 @@ def mobilenet_v3_large_imagenet1k(pytorch_preset_version=2):
         raise NotImplementedError
     output_ml_setup.model = models.mobilenet_v3_large(progress=False)
     output_ml_setup.model_name = str(ModelType.mobilenet_v3_large.name)
+    output_ml_setup.model_type = ModelType.mobilenet_v3_large
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.training_batch_size = 128
     output_ml_setup.has_normalization_layer = True

@@ -11,6 +11,7 @@ def conveNeXt_tiny_imagenet1k():
 
     output_ml_setup.model = models.convnext_tiny(progress=False, num_classes=1000)
     output_ml_setup.model_name = str(ModelType.convnext_tiny.name)
+    output_ml_setup.model_type = ModelType.convnext_tiny
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.training_batch_size = 128
     output_ml_setup.has_normalization_layer = True

@@ -21,9 +21,11 @@ def resnet18_cifar10(enable_replace_bn_with_group_norm=False):
     if enable_replace_bn_with_group_norm:
         output_ml_setup.model = models.resnet18(progress=False, num_classes=10, zero_init_residual=False, groups=1, width_per_group=64, replace_stride_with_dilation=None, norm_layer=GroupNorm)
         output_ml_setup.model_name = str(ModelType.resnet18_gn.name)
+        output_ml_setup.model_type = ModelType.resnet18_gn
     else:
         output_ml_setup.model = models.resnet18(progress=False, num_classes=10, zero_init_residual=False, groups=1, width_per_group=64, replace_stride_with_dilation=None)
         output_ml_setup.model_name = str(ModelType.resnet18_bn.name)
+        output_ml_setup.model_type = ModelType.resnet18_bn
     output_ml_setup.model.conv1 = nn.Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)  # change for cifar10 resolution
     output_ml_setup.model.maxpool = nn.Identity()
     output_ml_setup.get_info_from_dataset(dataset)
@@ -39,9 +41,11 @@ def resnet18_cifar100(enable_replace_bn_with_group_norm=False):
     if enable_replace_bn_with_group_norm:
         output_ml_setup.model = models.resnet18(progress=False, num_classes=100, zero_init_residual=False, groups=1, width_per_group=64, replace_stride_with_dilation=None, norm_layer=GroupNorm)
         output_ml_setup.model_name = str(ModelType.resnet18_gn.name)
+        output_ml_setup.model_type = ModelType.resnet18_gn
     else:
         output_ml_setup.model = models.resnet18(progress=False, num_classes=100, zero_init_residual=False, groups=1, width_per_group=64, replace_stride_with_dilation=None)
         output_ml_setup.model_name = str(ModelType.resnet18_bn.name)
+        output_ml_setup.model_type = ModelType.resnet18_bn
     output_ml_setup.model.conv1 = nn.Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)  # change for cifar100 resolution
     output_ml_setup.model.maxpool = nn.Identity()
     output_ml_setup.get_info_from_dataset(dataset)
@@ -56,9 +60,11 @@ def resnet18_svhn(enable_replace_bn_with_group_norm=False, use_extra=False):
     if enable_replace_bn_with_group_norm:
         output_ml_setup.model = models.resnet18(progress=False, num_classes=10, zero_init_residual=False, groups=1, width_per_group=64, replace_stride_with_dilation=None, norm_layer=GroupNorm)
         output_ml_setup.model_name = str(ModelType.resnet18_gn.name)
+        output_ml_setup.model_type = ModelType.resnet18_gn
     else:
         output_ml_setup.model = models.resnet18(progress=False, num_classes=10, zero_init_residual=False, groups=1, width_per_group=64, replace_stride_with_dilation=None)
         output_ml_setup.model_name = str(ModelType.resnet18_bn.name)
+        output_ml_setup.model_type = ModelType.resnet18_bn
     output_ml_setup.model.conv1 = nn.Conv2d(3, 64, kernel_size=(3, 3), stride=(1, 1), padding=(1, 1), bias=False)  # change for cifar100 resolution
     output_ml_setup.model.maxpool = nn.Identity()
     output_ml_setup.get_info_from_dataset(dataset)
@@ -74,9 +80,11 @@ def resnet18_imagenet100(pytorch_preset_version=2, enable_replace_bn_with_group_
     if enable_replace_bn_with_group_norm:
         output_ml_setup.model = models.resnet18(progress=False, num_classes=100, zero_init_residual=False, groups=1, width_per_group=64, replace_stride_with_dilation=None, norm_layer=GroupNorm)
         output_ml_setup.model_name = str(ModelType.resnet18_gn.name)
+        output_ml_setup.model_type = ModelType.resnet18_gn
     else:
         output_ml_setup.model = models.resnet18(progress=False, num_classes=100, zero_init_residual=False, groups=1, width_per_group=64, replace_stride_with_dilation=None)
         output_ml_setup.model_name = str(ModelType.resnet18_bn.name)
+        output_ml_setup.model_type = ModelType.resnet18_bn
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.training_batch_size = 256
     output_ml_setup.has_normalization_layer = True
@@ -94,9 +102,11 @@ def resnet18_imagenet1k(pytorch_preset_version=2, enable_replace_bn_with_group_n
     if enable_replace_bn_with_group_norm:
         output_ml_setup.model = models.resnet18(progress=False, num_classes=1000, norm_layer=GroupNorm)
         output_ml_setup.model_name = str(ModelType.resnet18_gn.name)
+        output_ml_setup.model_type = ModelType.resnet18_gn
     else:
         output_ml_setup.model = models.resnet18(progress=False, num_classes=1000)
         output_ml_setup.model_name = str(ModelType.resnet18_bn.name)
+        output_ml_setup.model_type = ModelType.resnet18_bn
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.training_batch_size = 256
     output_ml_setup.has_normalization_layer = True
@@ -114,9 +124,11 @@ def resnet18_imagenet1k_sam_mask_random_noise(pytorch_preset_version=2, enable_r
     if enable_replace_bn_with_group_norm:
         output_ml_setup.model = models.resnet18(progress=False, num_classes=1000, norm_layer=GroupNorm)
         output_ml_setup.model_name = str(ModelType.resnet18_gn.name)
+        output_ml_setup.model_type = ModelType.resnet18_gn
     else:
         output_ml_setup.model = models.resnet18(progress=False, num_classes=1000)
         output_ml_setup.model_name = str(ModelType.resnet18_bn.name)
+        output_ml_setup.model_type = ModelType.resnet18_bn
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.training_batch_size = 256
     output_ml_setup.has_normalization_layer = True
@@ -134,9 +146,11 @@ def resnet18_imagenet1k_sam_mask_black(pytorch_preset_version=2, enable_replace_
     if enable_replace_bn_with_group_norm:
         output_ml_setup.model = models.resnet18(progress=False, num_classes=1000, norm_layer=GroupNorm)
         output_ml_setup.model_name = str(ModelType.resnet18_gn.name)
+        output_ml_setup.model_type = ModelType.resnet18_gn
     else:
         output_ml_setup.model = models.resnet18(progress=False, num_classes=1000)
         output_ml_setup.model_name = str(ModelType.resnet18_bn.name)
+        output_ml_setup.model_type = ModelType.resnet18_bn
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.training_batch_size = 256
     output_ml_setup.has_normalization_layer = True
@@ -153,6 +167,7 @@ def resnet34_imagenet1k(pytorch_preset_version=1):
 
     output_ml_setup.model = models.resnet34(progress=False, num_classes=1000)
     output_ml_setup.model_name = str(ModelType.resnet34.name)
+    output_ml_setup.model_type = ModelType.resnet34
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.training_batch_size = 256
     output_ml_setup.has_normalization_layer = True
@@ -169,6 +184,7 @@ def resnet50_imagenet1k(pytorch_preset_version=2):
 
     output_ml_setup.model = models.resnet50(progress=False, num_classes=1000)
     output_ml_setup.model_name = str(ModelType.resnet50.name)
+    output_ml_setup.model_type = ModelType.resnet50
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.training_batch_size = 256
     output_ml_setup.has_normalization_layer = True

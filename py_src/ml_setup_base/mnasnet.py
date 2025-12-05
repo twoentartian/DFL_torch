@@ -11,6 +11,7 @@ def mnasnet0_5_imagenet1k():
     loss_fn, collate_fn, model_ema_decay, model_ema_steps, sampler_fn = get_pytorch_training_imagenet(1)
     output_ml_setup.model = models.mnasnet0_5(progress=False)
     output_ml_setup.model_name = str(ModelType.mnasnet0_5.name)
+    output_ml_setup.model_type = ModelType.mnasnet0_5
     output_ml_setup.get_info_from_dataset(dataset)
 
     output_ml_setup.training_batch_size = 512
@@ -27,6 +28,7 @@ def mnasnet1_0_imagenet1k():
     loss_fn, collate_fn, model_ema_decay, model_ema_steps, sampler_fn = get_pytorch_training_imagenet(1)
     output_ml_setup.model = models.mnasnet1_0(progress=False)
     output_ml_setup.model_name = str(ModelType.mnasnet1_0.name)
+    output_ml_setup.model_type = ModelType.mnasnet1_0
     output_ml_setup.get_info_from_dataset(dataset)
 
     output_ml_setup.training_batch_size = 256

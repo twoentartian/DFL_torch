@@ -12,6 +12,7 @@ def cct7_3x1_cifar10():
 
     output_ml_setup.model = cct.cct_7_3x1_32()
     output_ml_setup.model_name = str(ModelType.cct_7_3x1_32.name)
+    output_ml_setup.model_type = ModelType.cct_7_3x1_32
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.criterion = nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 128
@@ -24,6 +25,7 @@ def cct7_3x1_cifar100():
 
     output_ml_setup.model = cct.cct_7_3x1_32(num_classes=100)
     output_ml_setup.model_name = str(ModelType.cct_7_3x1_32.name)
+    output_ml_setup.model_type = ModelType.cct_7_3x1_32
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.criterion = nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 128
@@ -36,6 +38,7 @@ def cct7_7x2_imagenet1k():
 
     output_ml_setup.model = cct.cct_7_7x2_224()
     output_ml_setup.model_name = str(ModelType.cct_7_7x2_224.name)
+    output_ml_setup.model_type = ModelType.cct_7_7x2_224
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.criterion = nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 64
@@ -48,6 +51,7 @@ def cct7_7x2_imagenet100():
 
     output_ml_setup.model = cct.cct_7_7x2_224()
     output_ml_setup.model_name = str(ModelType.cct_7_7x2_224.name)
+    output_ml_setup.model_type = ModelType.cct_7_7x2_224
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.criterion = nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 64
@@ -60,6 +64,7 @@ def cct7_7x2_imagenet10():
 
     output_ml_setup.model = cct.cct_7_7x2_224()
     output_ml_setup.model_name = str(ModelType.cct_7_7x2_224.name)
+    output_ml_setup.model_type = ModelType.cct_7_7x2_224
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.criterion = nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 64
@@ -73,6 +78,7 @@ def cct14_7x2_imagenet1k():
     loss_fn, collate_fn, model_ema_decay, model_ema_steps, sampler_fn = get_pytorch_training_imagenet(2, label_smoothing=0.1, mixup_alpha=0.8, cutmix_alpha=1.0)
     output_ml_setup.model = cct.cct_14_7x2_224()
     output_ml_setup.model_name = str(ModelType.cct_14_7x2_224.name)
+    output_ml_setup.model_type = ModelType.cct_14_7x2_224
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.training_batch_size = 128
     output_ml_setup.has_normalization_layer = True

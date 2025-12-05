@@ -11,6 +11,7 @@ def vit_b_32_imagenet1k():
                                                              val_crop_size=224, val_resize_size=256, train_crop_size=224)
     output_ml_setup.model = models.vit_b_32(progress=False, num_classes=1000)
     output_ml_setup.model_name = str(ModelType.vit_b_32.name)
+    output_ml_setup.model_type = ModelType.vit_b_32
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.training_batch_size = 128
     output_ml_setup.has_normalization_layer = True

@@ -10,6 +10,7 @@ def wide_resnet50_2_imagenet1k(pytorch_preset_version=2):
 
     output_ml_setup.model = models.wide_resnet50_2(progress=False, num_classes=1000)
     output_ml_setup.model_name = str(ModelType.wide_resnet50_2.name)
+    output_ml_setup.model_type = ModelType.wide_resnet50_2
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.training_batch_size = 256
     output_ml_setup.has_normalization_layer = True

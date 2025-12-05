@@ -12,6 +12,7 @@ def densenet121_imagenet1k():
     loss_fn, collate_fn, model_ema_decay, model_ema_steps, sampler_fn = get_pytorch_training_imagenet(1)
     output_ml_setup.model = models.densenet121(progress=False)
     output_ml_setup.model_name = str(ModelType.densenet121.name)
+    output_ml_setup.model_type = ModelType.densenet121
     output_ml_setup.get_info_from_dataset(dataset)
 
     output_ml_setup.training_batch_size = 128
@@ -27,6 +28,7 @@ def densenet121_cifar10():
     dataset = ml_setup_dataset.dataset_cifar10()
     output_ml_setup.model = densenet_cifar.DenseNet121()
     output_ml_setup.model_name = str(ModelType.densenet121.name)
+    output_ml_setup.model_type = ModelType.densenet121
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.training_batch_size = 256
     output_ml_setup.has_normalization_layer = True
@@ -38,6 +40,7 @@ def densenet_cifar10():
     dataset = ml_setup_dataset.dataset_cifar10()
     output_ml_setup.model = densenet_cifar.densenet_cifar()
     output_ml_setup.model_name = str(ModelType.densenet_cifar.name)
+    output_ml_setup.model_type = ModelType.densenet_cifar
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.training_batch_size = 256
     output_ml_setup.has_normalization_layer = True

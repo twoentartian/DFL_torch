@@ -12,6 +12,7 @@ def lenet4_mnist():
 
     output_ml_setup.model = lenet.lenet4()
     output_ml_setup.model_name = str(ModelType.lenet4.name)
+    output_ml_setup.model_type = ModelType.lenet4
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.criterion = nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 64
@@ -25,6 +26,7 @@ def lenet5_mnist():
 
     output_ml_setup.model = lenet.lenet5()
     output_ml_setup.model_name = str(ModelType.lenet5.name)
+    output_ml_setup.model_type = ModelType.lenet5
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.criterion = nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 64
@@ -38,6 +40,7 @@ def lenet5_random_mnist():
 
     output_ml_setup.model = lenet.lenet5()
     output_ml_setup.model_name = str(ModelType.lenet5.name)
+    output_ml_setup.model_type = ModelType.lenet5
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.criterion = nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 64
@@ -51,6 +54,7 @@ def lenet5_large_fc_mnist():
 
     output_ml_setup.model = lenet.lenet5(large_fc=True)
     output_ml_setup.model_name = str(ModelType.lenet5_large_fc.name)
+    output_ml_setup.model_type = ModelType.lenet5_large_fc
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.criterion = nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 64

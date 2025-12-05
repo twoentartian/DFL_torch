@@ -12,6 +12,7 @@ def squeezenet1_1_imagenet1k():
     model_ft = models.squeezenet1_1(weights=None)
 
     output_ml_setup.model_name = str(ModelType.squeezenet1_1.name)
+    output_ml_setup.model_type = ModelType.squeezenet1_1
     output_ml_setup.model = model_ft
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.criterion = nn.CrossEntropyLoss()

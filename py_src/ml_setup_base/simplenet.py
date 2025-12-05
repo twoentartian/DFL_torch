@@ -10,6 +10,7 @@ def simplenet_cifar10():
 
     output_ml_setup.model = simplenet.__dict__["simplenet_cifar_5m"](num_classes=10)
     output_ml_setup.model_name = str(ModelType.simplenet.name)
+    output_ml_setup.model_type = ModelType.simplenet
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.criterion = nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 64
@@ -22,6 +23,7 @@ def simplenet_cifar100():
 
     output_ml_setup.model = simplenet.__dict__["simplenet_cifar_5m"](num_classes=100)
     output_ml_setup.model_name = str(ModelType.simplenet.name)
+    output_ml_setup.model_type = ModelType.simplenet
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.criterion = nn.CrossEntropyLoss()
     output_ml_setup.training_batch_size = 64

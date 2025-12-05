@@ -13,6 +13,7 @@ def alexnet_imagenet1k():
     loss_fn, collate_fn, model_ema_decay, model_ema_steps, sampler_fn = get_pytorch_training_imagenet(1)
     alexnet = models.alexnet(progress=False, weights=None, num_classes=1000)
     output_ml_setup.model_name = str(ModelType.alexnet.name)
+    output_ml_setup.model_type = ModelType.alexnet
     output_ml_setup.model = alexnet
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.training_batch_size = 256

@@ -13,6 +13,7 @@ def vgg11_mnist():
 
     vgg11 = vgg.VGG11_no_bn(in_channels=1, num_classes=10)
     output_ml_setup.model_name = str(ModelType.vgg11_no_bn.name)
+    output_ml_setup.model_type = ModelType.vgg11_no_bn
     output_ml_setup.model = vgg11
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.criterion = nn.CrossEntropyLoss()
@@ -27,6 +28,7 @@ def vgg11_cifar10():
 
     vgg11 = vgg.VGG11_no_bn(in_channels=3, num_classes=10)
     output_ml_setup.model_name = str(ModelType.vgg11_no_bn.name)
+    output_ml_setup.model_type = ModelType.vgg11_no_bn
     output_ml_setup.model = vgg11
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.criterion = nn.CrossEntropyLoss()
@@ -40,6 +42,7 @@ def vgg11_bn_cifar10():
 
     vgg11_bn = vgg_cifar.VGG("VGG11")
     output_ml_setup.model_name = str(ModelType.vgg11_bn.name)
+    output_ml_setup.model_type = ModelType.vgg11_bn
     output_ml_setup.model = vgg11_bn
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.criterion = nn.CrossEntropyLoss()
@@ -54,6 +57,7 @@ def vgg11_bn_imagenet1k():
     loss_fn, collate_fn, model_ema_decay, model_ema_steps, sampler_fn = get_pytorch_training_imagenet(1)
     vgg11 = models.vgg11_bn(progress=False, weights=None, num_classes=1000)
     output_ml_setup.model_name = str(ModelType.vgg11_bn.name)
+    output_ml_setup.model_type = ModelType.vgg11_bn
     output_ml_setup.model = vgg11
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.training_batch_size = 128

@@ -16,6 +16,7 @@ def resnext50_32x4d_imagenet1k(pytorch_preset_version=2):
         raise NotImplementedError
     output_ml_setup.model = models.resnext50_32x4d(progress=False, num_classes=1000)
     output_ml_setup.model_name = str(ModelType.resnext50_32x4d.name)
+    output_ml_setup.model_type = ModelType.resnext50_32x4d
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.training_batch_size = 128
     output_ml_setup.has_normalization_layer = True
