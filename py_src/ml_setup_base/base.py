@@ -6,10 +6,11 @@ import torch.nn as nn
 from torch.utils.data import DataLoader
 
 class DatasetSetup:
-    def __init__(self, name, training_data, testing_data, labels=None):
+    def __init__(self, name, dataset_type, training_data, testing_data, labels=None):
         self.training_data = training_data
         self.testing_data = testing_data
         self.dataset_name = name
+        self.dataset_type = dataset_type
 
         if labels is None:
             self.labels = self._get_dataset_labels(self.testing_data)
@@ -29,7 +30,9 @@ class MlSetup:
     def __init__(self):
         self.model: torch.nn.Module = None
         self.model_name: str = None
+        self.model_type = None
         self.dataset_name: str = None
+        self.dataset_type = None
         self.training_data = None
         self.testing_data = None
         self.criterion = None
@@ -53,6 +56,7 @@ class MlSetup:
         self.training_data = dataset.training_data
         self.testing_data = dataset.testing_data
         self.dataset_name = dataset.dataset_name
+        self.dataset_type = dataset.dataset_type
         self.dataset_label = dataset.labels
         self.dataset_tensor_size = dataset.tensor_size
 

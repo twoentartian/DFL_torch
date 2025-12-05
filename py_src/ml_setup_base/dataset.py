@@ -1,10 +1,7 @@
-import os, sys
+import os, sys, json
 from enum import Enum, auto
 from torchvision import transforms, datasets
 from torch.utils.data import DataLoader, ConcatDataset
-from py_src.dataset import DatasetWithCachedOutputInSharedMem, DatasetWithCachedOutputInMem, ImageDatasetWithCachedInputInSharedMem
-from py_src.ml_setup_base.base import DatasetSetup
-from py_src.torch_vision_train import presets
 from torchvision.transforms.autoaugment import TrivialAugmentWide
 from torchvision.transforms.v2 import RandAugment
 
@@ -12,15 +9,24 @@ from .dataset_masked import MaskedImageDataset
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from py_src.util import expand_path
+from py_src.dataset import DatasetWithCachedOutputInSharedMem, DatasetWithCachedOutputInMem, ImageDatasetWithCachedInputInSharedMem
+from py_src.ml_setup_base.base import DatasetSetup
+from py_src.torch_vision_train import presets
 
 default_path_mnist = expand_path('~/dataset/mnist')
-default_path_random_mnist = expand_path('~/dataset/random_mnist')
 default_path_cifar10 = expand_path('~/dataset/cifar10')
 default_path_cifar100 = expand_path('~/dataset/cifar100')
 default_path_svhn = expand_path('~/dataset/svhn')
 default_path_imagenet1k = expand_path('~/dataset/imagenet1k')
 default_path_imagenet100 = expand_path('~/dataset/imagenet100')
 default_path_imagenet10 = expand_path('~/dataset/imagenet10')
+
+default_path_random_mnist = expand_path('~/dataset/random_mnist')
+default_path_random_cifar10 = expand_path('~/dataset/random_cifar10')
+default_path_random_cifar100 = expand_path('~/dataset/random_cifar100')
+default_path_random_imagenet10 = expand_path('~/dataset/random_imagenet10')
+default_path_random_imagenet100 = expand_path('~/dataset/random_imagenet100')
+default_path_random_imagenet1k = expand_path('~/dataset/random_imagenet1k')
 
 """ Load env override file """
 imagenet1k_path = None
@@ -58,11 +64,16 @@ class DatasetType(Enum):
     random_mnist = auto()
     cifar10 = auto()
     cifar10_224 = auto()
+    random_cifar10 = auto()
     cifar100 = auto()
     cifar100_224 = auto()
+    random_cifar100 = auto()
     imagenet10 = auto()
+    random_imagenet10 = auto()
     imagenet100 = auto()
+    random_imagenet100 = auto()
     imagenet1k = auto()
+    random_imagenet1k = auto()
     imagenet1k_sam_mask_random_noise = auto()
     imagenet1k_sam_mask_black = auto()
     svhn = auto()
@@ -88,16 +99,34 @@ def calculate_mean_std(dataset):
     std = var ** 0.5
     return mean, std
 
+def dataset_type_to_random(in_type: DatasetType) -> DatasetType:
+    if in_type == DatasetType.mnist:
+        return DatasetType.random_mnist
+    elif in_type == DatasetType.cifar10:
+        return DatasetType.random_cifar10
+    elif in_type == DatasetType.cifar100:
+        return DatasetType.random_cifar100
+    elif in_type == DatasetType.imagenet10:
+        return DatasetType.random_imagenet10
+    elif in_type == DatasetType.imagenet100:
+        return DatasetType.random_imagenet100
+    elif in_type == DatasetType.imagenet1k:
+        return DatasetType.random_imagenet1k
+    else:
+        raise NotImplementedError
+
+
 """ MNIST """
-def dataset_mnist(rescale_to_224=False, random_rotation=5):
-    dataset_path = default_path_mnist
+def dataset_mnist(rescale_to_224=False, random_rotation=5, override_dataset_path=None):
+    dataset_path = default_path_mnist if override_dataset_path is None else override_dataset_path
     mnist_train = datasets.MNIST(root=dataset_path, train=True, download=True)
     mean = mnist_train.data.float().mean() / 255
     std = mnist_train.data.float().std() / 255
     if rescale_to_224:
-        dataset_name = str(DatasetType.mnist_224.name)
+        dataset_type = DatasetType.mnist_224
     else:
-        dataset_name = str(DatasetType.mnist.name)
+        dataset_type = DatasetType.mnist
+    dataset_name = str(dataset_type.name)
 
     train_transforms = []
     test_transforms = []
@@ -111,32 +140,18 @@ def dataset_mnist(rescale_to_224=False, random_rotation=5):
         train_transforms.append(transforms.RandomCrop(28, padding=2))
     train_transforms = train_transforms + [transforms.ToTensor(), transforms.Normalize(mean=[mean], std=[std])]
     test_transforms = test_transforms + [transforms.ToTensor(), transforms.Normalize(mean=[mean], std=[std])]
-    transforms.ToTensor(), transforms.Normalize(mean=[mean], std=[std])
     train_data = datasets.MNIST(root=dataset_path, train=True, download=False, transform=transforms.Compose(train_transforms))
     test_data = datasets.MNIST(root=dataset_path, train=False, download=False, transform=transforms.Compose(test_transforms))
-    return DatasetSetup(dataset_name, train_data, test_data, labels=set(range(10)))
-
-""" Random MNIST """
-def dataset_random_mnist():
-    dataset_path = default_path_random_mnist
-    dataset_name = str(DatasetType.random_mnist.name)
-    mnist_train = datasets.ImageFolder(os.path.join(dataset_path, "train"), transform=transforms.Compose([transforms.ToTensor()]))
-    mean, std = calculate_mean_std(mnist_train)
-    mean, std = mean.mean().item(), std.mean().item()
-    transforms_mnist_train = transforms.Compose([transforms.Grayscale(), transforms.ToTensor(), transforms.Normalize(mean=mean, std=std)])
-    transforms_mnist_test = transforms.Compose([transforms.Grayscale(), transforms.ToTensor(), transforms.Normalize(mean=mean, std=std)])
-    mnist_train = datasets.ImageFolder(os.path.join(dataset_path, "train"), transform=transforms_mnist_train)
-    mnist_test = datasets.ImageFolder(os.path.join(dataset_path, "test"), transform=transforms_mnist_test)
-    return DatasetSetup(dataset_name, mnist_train, mnist_test, labels=set(range(10)))
-
+    return DatasetSetup(dataset_name, dataset_type, train_data, test_data, labels=set(range(10)))
 
 """ CIFAR10 """
 def dataset_cifar10(rescale_to_224=False, transforms_training=None, transforms_testing=None, mean_std=None):
     dataset_path = default_path_cifar10
     if rescale_to_224:
-        dataset_name = str(DatasetType.cifar10_224.name)
+        dataset_type = DatasetType.cifar10_224
     else:
-        dataset_name = str(DatasetType.cifar10.name)
+        dataset_type = DatasetType.cifar10
+    dataset_name = str(dataset_type.name)
     if mean_std is not None:
         stats = mean_std
     else:
@@ -164,15 +179,18 @@ def dataset_cifar10(rescale_to_224=False, transforms_training=None, transforms_t
     else:
         cifar10_test = datasets.CIFAR10(root=dataset_path, train=False, download=True, transform=transforms_testing)
 
-    return DatasetSetup(dataset_name, cifar10_train, cifar10_test, labels=set(range(10)))
+    return DatasetSetup(dataset_name, dataset_type, cifar10_train, cifar10_test, labels=set(range(10)))
+
+
 
 """ CIFAR100 """
 def dataset_cifar100(rescale_to_224=False, transforms_training=None, transforms_testing=None, mean_std=None):
     dataset_path = default_path_cifar100
     if rescale_to_224:
-        dataset_name = str(DatasetType.cifar100_224.name)
+        dataset_type = DatasetType.cifar100_224
     else:
-        dataset_name = str(DatasetType.cifar100.name)
+        dataset_type = DatasetType.cifar100
+    dataset_name = str(dataset_type.name)
     if mean_std is not None:
         stats = mean_std
     else:
@@ -199,13 +217,14 @@ def dataset_cifar100(rescale_to_224=False, transforms_training=None, transforms_
         cifar100_test = datasets.CIFAR100(root=dataset_path, train=False, download=True, transform=transforms.Compose(test_transforms))
     else:
         cifar100_test = datasets.CIFAR100(root=dataset_path, train=False, download=True, transform=transforms_testing)
-    return DatasetSetup(dataset_name, cifar100_train, cifar100_test)
+    return DatasetSetup(dataset_name, dataset_type, cifar100_train, cifar100_test, labels=set(range(0, 100)))
 
 """ SVHN """
 def dataset_svhn(transforms_training=None, transforms_testing=None, mean_std=None, use_extra=False):
     dataset_path = default_path_svhn
     if mean_std is None:
         mean_std = ((0.4377, 0.4438, 0.4728), (0.1980, 0.2010, 0.1970))
+    dataset_type = DatasetType.svhn
     dataset_name = DatasetType.svhn.name
 
     if transforms_training is None:
@@ -226,7 +245,7 @@ def dataset_svhn(transforms_training=None, transforms_testing=None, mean_std=Non
     if use_extra:
         extra = datasets.SVHN(root=dataset_path, split='extra', download=True, transform=transforms_training)
         svhn_train = ConcatDataset([svhn_train, extra])
-    return DatasetSetup(dataset_name, svhn_train, svhn_test)
+    return DatasetSetup(dataset_name, dataset_type, svhn_train, svhn_test, labels=set(range(0, 10)))
 
 """ ImageNet """
 
@@ -278,6 +297,7 @@ def dataset_imagenet1k(pytorch_preset_version: int, transforms_training=None, tr
                        train_crop_size=None, val_resize_size=None, val_crop_size=None,
                        random_erasing=None, enable_memory_cache=False):
     dataset_name = str(DatasetType.imagenet1k.name)
+    dataset_type = DatasetType.imagenet1k
 
     if transforms_testing is None and transforms_training is None:
         transforms_train, transforms_test = get_pytorch_preprocessing(version=pytorch_preset_version, train_crop_size=train_crop_size,
@@ -292,12 +312,13 @@ def dataset_imagenet1k(pytorch_preset_version: int, transforms_training=None, tr
     else:
         imagenet_train = datasets.ImageNet(root=imagenet1k_path, split='train', transform=transforms_train)
         imagenet_test = datasets.ImageNet(root=imagenet1k_path, split='val', transform=transforms_test)
-    return DatasetSetup(dataset_name, imagenet_train, imagenet_test, labels=set(range(0, 1000)))
+    return DatasetSetup(dataset_name, dataset_type, imagenet_train, imagenet_test, labels=set(range(0, 1000)))
 
 def dataset_imagenet100(pytorch_preset_version: int, transforms_training=None, transforms_testing=None,
                         train_crop_size=None, val_resize_size=None, val_crop_size=None, random_erasing=None, enable_memory_cache=False):
     dataset_path = default_path_imagenet100 if imagenet100_path is None else imagenet100_path
     dataset_name = str(DatasetType.imagenet100.name)
+    dataset_type = DatasetType.imagenet100
 
     if transforms_testing is None and transforms_training is None:
         transforms_train, transforms_test = get_pytorch_preprocessing(version=pytorch_preset_version, train_crop_size=train_crop_size,
@@ -313,12 +334,13 @@ def dataset_imagenet100(pytorch_preset_version: int, transforms_training=None, t
         imagenet_train = datasets.ImageFolder(os.path.join(dataset_path, "train"), transform = transforms_train)
         imagenet_test = datasets.ImageFolder(os.path.join(dataset_path, "val"), transform = transforms_test)
 
-    return DatasetSetup(dataset_name, imagenet_train, imagenet_test, labels=set(range(0, 100)))
+    return DatasetSetup(dataset_name, dataset_type, imagenet_train, imagenet_test, labels=set(range(0, 100)))
 
 def dataset_imagenet10(pytorch_preset_version: int, transforms_training=None, transforms_testing=None,
                        train_crop_size=None, val_resize_size=None, val_crop_size=None, random_erasing=None, enable_memory_cache=False):
     dataset_path = default_path_imagenet10 if imagenet10_path is None else imagenet10_path
     dataset_name = str(DatasetType.imagenet10.name)
+    dataset_type = DatasetType.imagenet10
 
     if transforms_testing is None and transforms_training is None:
         transforms_train, transforms_test = get_pytorch_preprocessing(version=pytorch_preset_version, train_crop_size=train_crop_size,
@@ -334,7 +356,7 @@ def dataset_imagenet10(pytorch_preset_version: int, transforms_training=None, tr
         imagenet_train = datasets.ImageFolder(os.path.join(dataset_path, "train"), transform = transforms_train)
         imagenet_test = datasets.ImageFolder(os.path.join(dataset_path, "val"), transform = transforms_test)
 
-    return DatasetSetup(dataset_name, imagenet_train, imagenet_test, labels=set(range(0, 10)))
+    return DatasetSetup(dataset_name, dataset_type, imagenet_train, imagenet_test, labels=set(range(0, 10)))
 
 
 def dataset_imagenet1k_custom(train_crop_size=224, val_resize_size=256, val_crop_size=224,
@@ -342,6 +364,7 @@ def dataset_imagenet1k_custom(train_crop_size=224, val_resize_size=256, val_crop
                               random_erase_prob=0.0, ra_magnitude=9, augmix_severity=3,
                               backend='pil', use_v2=False):
     dataset_name = str(DatasetType.imagenet1k.name)
+    dataset_type = DatasetType.imagenet1k
     dataset_path = f'{default_path_imagenet1k}/train' if imagenet1k_path is None else f"{imagenet1k_path}/train"
     dataset_train = datasets.ImageFolder(
         dataset_path,
@@ -364,20 +387,21 @@ def dataset_imagenet1k_custom(train_crop_size=224, val_resize_size=256, val_crop
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
     dataset_test = datasets.ImageFolder(dataset_path, transforms_test)
-    return DatasetSetup(dataset_name, dataset_train, dataset_test, labels=set(range(0, 1000)))
+    return DatasetSetup(dataset_name, dataset_type, dataset_train, dataset_test, labels=set(range(0, 1000)))
 
 
 def dataset_imagenet1k_sam_mask_random_noise(train_crop_size=224, val_resize_size=256, val_crop_size=224,
                                 return_path=False):
     dataset_name = str(DatasetType.imagenet1k_sam_mask_random_noise.name)
+    dataset_type = DatasetType.imagenet1k_sam_mask_random_noise
     transforms_train = transforms.Compose([
         transforms.RandomResizedCrop(train_crop_size, interpolation=transforms.InterpolationMode.BILINEAR),
         transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
-    dataset_train = MaskedImageDataset(image_root=expand_path('~/dataset/imagenet1k/train'),
-                                       mask_root=expand_path('~/dataset/imagenet1k/train_sam_mask'),
+    dataset_train = MaskedImageDataset(image_root=os.path.join(imagenet1k_path, "train"),
+                                       mask_root=os.path.join(imagenet1k_path, "train_sam_mask"),
                                        transform=transforms_train, return_paths=return_path,
                                        unmasked_area_type="random", use_imagenet_label=True)
 
@@ -388,12 +412,13 @@ def dataset_imagenet1k_sam_mask_random_noise(train_crop_size=224, val_resize_siz
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
     dataset_test = datasets.ImageNet(root=imagenet1k_path, split='val', transform=transforms_test)
-    return DatasetSetup(dataset_name, dataset_train, dataset_test, labels=set(range(0, 1000)))
+    return DatasetSetup(dataset_name, dataset_type, dataset_train, dataset_test, labels=set(range(0, 1000)))
 
 
 def dataset_imagenet1k_sam_mask_black(train_crop_size=224, val_resize_size=256, val_crop_size=224,
                                 return_path=False):
     dataset_name = str(DatasetType.imagenet1k_sam_mask_black.name)
+    dataset_type = DatasetType.imagenet1k_sam_mask_black
     transforms_train = transforms.Compose([
         transforms.RandomResizedCrop(train_crop_size, interpolation=transforms.InterpolationMode.BILINEAR),
         transforms.RandomHorizontalFlip(),
@@ -412,18 +437,88 @@ def dataset_imagenet1k_sam_mask_black(train_crop_size=224, val_resize_size=256, 
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
     dataset_test = datasets.ImageNet(root=imagenet1k_path, split='val', transform=transforms_test)
-    return DatasetSetup(dataset_name, dataset_train, dataset_test, labels=set(range(0, 1000)))
+    return DatasetSetup(dataset_name, dataset_type, dataset_train, dataset_test, labels=set(range(0, 1000)))
+
+
+
+def get_dataset_random(dataset_type, default_dataset_path, override_dataset_path, channel, label_count):
+    dataset_path = default_dataset_path if override_dataset_path is None else override_dataset_path
+    dataset_name = str(dataset_type.name)
+
+    mean_std_file_path = os.path.join(dataset_path, "mean_std.json")
+    if os.path.exists(mean_std_file_path):
+        with open(mean_std_file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        mean = data["mean"]
+        std = data["std"]
+    else:
+        dataset_train = datasets.ImageFolder(os.path.join(dataset_path, "train"), transform=transforms.Compose([transforms.ToTensor()]))
+        mean, std = calculate_mean_std(dataset_train)
+        mean, std = mean.tolist(), std.tolist()
+    if isinstance(mean, (int, float)):
+        mean = [float(mean)]
+    if isinstance(std, (int, float)):
+        std = [float(std)]
+
+    if channel == 1:
+        mean = [sum(mean) / len(mean)]
+        std = [sum(std) / len(std)]
+    elif channel == 3:
+        pass
+    else:
+        raise NotImplementedError
+
+    transforms_train = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean=mean, std=std)])
+    transforms_test = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean=mean, std=std)])
+    dataset_train = datasets.ImageFolder(os.path.join(dataset_path, "train"), transform=transforms_train)
+    dataset_test = datasets.ImageFolder(os.path.join(dataset_path, "test"), transform=transforms_test)
+    return DatasetSetup(dataset_name, dataset_type, dataset_train, dataset_test, labels=set(range(label_count)))
+
+
+""" Random MNIST """
+def dataset_random_mnist(override_dataset_path=None):
+    return get_dataset_random(DatasetType.random_mnist, default_path_random_mnist, override_dataset_path, 1, 10)
+
+""" Random CIFAR10 """
+def dataset_random_cifar10(override_dataset_path=None):
+    return get_dataset_random(DatasetType.random_cifar10, default_path_random_cifar10, override_dataset_path, 3, 10)
+
+""" Random CIFAR100 """
+def dataset_random_cifar100(override_dataset_path=None):
+    return get_dataset_random(DatasetType.random_cifar100, default_path_random_cifar100, override_dataset_path, 3, 100)
+
+""" Random Imagenet """
+def dataset_random_imagenet10(override_dataset_path=None):
+    return get_dataset_random(DatasetType.random_imagenet10, default_path_random_imagenet10, override_dataset_path, 3, 10)
+
+def dataset_random_imagenet100(override_dataset_path=None):
+    return get_dataset_random(DatasetType.random_imagenet100, default_path_random_imagenet100, override_dataset_path, 3, 100)
+
+def dataset_random_imagenet1k(override_dataset_path=None):
+    return get_dataset_random(DatasetType.random_imagenet1k, default_path_random_imagenet1k, override_dataset_path, 3, 1000)
+
+
+
+
 
 
 # helper functions
 name_to_dataset_setup = {
     'mnist': dataset_mnist,
-    'random_mnist': dataset_random_mnist,
     'cifar10': dataset_cifar10,
     'cifar100': dataset_cifar100,
+    'imagenet10': dataset_imagenet10,
+    'imagenet100': dataset_imagenet100,
     'imagenet1k': dataset_imagenet1k_custom,
     'imagenet1k_sam_mask_random_noise': dataset_imagenet1k_sam_mask_random_noise,
     'imagenet1k_sam_mask_black': dataset_imagenet1k_sam_mask_black,
+
+    'random_mnist': dataset_random_mnist,
+    'random_cifar10': dataset_random_cifar10,
+    'random_cifar100': dataset_random_cifar100,
+    'random_imagenet10': dataset_random_imagenet10,
+    'random_imagenet100': dataset_random_imagenet100,
+    'random_imagenet1k': dataset_random_imagenet1k,
 }
 
 is_masked_dataset = {

@@ -1,9 +1,8 @@
 import torch
 import torch.nn as nn
 from py_src.ml_setup_base.model import ModelType
-from py_src.ml_setup_base.dataset import DatasetType
+from py_src.ml_setup_base.dataset import DatasetType, imagenet1k_path, dataset_type_to_random
 from py_src.ml_setup_base.base import MlSetup
-from py_src.ml_setup_base.dataset import imagenet1k_path
 
 from py_src.ml_setup_base.mnist_models import lenet4_mnist, lenet5_mnist, lenet5_random_mnist, lenet5_large_fc_mnist
 from py_src.ml_setup_base.regnet import regnet_y_400mf_imagenet1k, regnet_x_200mf_cifar10, regnet_x_200mf_cifar100
@@ -53,7 +52,11 @@ __all__ = [ 'MlSetup', 'ModelType', 'DatasetType', 'imagenet1k_path',
 def get_ml_setup_from_config(model_type: str, dataset_type: str = None, pytorch_preset_version=None):
     if dataset_type is None:
         dataset_type = 'default'
-    model_type = ModelType[model_type]
+    try:
+        model_type = ModelType[model_type]
+    except KeyError:
+        print(f"{model_type} is not found in the built-in types.")
+        exit(-1)
     dataset_type_enum = DatasetType[dataset_type]
     output_ml_setup = get_ml_setup_from_model_type(model_type, dataset_type=dataset_type_enum, pytorch_preset_version=pytorch_preset_version)
     return output_ml_setup
