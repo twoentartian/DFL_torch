@@ -291,3 +291,34 @@ class TransferTrainingSetup(object):
             return optimizer, lr_scheduler, epochs
         else:
             raise not_implemented_error_instance
+
+
+class RandomDatasetTrainingSetup(object):
+    @staticmethod
+    def get_optimizer_lr_scheduler_epoch(arg_ml_setup: ml_setup, model, preset=0, override_dataset=None, override_batch_size=None):
+        not_implemented_error_instance = NotImplementedError(f"cannot find optimizer and lr scheduler for {arg_ml_setup.model_name} @ {arg_ml_setup.dataset_name} preset {preset}")
+
+        training_data = arg_ml_setup.training_data if override_dataset is None else override_dataset
+        training_batch_size = arg_ml_setup.training_batch_size if override_batch_size is None else override_batch_size
+        steps_per_epoch = len(training_data) // training_batch_size + 1
+
+        if arg_ml_setup.model_name in [ModelType.lenet5.name, ModelType.lenet4.name]:
+            if arg_ml_setup.dataset_name == str(DatasetType.mnist.name):
+                lr = 0.01
+                epochs = 100
+                optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=2e-4)
+                lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, lr, steps_per_epoch=steps_per_epoch, epochs=epochs)
+            else:
+                raise not_implemented_error_instance
+            return optimizer, lr_scheduler, epochs
+        elif arg_ml_setup.model_name == str(ModelType.resnet18_bn.name):
+            if arg_ml_setup.dataset_name in [DatasetType.cifar10.name]:
+                lr = 0.1
+                epochs = 100
+                optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=5e-4)
+                lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, lr, steps_per_epoch=steps_per_epoch, epochs=epochs)
+            else:
+                raise not_implemented_error_instance
+            return optimizer, lr_scheduler, epochs
+        else:
+            raise not_implemented_error_instance

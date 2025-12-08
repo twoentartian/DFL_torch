@@ -31,13 +31,7 @@ def check_number_of_sample(sample_count_per_label, random_dataset_type, random_d
     batch_size = len(dataset_setup.training_data) if len(dataset_setup.training_data) < current_ml_setup.training_batch_size else current_ml_setup.training_batch_size
 
     current_ml_setup.re_initialize_model(model)
-    # optimizer, lr_scheduler, epochs = complete_ml_setup.FastTrainingSetup.get_optimizer_lr_scheduler_epoch(current_ml_setup, model, 0, override_dataset=dataset_setup.training_data, override_batch_size=batch_size)
-
-    steps_per_epoch = len(dataset_setup.training_data) // batch_size + 1
-    lr = 0.01
-    epochs = 100
-    optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=2e-4)
-    lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, lr, steps_per_epoch=steps_per_epoch, epochs=epochs)
+    optimizer, lr_scheduler, epochs = complete_ml_setup.RandomDatasetTrainingSetup.get_optimizer_lr_scheduler_epoch(current_ml_setup, model, 0, override_dataset=dataset_setup.training_data, override_batch_size=batch_size)
 
     criterion = current_ml_setup.criterion
     num_worker = 8 if core > 8 else core
@@ -115,13 +109,13 @@ if __name__ == '__main__':
     dataset_gen_reset_seed_per_label = args.dataset_gen_reset_seed_per_label
     dataset_gen_reset_seed_per_sample = args.dataset_gen_reset_seed_per_sample
 
-    util.set_logging(logger, "main")
-
     if args.output_folder_name is None:
         time_now_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")
         output_folder_path = os.path.join(os.curdir, f"{__file__}_{time_now_str}")
     else:
         output_folder_path = os.path.join(os.curdir, args.output_folder_name)
+
+    util.set_logging(logger, "main", log_file_path=os.path.join(output_folder_path, "log.txt"))
 
     current_ml_setup = ml_setup.get_ml_setup_from_config(model_name, dataset_type=dataset_name)
     random_dataset_type = ml_setup.dataset_type_to_random(current_ml_setup.dataset_type)
@@ -155,6 +149,7 @@ if __name__ == '__main__':
         mid = (low + high) // 2
         if mid==low or mid==high:
             logger.info(f"the maximum sample count is {mid}.")
+            exit(0)
         loss, accuracy = check_number_of_sample(mid, random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup,
                                                 use_amp=amp, core=core, dataset_gen_mp=dataset_gen_worker,
                                                 dataset_gen_reset_seed_per_label=dataset_gen_reset_seed_per_label, dataset_gen_reset_seed_per_sample=dataset_gen_reset_seed_per_sample)
