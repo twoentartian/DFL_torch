@@ -9,10 +9,14 @@ from PIL import Image
 
 from ml_setup_base.dataset import calculate_mean_std, DatasetType
 
-def generate_images_for_label(label, num_images, img_size, channels, split: Literal["train", "test", "val"], output_path):
+def generate_images_for_label(label, num_images, img_size, channels, split: Literal["train", "test", "val"], output_path, reset_random_seed_per_sample):
     current_label_dir = os.path.join(output_path, split, str(label))
     os.makedirs(current_label_dir)
     for i in range(num_images):
+        if reset_random_seed_per_sample:
+            random_data = os.urandom(4)
+            seed = int.from_bytes(random_data, byteorder="big")
+            np.random.seed(seed)
         if channels == 1:
             noise_image = (np.random.rand(*img_size) * 255).astype(np.uint8)
             # noise_image = np.random.randint(0, 256, size=img_size, dtype=np.uint8)  # (H, W)
@@ -22,8 +26,8 @@ def generate_images_for_label(label, num_images, img_size, channels, split: Lite
         img = Image.fromarray(noise_image)
         img.save(os.path.join(current_label_dir, f'image_{label}_{i}.png'))
 
-def save_random_images(num_images_per_label, dataset_type: DatasetType,
-                       output_path, num_images_per_label_test=1, num_workers: Optional[int]=None):
+def save_random_images(num_images_per_label, dataset_type: DatasetType, output_path,
+                       num_images_per_label_test=1, num_workers: Optional[int]=None, reset_random_seeds_per_label=False, reset_random_seeds_per_sample=False):
     match dataset_type.value:
         case DatasetType.random_mnist.value:
             num_classes = 10
@@ -58,16 +62,24 @@ def save_random_images(num_images_per_label, dataset_type: DatasetType,
         case _:
             raise NotImplementedError
 
+    if num_workers is None:
+        for class_label in range(num_classes):
+            if reset_random_seeds_per_label:
+                random_data = os.urandom(4)
+                seed = int.from_bytes(random_data, byteorder="big")
+                np.random.seed(seed)
+            generate_images_for_label(class_label, num_images_per_label, img_size, channels, "train", output_path, reset_random_seed_per_sample=reset_random_seeds_per_sample)
+            generate_images_for_label(class_label, num_images_per_label_test, img_size, channels, "test", output_path, reset_random_seed_per_sample=reset_random_seeds_per_sample)
+    else:
+        if reset_random_seeds_per_label:
+            raise NotImplementedError(f"reset_random_seeds cannot be set in multi-process mode")
+        args_list_train = [(class_label, num_images_per_label, img_size, channels, "train", output_path, reset_random_seeds_per_sample) for class_label in range(num_classes)]
+        args_list_test = [(class_label, num_images_per_label_test, img_size, channels, "test", output_path, reset_random_seeds_per_sample) for class_label in range(num_classes)]
+        args_list = args_list_train + args_list_test
+        num_workers = default_worker_count if num_workers is None else num_workers
+        with Pool(processes=num_workers) as pool:
+            pool.starmap(generate_images_for_label, args_list)
 
-    # args_list_train = [(class_label, num_images_per_label, img_size, channels, "train", output_path) for class_label in range(num_classes)]
-    # args_list_test = [(class_label, num_images_per_label_test, img_size, channels, "test", output_path) for class_label in range(num_classes)]
-    # args_list = args_list_train + args_list_test
-    # num_workers = default_worker_count if num_workers is None else num_workers
-    # with Pool(processes=num_workers) as pool:
-    #     pool.starmap(generate_images_for_label, args_list)
-    for class_label in range(num_classes):
-        generate_images_for_label(class_label, num_images_per_label, img_size, channels, "train", output_path)
-        generate_images_for_label(class_label, num_images_per_label, img_size, channels, "test", output_path)
 
     # calculate mean and variance
     mnist_train = datasets.ImageFolder(os.path.join(output_path, "train"), transform=transforms.Compose([transforms.ToTensor()]))
