@@ -9,9 +9,13 @@ from PIL import Image
 
 from ml_setup_base.dataset import calculate_mean_std, DatasetType
 
-def generate_images_for_label(label, num_images, img_size, channels, split: Literal["train", "test", "val"], output_path, reset_random_seed_per_sample):
+def generate_images_for_label(label, num_images, img_size, channels, split: Literal["train", "test", "val"], output_path, reset_random_seed_per_sample, reset_random_seed_per_label):
     current_label_dir = os.path.join(output_path, split, str(label))
     os.makedirs(current_label_dir)
+    if reset_random_seed_per_label:
+        random_data = os.urandom(4)
+        seed = int.from_bytes(random_data, byteorder="big")
+        np.random.seed(seed)
     for i in range(num_images):
         if reset_random_seed_per_sample:
             random_data = os.urandom(4)
@@ -64,19 +68,18 @@ def save_random_images(num_images_per_label, dataset_type: DatasetType, output_p
 
     if num_workers is None:
         for class_label in range(num_classes):
-            if reset_random_seeds_per_label:
-                random_data = os.urandom(4)
-                seed = int.from_bytes(random_data, byteorder="big")
-                np.random.seed(seed)
-            generate_images_for_label(class_label, num_images_per_label, img_size, channels, "train", output_path, reset_random_seed_per_sample=reset_random_seeds_per_sample)
-            generate_images_for_label(class_label, num_images_per_label_test, img_size, channels, "test", output_path, reset_random_seed_per_sample=reset_random_seeds_per_sample)
+            generate_images_for_label(class_label, num_images_per_label, img_size, channels, "train", output_path,
+                                      reset_random_seed_per_sample=reset_random_seeds_per_sample, reset_random_seed_per_label=reset_random_seeds_per_label)
+            generate_images_for_label(class_label, num_images_per_label_test, img_size, channels, "test", output_path,
+                                      reset_random_seed_per_sample=reset_random_seeds_per_sample, reset_random_seed_per_label=reset_random_seeds_per_label)
     else:
         if reset_random_seeds_per_label:
             raise NotImplementedError(f"reset_random_seeds cannot be set in multi-process mode")
-        args_list_train = [(class_label, num_images_per_label, img_size, channels, "train", output_path, reset_random_seeds_per_sample) for class_label in range(num_classes)]
-        args_list_test = [(class_label, num_images_per_label_test, img_size, channels, "test", output_path, reset_random_seeds_per_sample) for class_label in range(num_classes)]
+        args_list_train = [(class_label, num_images_per_label, img_size, channels, "train", output_path, reset_random_seeds_per_sample, True) for class_label in range(num_classes)]
+        args_list_test = [(class_label, num_images_per_label_test, img_size, channels, "test", output_path, reset_random_seeds_per_sample, True) for class_label in range(num_classes)]
         args_list = args_list_train + args_list_test
         num_workers = default_worker_count if num_workers is None else num_workers
+        print(f"use {num_workers} workers to generate dataset")
         with Pool(processes=num_workers) as pool:
             pool.starmap(generate_images_for_label, args_list)
 

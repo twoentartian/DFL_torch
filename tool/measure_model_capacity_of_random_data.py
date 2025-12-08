@@ -133,23 +133,31 @@ if __name__ == '__main__':
     logger.info(f"Random dataset type: {random_dataset_type.name}")
 
     low = 1
-    loss, accuracy = check_number_of_sample(low, random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup, use_amp=amp, core=core, )
+    loss, accuracy = check_number_of_sample(low, random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup,
+                                            use_amp=amp, core=core, dataset_gen_mp=dataset_gen_worker,
+                                            dataset_gen_reset_seed_per_label=dataset_gen_reset_seed_per_label, dataset_gen_reset_seed_per_sample=dataset_gen_reset_seed_per_sample)
     if accuracy < accuracy_threshold:
         logger.fatal(f"The accuracy of random_dataset_count_{low} is smaller than {accuracy_threshold}. Stopped.")
         exit(-1)
 
     high = 2
-    loss, accuracy = check_number_of_sample(high, random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup, use_amp=amp, core=core)
+    loss, accuracy = check_number_of_sample(high, random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup,
+                                            use_amp=amp, core=core, dataset_gen_mp=dataset_gen_worker,
+                                            dataset_gen_reset_seed_per_label=dataset_gen_reset_seed_per_label, dataset_gen_reset_seed_per_sample=dataset_gen_reset_seed_per_sample)
     while accuracy >= accuracy_threshold:
         low = high
         high *= 2
-        loss, accuracy = check_number_of_sample(high, random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup, use_amp=amp, core=core)
+        loss, accuracy = check_number_of_sample(high, random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup,
+                                                use_amp=amp, core=core, dataset_gen_mp=dataset_gen_worker,
+                                                dataset_gen_reset_seed_per_label=dataset_gen_reset_seed_per_label, dataset_gen_reset_seed_per_sample=dataset_gen_reset_seed_per_sample)
 
     while True:
         mid = (low + high) // 2
         if mid==low or mid==high:
             logger.info(f"the maximum sample count is {mid}.")
-        loss, accuracy = check_number_of_sample(mid, random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup, use_amp=amp, core=core)
+        loss, accuracy = check_number_of_sample(mid, random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup,
+                                                use_amp=amp, core=core, dataset_gen_mp=dataset_gen_worker,
+                                                dataset_gen_reset_seed_per_label=dataset_gen_reset_seed_per_label, dataset_gen_reset_seed_per_sample=dataset_gen_reset_seed_per_sample)
 
         if accuracy < accuracy_threshold:
             high = mid
