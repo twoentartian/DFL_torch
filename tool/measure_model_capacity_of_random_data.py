@@ -117,6 +117,7 @@ if __name__ == '__main__':
         output_folder_path = os.path.join(os.curdir, f"{__file__}_{time_now_str}")
     else:
         output_folder_path = os.path.join(os.curdir, args.output_folder_name)
+    os.makedirs(output_folder_path)
 
     util.set_logging(logger, "main", log_file_path=os.path.join(output_folder_path, "log.txt"))
 
