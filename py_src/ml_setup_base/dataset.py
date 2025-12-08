@@ -412,7 +412,9 @@ def dataset_imagenet1k_sam_mask_random_noise(train_crop_size=224, val_resize_siz
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
     dataset_test = datasets.ImageNet(root=imagenet1k_path, split='val', transform=transforms_test)
-    return DatasetSetup(dataset_name, dataset_type, dataset_train, dataset_test, labels=set(range(0, 1000)))
+    output = DatasetSetup(dataset_name, dataset_type, dataset_train, dataset_test, labels=set(range(0, 1000)))
+    output.is_masked_dataset = True
+    return output
 
 
 def dataset_imagenet1k_sam_mask_black(train_crop_size=224, val_resize_size=256, val_crop_size=224,
@@ -437,13 +439,17 @@ def dataset_imagenet1k_sam_mask_black(train_crop_size=224, val_resize_size=256, 
         transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
     ])
     dataset_test = datasets.ImageNet(root=imagenet1k_path, split='val', transform=transforms_test)
-    return DatasetSetup(dataset_name, dataset_type, dataset_train, dataset_test, labels=set(range(0, 1000)))
-
+    output = DatasetSetup(dataset_name, dataset_type, dataset_train, dataset_test, labels=set(range(0, 1000)))
+    output.is_masked_dataset = True
+    return output
 
 
 def get_dataset_random(dataset_type, default_dataset_path, override_dataset_path, channel, label_count):
     dataset_path = default_dataset_path if override_dataset_path is None else override_dataset_path
     dataset_name = str(dataset_type.name)
+
+    transforms_train = []
+    transforms_test = []
 
     mean_std_file_path = os.path.join(dataset_path, "mean_std.json")
     if os.path.exists(mean_std_file_path):
@@ -463,13 +469,15 @@ def get_dataset_random(dataset_type, default_dataset_path, override_dataset_path
     if channel == 1:
         mean = [sum(mean) / len(mean)]
         std = [sum(std) / len(std)]
+        transforms_train.append(transforms.Grayscale())
+        transforms_test.append(transforms.Grayscale())
     elif channel == 3:
         pass
     else:
         raise NotImplementedError
 
-    transforms_train = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean=mean, std=std)])
-    transforms_test = transforms.Compose([transforms.ToTensor(), transforms.Normalize(mean=mean, std=std)])
+    transforms_train = transforms.Compose(transforms_train + [transforms.ToTensor(), transforms.Normalize(mean=mean, std=std)])
+    transforms_test = transforms.Compose(transforms_test + [transforms.ToTensor(), transforms.Normalize(mean=mean, std=std)])
     dataset_train = datasets.ImageFolder(os.path.join(dataset_path, "train"), transform=transforms_train)
     dataset_test = datasets.ImageFolder(os.path.join(dataset_path, "test"), transform=transforms_test)
     return DatasetSetup(dataset_name, dataset_type, dataset_train, dataset_test, labels=set(range(label_count)))
@@ -499,34 +507,21 @@ def dataset_random_imagenet1k(override_dataset_path=None):
 
 
 
-
-
-
 # helper functions
-name_to_dataset_setup = {
-    'mnist': dataset_mnist,
-    'cifar10': dataset_cifar10,
-    'cifar100': dataset_cifar100,
-    'imagenet10': dataset_imagenet10,
-    'imagenet100': dataset_imagenet100,
-    'imagenet1k': dataset_imagenet1k_custom,
-    'imagenet1k_sam_mask_random_noise': dataset_imagenet1k_sam_mask_random_noise,
-    'imagenet1k_sam_mask_black': dataset_imagenet1k_sam_mask_black,
+dataset_type_to_setup = {
+    DatasetType.mnist: dataset_mnist,
+    DatasetType.cifar10: dataset_cifar10,
+    DatasetType.cifar100: dataset_cifar100,
+    DatasetType.imagenet10: dataset_imagenet10,
+    DatasetType.imagenet100: dataset_imagenet100,
+    DatasetType.imagenet1k: dataset_imagenet1k_custom,
+    DatasetType.imagenet1k_sam_mask_random_noise: dataset_imagenet1k_sam_mask_random_noise,
+    DatasetType.imagenet1k_sam_mask_black: dataset_imagenet1k_sam_mask_black,
 
-    'random_mnist': dataset_random_mnist,
-    'random_cifar10': dataset_random_cifar10,
-    'random_cifar100': dataset_random_cifar100,
-    'random_imagenet10': dataset_random_imagenet10,
-    'random_imagenet100': dataset_random_imagenet100,
-    'random_imagenet1k': dataset_random_imagenet1k,
-}
-
-is_masked_dataset = {
-    'mnist': False,
-    'random_mnist': False,
-    'cifar10': False,
-    'cifar100': False,
-    'imagenet1k': False,
-    'imagenet1k_sam_mask_random_noise': True,
-    'imagenet1k_sam_mask_black': True,
+    DatasetType.random_mnist: dataset_random_mnist,
+    DatasetType.random_cifar10: dataset_random_cifar10,
+    DatasetType.random_cifar100: dataset_random_cifar100,
+    DatasetType.random_imagenet10: dataset_random_imagenet10,
+    DatasetType.random_imagenet100: dataset_random_imagenet100,
+    DatasetType.random_imagenet1k: dataset_random_imagenet1k,
 }

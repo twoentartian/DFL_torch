@@ -14,54 +14,60 @@ def generate_images_for_label(label, num_images, img_size, channels, split: Lite
     os.makedirs(current_label_dir)
     for i in range(num_images):
         if channels == 1:
-            noise_image = np.random.randint(0, 256, size=img_size, dtype=np.uint8)  # (H, W)
+            noise_image = (np.random.rand(*img_size) * 255).astype(np.uint8)
+            # noise_image = np.random.randint(0, 256, size=img_size, dtype=np.uint8)  # (H, W)
         else:
-            noise_image = np.random.randint(0, 256, size=(*img_size, channels), dtype=np.uint8)  # (H, W, 3)
+            noise_image = (np.random.rand(*img_size, channels) * 255).astype(np.uint8)
+            # noise_image = np.random.randint(0, 256, size=(*img_size, channels), dtype=np.uint8)  # (H, W, 3)
         img = Image.fromarray(noise_image)
         img.save(os.path.join(current_label_dir, f'image_{label}_{i}.png'))
 
 def save_random_images(num_images_per_label, dataset_type: DatasetType,
                        output_path, num_images_per_label_test=1, num_workers: Optional[int]=None):
-    if dataset_type == DatasetType.random_mnist:
-        num_classes = 10
-        img_size = (28, 28)
-        channels = 1
-        default_worker_count = 2
-    elif dataset_type == DatasetType.random_cifar10:
-        num_classes = 10
-        img_size = (32, 32)
-        channels = 3
-        default_worker_count = 4
-    elif dataset_type == DatasetType.random_cifar100:
-        num_classes = 100
-        img_size = (32, 32)
-        channels = 3
-        default_worker_count = 4
-    elif dataset_type == DatasetType.imagenet10:
-        num_classes = 10
-        img_size = (224, 224)
-        channels = 3
-        default_worker_count = 4
-    elif dataset_type == DatasetType.imagenet100:
-        num_classes = 100
-        img_size = (224, 224)
-        channels = 3
-        default_worker_count = 8
-    elif dataset_type == DatasetType.imagenet1k:
-        num_classes = 1000
-        img_size = (224, 224)
-        channels = 3
-        default_worker_count = 8
-    else:
-        raise NotImplementedError
+    match dataset_type.value:
+        case DatasetType.random_mnist.value:
+            num_classes = 10
+            img_size = (28, 28)
+            channels = 1
+            default_worker_count = 2
+        case DatasetType.random_cifar10.value:
+            num_classes = 10
+            img_size = (32, 32)
+            channels = 3
+            default_worker_count = 4
+        case DatasetType.random_cifar100.value:
+            num_classes = 100
+            img_size = (32, 32)
+            channels = 3
+            default_worker_count = 4
+        case DatasetType.imagenet10.value:
+            num_classes = 10
+            img_size = (224, 224)
+            channels = 3
+            default_worker_count = 4
+        case DatasetType.imagenet100.value:
+            num_classes = 100
+            img_size = (224, 224)
+            channels = 3
+            default_worker_count = 8
+        case DatasetType.imagenet1k.value:
+            num_classes = 1000
+            img_size = (224, 224)
+            channels = 3
+            default_worker_count = 8
+        case _:
+            raise NotImplementedError
 
-    args_list_train = [(class_label, num_images_per_label, img_size, channels, "train", output_path) for class_label in range(num_classes)]
-    args_list_test = [(class_label, num_images_per_label_test, img_size, channels, "test", output_path) for class_label in range(num_classes)]
-    args_list = args_list_train + args_list_test
-    num_workers = default_worker_count if num_workers is None else num_workers
 
-    with Pool(processes=num_workers) as pool:
-        pool.starmap(generate_images_for_label, args_list)
+    # args_list_train = [(class_label, num_images_per_label, img_size, channels, "train", output_path) for class_label in range(num_classes)]
+    # args_list_test = [(class_label, num_images_per_label_test, img_size, channels, "test", output_path) for class_label in range(num_classes)]
+    # args_list = args_list_train + args_list_test
+    # num_workers = default_worker_count if num_workers is None else num_workers
+    # with Pool(processes=num_workers) as pool:
+    #     pool.starmap(generate_images_for_label, args_list)
+    for class_label in range(num_classes):
+        generate_images_for_label(class_label, num_images_per_label, img_size, channels, "train", output_path)
+        generate_images_for_label(class_label, num_images_per_label, img_size, channels, "test", output_path)
 
     # calculate mean and variance
     mnist_train = datasets.ImageFolder(os.path.join(output_path, "train"), transform=transforms.Compose([transforms.ToTensor()]))

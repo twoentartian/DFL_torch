@@ -8,9 +8,10 @@ from torch.utils.data import DataLoader
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from py_src.ml_setup_base import dataset as dfl_dataset
+from py_src.ml_setup import DatasetType
 
 
-def show_batch(dl, dataset_name, cols=8, save_path=None):
+def show_batch(ds, dl, dataset_name, cols=8, save_path=None):
     it = iter(dl)
 
     while True:
@@ -18,7 +19,7 @@ def show_batch(dl, dataset_name, cols=8, save_path=None):
         if target is None:
             break
         """Visualize a batch of CHW images in [0,1]."""
-        if dfl_dataset.is_masked_dataset[dataset_name]:
+        if ds.is_masked_dataset:
             images, labels, path_img, path_mask = target
             n = images.size(0)
             rows = math.ceil(n / cols)
@@ -78,7 +79,7 @@ def show_batch(dl, dataset_name, cols=8, save_path=None):
 
 def main():
     ap = argparse.ArgumentParser(description="Visualize ImageDataset batch")
-    ap.add_argument("dataset", help=f"dataset type, candidate: {dfl_dataset.name_to_dataset_setup.keys()}")
+    ap.add_argument("dataset", help=f"dataset type, candidate: {[i.name for i in dfl_dataset.dataset_type_to_setup.keys()]}")
     ap.add_argument("--batch-size", type=int, default=16)
     ap.add_argument("--num-workers", type=int, default=4)
     ap.add_argument("--cols", type=int, default=8, help="number of columns in the grid")
@@ -90,14 +91,14 @@ def main():
     random.seed(args.seed)
     torch.manual_seed(args.seed)
 
-    dataset_name = args.dataset
-    if dataset_name in dfl_dataset.name_to_dataset_setup:
-        if dfl_dataset.is_masked_dataset[dataset_name]:
-            ds = dfl_dataset.name_to_dataset_setup[dataset_name](return_path=True)
+    dataset_name = DatasetType(args.dataset)
+    if dataset_name in dfl_dataset.dataset_type_to_setup:
+        if dfl_dataset.dataset_type_to_setup[dataset_name]:
+            ds = dfl_dataset.dataset_type_to_setup[dataset_name](return_path=True)
         else:
-            ds = dfl_dataset.name_to_dataset_setup[dataset_name]()
+            ds = dfl_dataset.dataset_type_to_setup[dataset_name]()
     else:
-        print(f"dataset name {dataset_name} not found, available: {dfl_dataset.name_to_dataset_setup.keys()}")
+        print(f"dataset name {dataset_name} not found, available: {[i.name for i in dfl_dataset.dataset_type_to_setup.keys()]}")
         exit(-1)
 
     dl = DataLoader(
@@ -108,7 +109,7 @@ def main():
         pin_memory=True,
     )
 
-    show_batch(dl, dataset_name, cols=args.cols, save_path=(args.save or None))
+    show_batch(ds, dl, dataset_name, cols=args.cols, save_path=(args.save or None))
 
 
 if __name__ == "__main__":

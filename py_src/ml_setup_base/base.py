@@ -19,6 +19,9 @@ class DatasetSetup:
         sample_data = self.testing_data[0][0]
         self.tensor_size = sample_data.shape
 
+        self.is_masked_dataset = False
+
+
     def _get_dataset_labels(self, dataset):
         dataloader = DataLoader(dataset, batch_size=1024, shuffle=False)
         labels_set = set()
