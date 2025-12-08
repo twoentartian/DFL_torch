@@ -10,7 +10,7 @@ from py_src import ml_setup, util, dataset_random, complete_ml_setup
 logger = logging.getLogger("measure_model_capacity_of_random_data")
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-def check_number_of_sample(sample_count_per_label, random_dataset_type, random_dataset_func, output_dir, current_ml_setup,
+def check_number_of_sample(sample_count_per_label, random_dataset_type, random_dataset_func, output_dir, current_ml_setup, accuracy_threshold,
                            use_amp=False, core=os.cpu_count(), dataset_gen_mp=None, dataset_gen_reset_seed_per_label=False, dataset_gen_reset_seed_per_sample=False):
     dataset_path = os.path.join(output_dir, f"random_dataset_count_{sample_count_per_label}")
     dataset_random.save_random_images(sample_count_per_label, random_dataset_type, dataset_path,
@@ -79,6 +79,9 @@ def check_number_of_sample(sample_count_per_label, random_dataset_type, random_d
         logger.info(f"epoch[{epoch}] loss={final_loss} accuracy={final_accuracy} lrs={lrs}")
         epoch_loss_lr_log_file.write(f"{epoch},{final_loss},{final_accuracy},{lrs}" + "\n")
         epoch_loss_lr_log_file.flush()
+        if final_accuracy > accuracy_threshold:
+            logger.info(f"early stopping at epoch {epoch}, {final_accuracy}(accuracy) > {accuracy_threshold}(threshold)")
+            break
 
     logger.info(f"finish training")
     epoch_loss_lr_log_file.flush()
@@ -127,7 +130,7 @@ if __name__ == '__main__':
     logger.info(f"Random dataset type: {random_dataset_type.name}")
 
     low = 1
-    loss, accuracy = check_number_of_sample(low, random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup,
+    loss, accuracy = check_number_of_sample(low, random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup, accuracy_threshold,
                                             use_amp=amp, core=core, dataset_gen_mp=dataset_gen_worker,
                                             dataset_gen_reset_seed_per_label=dataset_gen_reset_seed_per_label, dataset_gen_reset_seed_per_sample=dataset_gen_reset_seed_per_sample)
     if accuracy < accuracy_threshold:
@@ -135,13 +138,13 @@ if __name__ == '__main__':
         exit(-1)
 
     high = 2
-    loss, accuracy = check_number_of_sample(high, random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup,
+    loss, accuracy = check_number_of_sample(high, random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup, accuracy_threshold,
                                             use_amp=amp, core=core, dataset_gen_mp=dataset_gen_worker,
                                             dataset_gen_reset_seed_per_label=dataset_gen_reset_seed_per_label, dataset_gen_reset_seed_per_sample=dataset_gen_reset_seed_per_sample)
     while accuracy >= accuracy_threshold:
         low = high
         high *= 2
-        loss, accuracy = check_number_of_sample(high, random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup,
+        loss, accuracy = check_number_of_sample(high, random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup, accuracy_threshold,
                                                 use_amp=amp, core=core, dataset_gen_mp=dataset_gen_worker,
                                                 dataset_gen_reset_seed_per_label=dataset_gen_reset_seed_per_label, dataset_gen_reset_seed_per_sample=dataset_gen_reset_seed_per_sample)
 
@@ -150,7 +153,7 @@ if __name__ == '__main__':
         if mid==low or mid==high:
             logger.info(f"the maximum sample count is {mid}.")
             exit(0)
-        loss, accuracy = check_number_of_sample(mid, random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup,
+        loss, accuracy = check_number_of_sample(mid, random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup, accuracy_threshold,
                                                 use_amp=amp, core=core, dataset_gen_mp=dataset_gen_worker,
                                                 dataset_gen_reset_seed_per_label=dataset_gen_reset_seed_per_label, dataset_gen_reset_seed_per_sample=dataset_gen_reset_seed_per_sample)
 
