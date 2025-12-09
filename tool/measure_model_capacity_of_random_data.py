@@ -11,7 +11,7 @@ logger = logging.getLogger("measure_model_capacity_of_random_data")
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def check_number_of_sample(sample_count_per_label, random_dataset_type, random_dataset_func, output_dir, current_ml_setup, accuracy_threshold,
-                           use_amp=False, core=os.cpu_count(), dataset_gen_mp=None, dataset_gen_reset_seed_per_label=False, dataset_gen_reset_seed_per_sample=False):
+                           use_amp=False, core=os.cpu_count(), dataset_gen_mp=None, dataset_gen_reset_seed_per_label=False, dataset_gen_reset_seed_per_sample=False, override_epoch=None):
     dataset_path = os.path.join(output_dir, f"random_dataset_count_{sample_count_per_label}")
     dataset_random.save_random_images(sample_count_per_label, random_dataset_type, dataset_path,
                                       num_workers=dataset_gen_mp, reset_random_seeds_per_label=dataset_gen_reset_seed_per_label, reset_random_seeds_per_sample=dataset_gen_reset_seed_per_sample)
@@ -31,8 +31,8 @@ def check_number_of_sample(sample_count_per_label, random_dataset_type, random_d
     batch_size = len(dataset_setup.training_data) if len(dataset_setup.training_data) < current_ml_setup.training_batch_size else current_ml_setup.training_batch_size
 
     current_ml_setup.re_initialize_model(model)
-    optimizer, lr_scheduler, epochs = complete_ml_setup.RandomDatasetTrainingSetup.get_optimizer_lr_scheduler_epoch(current_ml_setup, model, 0, override_dataset=dataset_setup.training_data, override_batch_size=batch_size)
-
+    optimizer, lr_scheduler, epochs = complete_ml_setup.RandomDatasetTrainingSetup.get_optimizer_lr_scheduler_epoch(current_ml_setup, model, 0,
+                                                                                                                    override_dataset=dataset_setup.training_data, override_batch_size=batch_size, override_epoch=override_epoch)
     criterion = current_ml_setup.criterion
     num_worker = 8 if core > 8 else core
     dataloader = DataLoader(dataset_setup.training_data, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers=num_worker, persistent_workers=True, prefetch_factor=4)
@@ -97,10 +97,11 @@ if __name__ == '__main__':
     parser.add_argument("-o", "--output_folder_name", default=None, help='specify the output folder name')
     parser.add_argument("-c", '--core', type=int, default=os.cpu_count(), help='specify the number of CPU cores to use')
     parser.add_argument("--amp", action='store_true', help='enable auto mixed precision')
-    parser.add_argument("-t","--accuracy_threshold", type=float, default=0.9999, help="specify the accuracy threshold of treating as not low enough")
+    parser.add_argument("-t","--accuracy_threshold", type=float, default=0.5, help="specify the accuracy threshold of treating as not low enough")
     parser.add_argument("--dataset_gen_worker", type=int, default=None, help='enable multiprocessing during dataset generation')
     parser.add_argument("--dataset_gen_reset_seed_per_label", action='store_true', help='reset the random seed after generating for each label')
     parser.add_argument("--dataset_gen_reset_seed_per_sample", action='store_true', help='reset the random seed after generating for each sample')
+    parser.add_argument("-e", "--epoch", type=int, default=100, help="specify the number of epochs")
 
     args = parser.parse_args()
     model_name = args.model
@@ -111,6 +112,7 @@ if __name__ == '__main__':
     dataset_gen_worker = args.dataset_gen_worker
     dataset_gen_reset_seed_per_label = args.dataset_gen_reset_seed_per_label
     dataset_gen_reset_seed_per_sample = args.dataset_gen_reset_seed_per_sample
+    override_epoch = args.epoch
 
     if args.output_folder_name is None:
         time_now_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")
@@ -132,7 +134,7 @@ if __name__ == '__main__':
 
     low = 1
     loss, accuracy = check_number_of_sample(low, random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup, accuracy_threshold,
-                                            use_amp=amp, core=core, dataset_gen_mp=dataset_gen_worker,
+                                            use_amp=amp, core=core, dataset_gen_mp=dataset_gen_worker, override_epoch=override_epoch,
                                             dataset_gen_reset_seed_per_label=dataset_gen_reset_seed_per_label, dataset_gen_reset_seed_per_sample=dataset_gen_reset_seed_per_sample)
     if accuracy < accuracy_threshold:
         logger.fatal(f"The accuracy of random_dataset_count_{low} is smaller than {accuracy_threshold}. Stopped.")
@@ -140,13 +142,13 @@ if __name__ == '__main__':
 
     high = 2
     loss, accuracy = check_number_of_sample(high, random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup, accuracy_threshold,
-                                            use_amp=amp, core=core, dataset_gen_mp=dataset_gen_worker,
+                                            use_amp=amp, core=core, dataset_gen_mp=dataset_gen_worker, override_epoch=override_epoch,
                                             dataset_gen_reset_seed_per_label=dataset_gen_reset_seed_per_label, dataset_gen_reset_seed_per_sample=dataset_gen_reset_seed_per_sample)
     while accuracy >= accuracy_threshold:
         low = high
         high *= 2
         loss, accuracy = check_number_of_sample(high, random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup, accuracy_threshold,
-                                                use_amp=amp, core=core, dataset_gen_mp=dataset_gen_worker,
+                                                use_amp=amp, core=core, dataset_gen_mp=dataset_gen_worker, override_epoch=override_epoch,
                                                 dataset_gen_reset_seed_per_label=dataset_gen_reset_seed_per_label, dataset_gen_reset_seed_per_sample=dataset_gen_reset_seed_per_sample)
 
     while True:
@@ -155,7 +157,7 @@ if __name__ == '__main__':
             logger.info(f"the maximum sample count is {mid}.")
             exit(0)
         loss, accuracy = check_number_of_sample(mid, random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup, accuracy_threshold,
-                                                use_amp=amp, core=core, dataset_gen_mp=dataset_gen_worker,
+                                                use_amp=amp, core=core, dataset_gen_mp=dataset_gen_worker, override_epoch=override_epoch,
                                                 dataset_gen_reset_seed_per_label=dataset_gen_reset_seed_per_label, dataset_gen_reset_seed_per_sample=dataset_gen_reset_seed_per_sample)
 
         if accuracy < accuracy_threshold:
