@@ -295,7 +295,7 @@ class TransferTrainingSetup(object):
 
 class RandomDatasetTrainingSetup(object):
     @staticmethod
-    def get_optimizer_lr_scheduler_epoch(arg_ml_setup: ml_setup, model, preset=0, override_dataset=None, override_batch_size=None, override_epoch=None):
+    def get_optimizer_lr_scheduler_epoch(arg_ml_setup: ml_setup, model, preset=0, override_dataset=None, override_batch_size=None, override_epoch=None, override_weight_decay=None):
         not_implemented_error_instance = NotImplementedError(f"cannot find optimizer and lr scheduler for {arg_ml_setup.model_name} @ {arg_ml_setup.dataset_name} preset {preset}")
 
         training_data = arg_ml_setup.training_data if override_dataset is None else override_dataset
@@ -303,14 +303,17 @@ class RandomDatasetTrainingSetup(object):
         steps_per_epoch = len(training_data) // training_batch_size + 1
 
         epochs = None
+        wd = None
         if override_epoch is not None:
             epochs = override_epoch
-
+        if override_weight_decay is not None:
+            wd = override_weight_decay
         if arg_ml_setup.model_name in [ModelType.lenet5.name, ModelType.lenet4.name]:
             if arg_ml_setup.dataset_name == str(DatasetType.mnist.name):
                 lr = 0.01
                 epochs = 100 if epochs is None else epochs
-                optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=2e-4)
+                wd = 2e-4 if wd is None else wd
+                optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=wd)
                 lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, lr, steps_per_epoch=steps_per_epoch, epochs=epochs)
             else:
                 raise not_implemented_error_instance
@@ -319,7 +322,8 @@ class RandomDatasetTrainingSetup(object):
             if arg_ml_setup.dataset_name in [DatasetType.cifar10.name]:
                 lr = 0.1
                 epochs = 100 if epochs is None else epochs
-                optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=5e-4)
+                wd = 5e-4 if wd is None else wd
+                optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=wd)
                 lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, lr, steps_per_epoch=steps_per_epoch, epochs=epochs)
             else:
                 raise not_implemented_error_instance
