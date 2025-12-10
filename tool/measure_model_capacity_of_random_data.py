@@ -76,6 +76,7 @@ def check_number_of_sample(sample_count_per_label, random_dataset_type, random_d
             lrs.append(param_group['lr'])
         final_loss = train_loss / count
         final_accuracy = training_correct_val / training_total_val
+        util.save_model_state(os.path.join(train_path, f"{epoch}.model.pt"), model.state_dict(), current_ml_setup.model_name, dataset_setup.dataset_name)
         logger.info(f"epoch[{epoch}] loss={final_loss} accuracy={final_accuracy} lrs={lrs}")
         epoch_loss_lr_log_file.write(f"{epoch},{final_loss},{final_accuracy},{lrs}" + "\n")
         epoch_loss_lr_log_file.flush()
