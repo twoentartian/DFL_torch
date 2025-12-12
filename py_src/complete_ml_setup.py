@@ -328,5 +328,15 @@ class RandomDatasetTrainingSetup(object):
             else:
                 raise not_implemented_error_instance
             return optimizer, lr_scheduler, epochs
+        elif arg_ml_setup.model_name == str(ModelType.resnet18_bn.name):
+            if arg_ml_setup.dataset_name in [DatasetType.imagenet100.name, DatasetType.imagenet1k.name]:
+                lr = 1e-1
+                epochs = 100 if epochs is None else epochs
+                wd = 1e-4 if wd is None else wd
+                optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=wd)
+                lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs * steps_per_epoch, eta_min=0.001)
+            else:
+                raise not_implemented_error_instance
+            return optimizer, lr_scheduler, epochs
         else:
             raise not_implemented_error_instance
