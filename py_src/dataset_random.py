@@ -48,17 +48,17 @@ def save_random_images(num_images_per_label, dataset_type: DatasetType, output_p
             img_size = (32, 32)
             channels = 3
             default_worker_count = 4
-        case DatasetType.imagenet10.value:
+        case DatasetType.random_imagenet10.value:
             num_classes = 10
             img_size = (224, 224)
             channels = 3
             default_worker_count = 4
-        case DatasetType.imagenet100.value:
+        case DatasetType.random_imagenet100.value:
             num_classes = 100
             img_size = (224, 224)
             channels = 3
             default_worker_count = 8
-        case DatasetType.imagenet1k.value:
+        case DatasetType.random_imagenet1k.value:
             num_classes = 1000
             img_size = (224, 224)
             channels = 3
