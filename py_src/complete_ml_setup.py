@@ -326,7 +326,7 @@ class RandomDatasetTrainingSetup(object):
                 optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=wd)
                 lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, lr, steps_per_epoch=steps_per_epoch, epochs=epochs)
             elif arg_ml_setup.dataset_name in [DatasetType.imagenet100.name, DatasetType.imagenet1k.name]:
-                lr = 1e-1
+                lr = 9e-1
                 epochs = 100 if epochs is None else epochs
                 wd = 1e-4 if wd is None else wd
                 optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=wd)
