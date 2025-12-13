@@ -1,4 +1,4 @@
-import os, sys, argparse, logging, copy
+import os, sys, argparse, logging, copy, json
 from datetime import datetime
 import torch
 from torch.utils.data import DataLoader
@@ -9,6 +9,18 @@ from py_src import ml_setup, util, dataset_random, complete_ml_setup
 
 logger = logging.getLogger("measure_model_capacity_of_random_data")
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+def save_lr_wd(model: torch.nn.modules, optimizer: torch.optim.Optimizer , file_path: str):
+    param2name = {p: n for n, p in model.named_parameters()}
+    decays = {}
+    for g in optimizer.param_groups:
+        wd = g.get("weight_decay", 0.0)
+        names = [param2name.get(p, "<unnamed>") for p in g["params"]]
+        for name in names:
+            decays[name] = wd
+
+    with open(file_path, "w") as f:
+        f.write(json.dumps(decays, indent=4))
 
 def check_number_of_sample(sample_count_per_label, random_dataset_type, random_dataset_func, output_dir, current_ml_setup, accuracy_threshold,
                            use_amp=False, core=os.cpu_count(), dataset_gen_mp=None, dataset_gen_reset_seed_per_label=False, dataset_gen_reset_seed_per_sample=False,
@@ -36,6 +48,7 @@ def check_number_of_sample(sample_count_per_label, random_dataset_type, random_d
                                                                                                                     override_dataset=dataset_setup.training_data,
                                                                                                                     override_batch_size=batch_size, override_epoch=override_epoch,
                                                                                                                     override_weight_decay=override_weight_decay)
+    save_lr_wd(model, optimizer, os.path.join(train_path, "lr_wd.txt"))
     criterion = current_ml_setup.criterion
     num_worker = 8 if core > 8 else core
     dataloader = DataLoader(dataset_setup.training_data, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers=num_worker, persistent_workers=True, prefetch_factor=4)
