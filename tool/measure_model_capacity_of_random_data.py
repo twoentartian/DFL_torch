@@ -107,6 +107,51 @@ def check_number_of_sample(sample_count_per_label, random_dataset_type, random_d
     return final_loss, final_accuracy
 
 
+def measure_one_configuration(random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup, accuracy_threshold, override_epoch, override_weight_decay):
+    child_logger = logging.getLogger("measure_one_configuration")
+    util.set_logging(child_logger, "single_task", log_file_path=os.path.join(output_folder_path, "log.txt"))
+
+    low = 1
+    child_logger.info(f"try sample_count per label: {low}.")
+    loss, accuracy = check_number_of_sample(low, random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup, accuracy_threshold,
+                                            use_amp=amp, core=core, dataset_gen_mp=dataset_gen_worker, override_epoch=override_epoch, override_weight_decay=override_weight_decay,
+                                            dataset_gen_reset_seed_per_label=dataset_gen_reset_seed_per_label, dataset_gen_reset_seed_per_sample=dataset_gen_reset_seed_per_sample)
+    if accuracy < accuracy_threshold:
+        logger.fatal(f"The accuracy of random_dataset_count_{low} is smaller than {accuracy_threshold}. Stopped.")
+        exit(-1)
+
+    high = 2
+    child_logger.info(f"try sample_count per label: {high}.")
+    loss, accuracy = check_number_of_sample(high, random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup, accuracy_threshold,
+                                            use_amp=amp, core=core, dataset_gen_mp=dataset_gen_worker, override_epoch=override_epoch, override_weight_decay=override_weight_decay,
+                                            dataset_gen_reset_seed_per_label=dataset_gen_reset_seed_per_label, dataset_gen_reset_seed_per_sample=dataset_gen_reset_seed_per_sample)
+    while accuracy >= accuracy_threshold:
+        low = high
+        high *= 2
+        child_logger.info(f"try sample_count per label: {high}.")
+        loss, accuracy = check_number_of_sample(high, random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup, accuracy_threshold,
+                                                use_amp=amp, core=core, dataset_gen_mp=dataset_gen_worker, override_epoch=override_epoch, override_weight_decay=override_weight_decay,
+                                                dataset_gen_reset_seed_per_label=dataset_gen_reset_seed_per_label, dataset_gen_reset_seed_per_sample=dataset_gen_reset_seed_per_sample)
+
+    while True:
+        mid = (low + high) // 2
+        if mid == low or mid == high:
+            logger.info(f"the maximum sample count is {mid}.")
+            child_logger.info(f"the maximum sample count is {mid}.")
+            exit(0)
+        child_logger.info(f"try sample_count per label: {mid}.")
+        loss, accuracy = check_number_of_sample(mid, random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup, accuracy_threshold,
+                                                use_amp=amp, core=core, dataset_gen_mp=dataset_gen_worker, override_epoch=override_epoch, override_weight_decay=override_weight_decay,
+                                                dataset_gen_reset_seed_per_label=dataset_gen_reset_seed_per_label, dataset_gen_reset_seed_per_sample=dataset_gen_reset_seed_per_sample)
+
+        if accuracy < accuracy_threshold:
+            high = mid
+        elif accuracy >= accuracy_threshold:
+            low = mid
+        else:
+            raise NotImplementedError
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Measure the model capacity in terms of how many random samples can be memorized')
     parser.add_argument("-m", "--model", type=str, required=True, help="specify the model type")
@@ -119,7 +164,7 @@ if __name__ == '__main__':
     parser.add_argument("--dataset_gen_reset_seed_per_label", action='store_true', help='reset the random seed after generating for each label')
     parser.add_argument("--dataset_gen_reset_seed_per_sample", action='store_true', help='reset the random seed after generating for each sample')
     parser.add_argument("-e", "--epoch", type=int, default=None, help="specify the number of epochs, None=default")
-    parser.add_argument("-w", "--weight_decay", type=float, default=None, help="specify the weight decay, None=default")
+    parser.add_argument("-w", "--weight_decay", nargs="+", type=float, default=None, help="specify the weight decay, None=default, can be a list of float.")
 
     args = parser.parse_args()
     model_name = args.model
@@ -151,38 +196,13 @@ if __name__ == '__main__':
         exit(-1)
     logger.info(f"Random dataset type: {random_dataset_type.name}")
 
-    low = 1
-    loss, accuracy = check_number_of_sample(low, random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup, accuracy_threshold,
-                                            use_amp=amp, core=core, dataset_gen_mp=dataset_gen_worker, override_epoch=override_epoch, override_weight_decay=override_weight_decay,
-                                            dataset_gen_reset_seed_per_label=dataset_gen_reset_seed_per_label, dataset_gen_reset_seed_per_sample=dataset_gen_reset_seed_per_sample)
-    if accuracy < accuracy_threshold:
-        logger.fatal(f"The accuracy of random_dataset_count_{low} is smaller than {accuracy_threshold}. Stopped.")
-        exit(-1)
+    if isinstance(override_weight_decay, list):
+        for wd in override_weight_decay:
+            output_folder_path_wd = os.path.join(output_folder_path, f"wd_{wd}")
+            os.mkdir(output_folder_path_wd)
+            measure_one_configuration(random_dataset_type, random_dataset_func, output_folder_path_wd, current_ml_setup, accuracy_threshold, override_epoch, wd)
+    else:
+        measure_one_configuration(random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup, accuracy_threshold, override_epoch, override_weight_decay)
 
-    high = 2
-    loss, accuracy = check_number_of_sample(high, random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup, accuracy_threshold,
-                                            use_amp=amp, core=core, dataset_gen_mp=dataset_gen_worker, override_epoch=override_epoch, override_weight_decay=override_weight_decay,
-                                            dataset_gen_reset_seed_per_label=dataset_gen_reset_seed_per_label, dataset_gen_reset_seed_per_sample=dataset_gen_reset_seed_per_sample)
-    while accuracy >= accuracy_threshold:
-        low = high
-        high *= 2
-        loss, accuracy = check_number_of_sample(high, random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup, accuracy_threshold,
-                                                use_amp=amp, core=core, dataset_gen_mp=dataset_gen_worker, override_epoch=override_epoch, override_weight_decay=override_weight_decay,
-                                                dataset_gen_reset_seed_per_label=dataset_gen_reset_seed_per_label, dataset_gen_reset_seed_per_sample=dataset_gen_reset_seed_per_sample)
 
-    while True:
-        mid = (low + high) // 2
-        if mid==low or mid==high:
-            logger.info(f"the maximum sample count is {mid}.")
-            exit(0)
-        loss, accuracy = check_number_of_sample(mid, random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup, accuracy_threshold,
-                                                use_amp=amp, core=core, dataset_gen_mp=dataset_gen_worker, override_epoch=override_epoch, override_weight_decay=override_weight_decay,
-                                                dataset_gen_reset_seed_per_label=dataset_gen_reset_seed_per_label, dataset_gen_reset_seed_per_sample=dataset_gen_reset_seed_per_sample)
-
-        if accuracy < accuracy_threshold:
-            high = mid
-        elif accuracy >= accuracy_threshold:
-            low = mid
-        else:
-            raise NotImplementedError
 
