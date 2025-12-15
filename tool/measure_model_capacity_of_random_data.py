@@ -108,7 +108,7 @@ def check_number_of_sample(sample_count_per_label, random_dataset_type, random_d
 
 
 def measure_one_configuration(random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup, accuracy_threshold, override_epoch, override_weight_decay):
-    child_logger = logging.getLogger("measure_one_configuration")
+    child_logger = logging.getLogger(f"measure_one_configuration_{override_weight_decay}")
     util.set_logging(child_logger, "single_task", log_file_path=os.path.join(output_folder_path, "log.txt"))
 
     low = 1
@@ -138,7 +138,7 @@ def measure_one_configuration(random_dataset_type, random_dataset_func, output_f
         if mid == low or mid == high:
             logger.info(f"the maximum sample count is {mid}.")
             child_logger.info(f"the maximum sample count is {mid}.")
-            exit(0)
+            return
         child_logger.info(f"try sample_count per label: {mid}.")
         loss, accuracy = check_number_of_sample(mid, random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup, accuracy_threshold,
                                                 use_amp=amp, core=core, dataset_gen_mp=dataset_gen_worker, override_epoch=override_epoch, override_weight_decay=override_weight_decay,
@@ -197,11 +197,13 @@ if __name__ == '__main__':
     logger.info(f"Random dataset type: {random_dataset_type.name}")
 
     if isinstance(override_weight_decay, list):
+        logger.info(f"wd is a list: {override_weight_decay}")
         for wd in override_weight_decay:
             output_folder_path_wd = os.path.join(output_folder_path, f"wd_{wd}")
             os.mkdir(output_folder_path_wd)
             measure_one_configuration(random_dataset_type, random_dataset_func, output_folder_path_wd, current_ml_setup, accuracy_threshold, override_epoch, wd)
     else:
+        logger.info(f"wd is a single value: {override_weight_decay}")
         measure_one_configuration(random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup, accuracy_threshold, override_epoch, override_weight_decay)
 
 
