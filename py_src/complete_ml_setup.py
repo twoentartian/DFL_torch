@@ -314,7 +314,8 @@ class RandomDatasetTrainingSetup(object):
                 epochs = 100 if epochs is None else epochs
                 wd = 2e-4 if wd is None else wd
                 optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=wd)
-                lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, lr, steps_per_epoch=steps_per_epoch, epochs=epochs)
+                lr_scheduler = None
+                # lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, lr, steps_per_epoch=steps_per_epoch, epochs=epochs)
             else:
                 raise not_implemented_error_instance
             return optimizer, lr_scheduler, epochs
