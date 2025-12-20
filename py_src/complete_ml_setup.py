@@ -60,8 +60,7 @@ class FastTrainingSetup(object):
                 elif preset == 2:
                     epochs = 100
                     optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum=0.9, weight_decay=5e-4)
-                    # lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, lr, steps_per_epoch=steps_per_epoch, epochs=epochs)
-                    lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs * steps_per_epoch, eta_min=0.001)
+                    lr_scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, lr, steps_per_epoch=steps_per_epoch, epochs=epochs)
                 else:
                     raise not_implemented_error_instance
                 return optimizer, lr_scheduler, epochs
