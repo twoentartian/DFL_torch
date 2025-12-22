@@ -165,6 +165,7 @@ if __name__ == '__main__':
     parser.add_argument("--dataset_gen_reset_seed_per_sample", action='store_true', help='reset the random seed after generating for each sample')
     parser.add_argument("-e", "--epoch", type=int, default=None, help="specify the number of epochs, None=default")
     parser.add_argument("-w", "--weight_decay", nargs="+", type=float, default=None, help="specify the weight decay, None=default, can be a list of float.")
+    parser.add_argument("-s", "--sample_size", type=int, default=None, help="only measure whether the neural network model can memorize the dataset with that sample size or not.")
 
     args = parser.parse_args()
     model_name = args.model
@@ -177,6 +178,7 @@ if __name__ == '__main__':
     dataset_gen_reset_seed_per_sample = args.dataset_gen_reset_seed_per_sample
     override_epoch = args.epoch
     override_weight_decay = args.weight_decay
+    sample_size = args.sample_size
 
     if args.output_folder_name is None:
         time_now_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")
@@ -196,13 +198,34 @@ if __name__ == '__main__':
         exit(-1)
     logger.info(f"Random dataset type: {random_dataset_type.name}")
 
+    if sample_size is not None:
+        logger.info(f"sample size is {sample_size}")
+        if isinstance(override_weight_decay, list):
+            logger.info(f"mode: measure multiple weights decay for single sample size")
+            logger.info(f"wd is a list: {override_weight_decay}")
+            for wd in override_weight_decay:
+                output_folder_path_wd = os.path.join(output_folder_path, f"wd_{wd}")
+                os.mkdir(output_folder_path_wd)
+                check_number_of_sample(sample_size, random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup, accuracy_threshold,
+                                       use_amp=amp, core=core, dataset_gen_mp=dataset_gen_worker, override_epoch=override_epoch, override_weight_decay=override_weight_decay,
+                                       dataset_gen_reset_seed_per_label=dataset_gen_reset_seed_per_label, dataset_gen_reset_seed_per_sample=dataset_gen_reset_seed_per_sample)
+
+        else:
+            logger.info(f"mode: measure single weights decay for single sample size")
+            logger.info(f"wd is a single value: {override_weight_decay}")
+            check_number_of_sample(sample_size, random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup, accuracy_threshold,
+                                   use_amp=amp, core=core, dataset_gen_mp=dataset_gen_worker, override_epoch=override_epoch, override_weight_decay=override_weight_decay,
+                                   dataset_gen_reset_seed_per_label=dataset_gen_reset_seed_per_label, dataset_gen_reset_seed_per_sample=dataset_gen_reset_seed_per_sample)
+
     if isinstance(override_weight_decay, list):
+        logger.info(f"measure multiple weights decay mode")
         logger.info(f"wd is a list: {override_weight_decay}")
         for wd in override_weight_decay:
             output_folder_path_wd = os.path.join(output_folder_path, f"wd_{wd}")
             os.mkdir(output_folder_path_wd)
             measure_one_configuration(random_dataset_type, random_dataset_func, output_folder_path_wd, current_ml_setup, accuracy_threshold, override_epoch, wd)
     else:
+        logger.info(f"measure singe weights decay mode")
         logger.info(f"wd is a single value: {override_weight_decay}")
         measure_one_configuration(random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup, accuracy_threshold, override_epoch, override_weight_decay)
 
