@@ -216,18 +216,18 @@ if __name__ == '__main__':
             check_number_of_sample(sample_size, random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup, accuracy_threshold,
                                    use_amp=amp, core=core, dataset_gen_mp=dataset_gen_worker, override_epoch=override_epoch, override_weight_decay=override_weight_decay,
                                    dataset_gen_reset_seed_per_label=dataset_gen_reset_seed_per_label, dataset_gen_reset_seed_per_sample=dataset_gen_reset_seed_per_sample)
-
-    if isinstance(override_weight_decay, list):
-        logger.info(f"measure multiple weights decay mode")
-        logger.info(f"wd is a list: {override_weight_decay}")
-        for wd in override_weight_decay:
-            output_folder_path_wd = os.path.join(output_folder_path, f"wd_{wd}")
-            os.mkdir(output_folder_path_wd)
-            measure_one_configuration(random_dataset_type, random_dataset_func, output_folder_path_wd, current_ml_setup, accuracy_threshold, override_epoch, wd)
     else:
-        logger.info(f"measure singe weights decay mode")
-        logger.info(f"wd is a single value: {override_weight_decay}")
-        measure_one_configuration(random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup, accuracy_threshold, override_epoch, override_weight_decay)
+        if isinstance(override_weight_decay, list):
+            logger.info(f"measure multiple weights decay mode")
+            logger.info(f"wd is a list: {override_weight_decay}")
+            for wd in override_weight_decay:
+                output_folder_path_wd = os.path.join(output_folder_path, f"wd_{wd}")
+                os.mkdir(output_folder_path_wd)
+                measure_one_configuration(random_dataset_type, random_dataset_func, output_folder_path_wd, current_ml_setup, accuracy_threshold, override_epoch, wd)
+        else:
+            logger.info(f"measure singe weights decay mode")
+            logger.info(f"wd is a single value: {override_weight_decay}")
+            measure_one_configuration(random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup, accuracy_threshold, override_epoch, override_weight_decay)
 
 
 
