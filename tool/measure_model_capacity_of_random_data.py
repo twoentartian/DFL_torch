@@ -207,7 +207,7 @@ if __name__ == '__main__':
                 output_folder_path_wd = os.path.join(output_folder_path, f"wd_{wd}")
                 os.mkdir(output_folder_path_wd)
                 check_number_of_sample(sample_size, random_dataset_type, random_dataset_func, output_folder_path, current_ml_setup, accuracy_threshold,
-                                       use_amp=amp, core=core, dataset_gen_mp=dataset_gen_worker, override_epoch=override_epoch, override_weight_decay=override_weight_decay,
+                                       use_amp=amp, core=core, dataset_gen_mp=dataset_gen_worker, override_epoch=override_epoch, override_weight_decay=wd,
                                        dataset_gen_reset_seed_per_label=dataset_gen_reset_seed_per_label, dataset_gen_reset_seed_per_sample=dataset_gen_reset_seed_per_sample)
 
         else:
