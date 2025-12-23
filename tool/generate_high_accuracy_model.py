@@ -10,6 +10,9 @@ from datetime import datetime
 import concurrent.futures
 from torch.utils.data import DataLoader
 import logging
+from PIL import Image
+
+from py_src.ml_setup_base.model import ModelType
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from py_src import ml_setup, complete_ml_setup, util
@@ -121,11 +124,11 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
     epoch_loss_lr_log_file.write("epoch,loss,lrs" + "\n")
     epoch_loss_lr_log_file.flush()
 
-    model.train()
     child_logger.info(f"begin training")
     if arg_amp:
         scaler = torch.amp.GradScaler('cuda')
     for epoch in range(epochs):
+        model.train()
         train_loss = 0
         count = 0
         for data, label in dataloader:
@@ -134,17 +137,25 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
             if arg_amp:
                 with torch.amp.autocast('cuda'):
                     outputs = model(data)
-                    loss = criterion(outputs, label)
+                    if criterion == ml_setup.CriterionType.DiffusionModel:
+                        loss = outputs
+                    else:
+                        loss = criterion(outputs, label)
                     scaler.scale(loss).backward()
                     scaler.step(optimizer)
                     scaler.update()
             else:
                 outputs = model(data)
-                loss = criterion(outputs, label)
+                if criterion == ml_setup.CriterionType.DiffusionModel:
+                    loss = outputs
+                else:
+                    loss = criterion(outputs, label)
                 loss.backward()
                 optimizer.step()
             if lr_scheduler is not None:
                 lr_scheduler.step()
+            for func in arg_ml_setup.func_handler_post_training:
+                func(model=model)
             train_loss += loss.item()
             count += 1
         lrs = []
@@ -158,6 +169,18 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
         if record_model_service is not None:
             model_stat = model.state_dict()
             record_model_service.trigger_without_runtime_parameters(epoch, [0], [model_stat])
+
+        # post epoch functions
+        # ddpm
+        if arg_ml_setup.model_type in [ModelType.ddpm_cifar10]:
+            with torch.no_grad():
+                model.eval()
+                samples = model.sample(10, device)
+                samples = ((samples + 1) / 2).clip(0, 1).permute(0, 2, 3, 1).numpy()
+                for i, sample in enumerate(samples):
+                    sample = (sample * 255).astype(np.uint8)
+                    Image.fromarray(sample).save(os.path.join(output_folder, f"epoch{epoch}_{i}.png"))
+
     child_logger.info(f"finish training")
     epoch_loss_lr_log_file.flush()
     epoch_loss_lr_log_file.close()

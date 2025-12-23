@@ -2,8 +2,14 @@ import os
 import torch
 import random
 import numpy as np
+from enum import Enum, auto
 import torch.nn as nn
 from torch.utils.data import DataLoader
+
+# CriterionType: indicate the criterion function for diffusion models, etc
+class CriterionType(Enum):
+    DiffusionModel = auto()
+    # Others = the criterion function
 
 class DatasetSetup:
     def __init__(self, name, dataset_type, training_data, testing_data, labels=None):
@@ -51,6 +57,8 @@ class MlSetup:
         self.clip_grad_norm = None
 
         self.has_normalization_layer = None
+
+        self.func_handler_post_training = []
 
     def self_validate(self):
         pass  # do nothing for now
