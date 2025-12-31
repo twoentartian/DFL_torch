@@ -12,11 +12,10 @@ from torch.utils.data import DataLoader
 import logging
 from PIL import Image
 
-from py_src.ml_setup_base.model import ModelType
-
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from py_src import ml_setup, complete_ml_setup, util
 from py_src.service import record_model_stat
+from py_src.ml_setup import ModelType
 
 logger = logging.getLogger("generate_high_accuracy_model")
 
