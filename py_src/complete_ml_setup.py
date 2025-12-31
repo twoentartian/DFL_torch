@@ -270,7 +270,7 @@ class FastTrainingSetup(object):
             return optimizer, lr_scheduler, epochs
         elif arg_ml_setup.model_name == ModelType.ddpm_cifar10.name:
             if arg_ml_setup.dataset_name in [DatasetType.cifar10.name]:
-                epochs = 2048
+                epochs = 512
                 optimizer = torch.optim.Adam(model.parameters(), lr=2e-4)
                 lr_scheduler = None
             else:
