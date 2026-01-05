@@ -3,11 +3,9 @@ import torchvision.models as models
 import os
 import sys
 
-from py_src.ml_setup_base.dataset import DatasetType
-
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from py_src import util
-from py_src.ml_setup_base.model import ModelType
+from py_src.ml_setup import ModelType, DatasetType
 import py_src.third_party.compact_transformers.src.cct as cct
 
 if __name__ == "__main__":
