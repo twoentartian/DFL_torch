@@ -24,6 +24,9 @@ if __name__ == "__main__":
     model = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V1)
     util.save_model_state(os.path.join(output_path, "resnet50_imagenet1k_v1.model.pt"), model.state_dict(), str(ModelType.resnet50.name), str(DatasetType.imagenet1k.name))
 
+    model = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V1)
+    util.save_model_state(os.path.join(output_path, "resnet50_imagenet1k_v1.model.pt"), model.state_dict(), str(ModelType.resnet50.name), str(DatasetType.imagenet1k.name))
+
     model = models.resnet50(weights=models.ResNet50_Weights.IMAGENET1K_V2)
     util.save_model_state(os.path.join(output_path, "resnet50_imagenet1k_v2.model.pt"), model.state_dict(), str(ModelType.resnet50.name), str(DatasetType.imagenet1k.name))
 
