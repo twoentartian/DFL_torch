@@ -14,7 +14,11 @@ import py_src.util as util
 
 class ServiceTestAccuracyLossRecorder(Service):
     def __init__(self, interval, test_batch_size, model_name, dataset_name, phase_to_record=(SimulationPhase.END_OF_TICK,), use_fixed_testing_dataset=True, store_top_accuracy_model_count = 0,
-                 accuracy_file_name="accuracy.csv", loss_file_name="loss.csv", output_var_file_name="output_var.csv", test_whole_dataset=False,):
+                 accuracy_file_name="accuracy.csv", loss_file_name="loss.csv", output_var_file_name="output_var.csv", test_whole_dataset=False,
+                 test_val_split=0.5, test_accuracy_file_name="accuracy_test.csv", test_loss_file_name="loss_test.csv", val_accuracy_file_name="accuracy_val.csv", val_loss_file_name="loss_val.csv"):
+        """
+        test_val_split=0.5: split the dataset into two parts: test and val, the value indicates the portion of test
+        """
         super().__init__()
         self.accuracy_file = None
         self.loss_file = None
@@ -38,7 +42,25 @@ class ServiceTestAccuracyLossRecorder(Service):
         self.test_whole_dataset = test_whole_dataset
         self.test_batch_size = test_batch_size
         self.test_dataset = None
+        self.val_dataset = None
         self.allocated_gpu = None
+
+        if test_whole_dataset:
+            self.test_val_split = test_val_split
+        else:
+            if test_val_split is not None:
+                raise ValueError(f"cannot use test_val_split({test_val_split}) if test_whole_dataset is set to {test_whole_dataset}")
+        if self.test_val_split is not None:
+            self.test_idx = None
+            self.val_idx = None
+            self.test_loss_file = None
+            self.test_accuracy_file = None
+            self.val_loss_file = None
+            self.val_accuracy_file = None
+            self.test_loss_file_name = test_loss_file_name
+            self.test_accuracy_file_name = test_accuracy_file_name
+            self.val_loss_file_name = val_loss_file_name
+            self.val_accuracy_file_name = val_accuracy_file_name
 
     @staticmethod
     def get_service_name() -> str:
@@ -65,6 +87,11 @@ class ServiceTestAccuracyLossRecorder(Service):
         self.accuracy_file = open(os.path.join(output_path, f"{self.accuracy_file_name}"), "w+")
         self.loss_file = open(os.path.join(output_path, f"{self.loss_file_name}"), "w+")
         self.output_var_file = open(os.path.join(output_path, f"{self.output_var_file_name}"), "w+")
+        if self.test_val_split is not None:
+            self.test_accuracy_file = open(os.path.join(output_path, f"{self.test_accuracy_file_name}"), "w+")
+            self.test_loss_file = open(os.path.join(output_path, f"{self.test_loss_file_name}"), "w+")
+            self.val_accuracy_file = open(os.path.join(output_path, f"{self.val_accuracy_file_name}"), "w+")
+            self.val_loss_file = open(os.path.join(output_path, f"{self.val_loss_file_name}"), "w+")
 
         self.node_order = node_names
         node_order_str = [str(i) for i in self.node_order]
@@ -72,14 +99,34 @@ class ServiceTestAccuracyLossRecorder(Service):
         self.accuracy_file.write(header + "\n")
         self.loss_file.write(header + "\n")
         self.output_var_file.write(header + "\n")
+        if self.test_val_split is not None:
+            self.test_accuracy_file.write(header + "\n")
+            self.test_loss_file.write(header + "\n")
+            self.val_accuracy_file.write(header + "\n")
+            self.val_loss_file.write(header + "\n")
         self.criterion = criterion
 
         # set testing dataset
         if self.test_whole_dataset:
-            if num_workers is None:
-                self.test_dataset = DataLoader(test_dataset, batch_size=self.test_batch_size, shuffle=True, pin_memory=True)
+            if self.test_val_split is not None:
+                assert 0.0 < self.test_val_split < 1.0
+                perm = torch.randperm(len(test_dataset)).tolist()
+                val_n = int(round(len(test_dataset) * self.test_val_split))
+                self.test_idx = perm[:val_n]
+                self.val_idx = perm[val_n:]
+                test_ds = Subset(test_dataset, self.test_idx)
+                val_ds = Subset(test_dataset, self.val_idx)
+                if num_workers is None:
+                    self.test_dataset = DataLoader(test_ds, batch_size=self.test_batch_size, shuffle=True, pin_memory=True)
+                    self.val_dataset = DataLoader(val_ds, batch_size=self.test_batch_size, shuffle=True, pin_memory=True)
+                else:
+                    self.test_dataset = DataLoader(test_ds, batch_size=self.test_batch_size, shuffle=True, pin_memory=True, num_workers=num_workers, persistent_workers=True)
+                    self.val_dataset = DataLoader(val_ds, batch_size=self.test_batch_size, shuffle=True, pin_memory=True, num_workers=num_workers, persistent_workers=True)
             else:
-                self.test_dataset = DataLoader(test_dataset, batch_size=self.test_batch_size, shuffle=True, pin_memory=True, num_workers=num_workers, persistent_workers=True)
+                if num_workers is None:
+                    self.test_dataset = DataLoader(test_dataset, batch_size=self.test_batch_size, shuffle=True, pin_memory=True)
+                else:
+                    self.test_dataset = DataLoader(test_dataset, batch_size=self.test_batch_size, shuffle=True, pin_memory=True, num_workers=num_workers, persistent_workers=True)
         else:
             if self.use_fixed_testing_dataset:
                 """we should iterate whole dataset"""
@@ -145,28 +192,54 @@ class ServiceTestAccuracyLossRecorder(Service):
         row_output_var = []
         final_accuracy = {}
         final_model = {}
+
+        # for test/val split
+        row_test_accuracy = []
+        row_test_loss = []
+        row_val_accuracy = []
+        row_val_loss = []
         for node_name in self.node_order:
+            loss_test, accuracy_test, loss_val, accuracy_val = None, None, None, None,
             if self.test_whole_dataset:
                 model_stat = node_names_and_model_stats[node_name]
                 self.test_model.load_state_dict(model_stat)
                 if self.allocated_gpu is not None:
                     self.test_model.to(self.allocated_gpu.device)
                 self.test_model.eval()
-                total_loss, correct, var_acc, total = 0, 0, 0.0, 0
+                test_loss, test_correct, test_var, test_count = 0, 0, 0.0, 0
+                val_loss, val_correct, val_var, val_count = 0, 0, 0.0, 0
                 for d, l in self.test_dataset:
                     test_data = d
                     test_labels = l
                     if self.allocated_gpu is not None:
                         test_data, test_labels = test_data.to(self.allocated_gpu.device), test_labels.to(self.allocated_gpu.device)
                     outputs = self.test_model(test_data)
-                    total_loss += self.criterion(outputs, test_labels).item() * test_labels.size(0)
+                    test_loss += self.criterion(outputs, test_labels).item() * test_labels.size(0)
                     _, predicted = torch.max(outputs, 1)
-                    correct += (predicted == test_labels).sum().item()
-                    total += test_labels.size(0)
-                    var_acc += outputs.var(dim=0, unbiased=False).mean().item()
-                loss = total_loss / total
-                accuracy = correct / total
-                var = var_acc / total
+                    test_correct += (predicted == test_labels).sum().item()
+                    test_count += test_labels.size(0)
+                    test_var += outputs.var(dim=0, unbiased=False).mean().item()
+
+                if self.test_val_split is not None:
+                    for d, l in self.val_dataset:
+                        val_data = d
+                        val_labels = l
+                        if self.allocated_gpu is not None:
+                            val_data, val_labels = val_data.to(self.allocated_gpu.device), val_labels.to(self.allocated_gpu.device)
+                        outputs = self.test_model(val_data)
+                        val_loss += self.criterion(outputs, val_labels).item() * val_labels.size(0)
+                        _, predicted = torch.max(outputs, 1)
+                        val_correct += (predicted == val_labels).sum().item()
+                        val_count += val_labels.size(0)
+                        val_var += outputs.var(dim=0, unbiased=False).mean().item()
+                loss = (test_loss+val_loss) / (test_count+val_count)
+                accuracy = (test_correct+val_correct) / (test_count+val_count)
+                var = (test_var+val_var) / (test_count+val_count)
+                # for test/val split
+                loss_test = test_loss / test_count
+                accuracy_test = test_correct / test_count
+                loss_val = val_loss / val_count
+                accuracy_val = val_correct / val_count
             else:
                 if self.use_fixed_testing_dataset:
                     total_loss, correct, var_acc, total = 0, 0, 0.0, 0
@@ -210,6 +283,11 @@ class ServiceTestAccuracyLossRecorder(Service):
             row_accuracy.append('%.4E' % accuracy)
             row_loss.append('%.4E' % loss)
             row_output_var.append('%.4E' % var)
+            if self.test_val_split is not None:
+                row_test_accuracy.append('%.4E' % accuracy_test)
+                row_test_loss.append('%.4E' % loss_test)
+                row_val_accuracy.append('%.4E' % accuracy_val)
+                row_val_loss.append('%.4E' % loss_val)
             final_accuracy[node_name] = accuracy
             final_model[node_name] = model_stat
         row_accuracy_str = ",".join([str(tick), str(phase_str), *row_accuracy])
@@ -221,6 +299,19 @@ class ServiceTestAccuracyLossRecorder(Service):
         self.loss_file.flush()
         self.output_var_file.write(row_output_var_str + "\n")
         self.output_var_file.flush()
+        if self.test_val_split is not None:
+            row_test_accuracy_str = ",".join([str(tick), str(phase_str), *row_test_accuracy])
+            row_test_loss_str = ",".join([str(tick), str(phase_str), *row_test_loss])
+            row_val_accuracy_str = ",".join([str(tick), str(phase_str), *row_val_accuracy])
+            row_val_loss_str = ",".join([str(tick), str(phase_str), *row_val_loss])
+            self.test_accuracy_file.write(row_test_accuracy_str + "\n")
+            self.test_accuracy_file.flush()
+            self.test_loss_file.write(row_test_loss_str + "\n")
+            self.test_loss_file.flush()
+            self.val_accuracy_file.write(row_val_accuracy_str + "\n")
+            self.val_accuracy_file.flush()
+            self.val_loss_file.write(row_val_loss_str + "\n")
+            self.val_loss_file.flush()
 
         # store_top_accuracy_model
         self._check_store_top_accuracy_model(final_accuracy, final_model, tick)
@@ -241,6 +332,12 @@ class ServiceTestAccuracyLossRecorder(Service):
         copy_file(self.loss_file_name, self.loss_file)
         # output variance file
         copy_file(self.output_var_file_name, self.output_var_file)
+
+        if self.test_val_split is not None:
+            copy_file(self.test_accuracy_file_name, self.test_accuracy_file)
+            copy_file(self.test_loss_file_name, self.test_loss_file)
+            copy_file(self.val_accuracy_file_name, self.val_accuracy_file)
+            copy_file(self.val_loss_file_name, self.val_loss_file)
 
     def _check_store_top_accuracy_model(self, final_accuracy, final_model, tick):
         if self.store_top_accuracy_model:
@@ -276,7 +373,11 @@ class ServiceTestAccuracyLossRecorder(Service):
         self.loss_file.close()
         self.output_var_file.flush()
         self.output_var_file.close()
-
+        if self.test_val_split is not None:
+            self.test_accuracy_file.flush()
+            self.test_loss_file.flush()
+            self.val_accuracy_file.flush()
+            self.val_loss_file.flush()
 
 import unittest
 class TestStoreTopAccuracyModel(unittest.TestCase):
