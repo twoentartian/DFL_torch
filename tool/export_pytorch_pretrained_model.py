@@ -88,5 +88,8 @@ if __name__ == "__main__":
     model = models.wide_resnet50_2(weights=models.Wide_ResNet50_2_Weights.IMAGENET1K_V2)
     util.save_model_state(os.path.join(output_path, "wide_resnet50_2_imagenet_v2.model.pt"), model.state_dict(), str(ModelType.wide_resnet50_2.name), str(DatasetType.imagenet1k.name))
 
+    import ssl
+    ssl._create_default_https_context = ssl._create_unverified_context
+
     model = cct.cct_14_7x2_224(pretrained=True, progress=False)
     util.save_model_state(os.path.join(output_path, "cct_14_7x2_224.model.pt"), model.state_dict(), str(ModelType.cct_14_7x2_224.name), str(DatasetType.imagenet1k.name))
