@@ -117,7 +117,7 @@ def dataset_type_to_random(in_type: DatasetType) -> DatasetType:
 
 
 """ MNIST """
-def dataset_mnist(rescale_to_224=False, random_rotation=5, override_dataset_path=None, augmentation=True):
+def dataset_mnist(rescale_to_224=False, random_rotation=5, override_dataset_path=None, augmentation=True, *args, **kwargs):
     dataset_path = default_path_mnist if override_dataset_path is None else override_dataset_path
     mnist_train = datasets.MNIST(root=dataset_path, train=True, download=True)
     mean = mnist_train.data.float().mean() / 255
@@ -146,7 +146,7 @@ def dataset_mnist(rescale_to_224=False, random_rotation=5, override_dataset_path
     return DatasetSetup(dataset_name, dataset_type, train_data, test_data, labels=set(range(10)))
 
 """ CIFAR10 """
-def dataset_cifar10(rescale_to_224=False, transforms_training=None, transforms_testing=None, mean_std=None, augmentation=True):
+def dataset_cifar10(rescale_to_224=False, transforms_training=None, transforms_testing=None, mean_std=None, augmentation=True, *args, **kwargs):
     dataset_path = default_path_cifar10
     if rescale_to_224:
         dataset_type = DatasetType.cifar10_224
@@ -184,7 +184,7 @@ def dataset_cifar10(rescale_to_224=False, transforms_training=None, transforms_t
 
 
 """ CIFAR100 """
-def dataset_cifar100(rescale_to_224=False, transforms_training=None, transforms_testing=None, mean_std=None, augmentation=True):
+def dataset_cifar100(rescale_to_224=False, transforms_training=None, transforms_testing=None, mean_std=None, augmentation=True, *args, **kwargs):
     dataset_path = default_path_cifar100
     if rescale_to_224:
         dataset_type = DatasetType.cifar100_224
@@ -219,7 +219,7 @@ def dataset_cifar100(rescale_to_224=False, transforms_training=None, transforms_
     return DatasetSetup(dataset_name, dataset_type, cifar100_train, cifar100_test, labels=set(range(0, 100)))
 
 """ SVHN """
-def dataset_svhn(transforms_training=None, transforms_testing=None, mean_std=None, use_extra=False, augmentation=True):
+def dataset_svhn(transforms_training=None, transforms_testing=None, mean_std=None, use_extra=False, augmentation=True, *args, **kwargs):
     dataset_path = default_path_svhn
     if mean_std is None:
         mean_std = ((0.4377, 0.4438, 0.4728), (0.1980, 0.2010, 0.1970))
@@ -314,7 +314,8 @@ def get_pytorch_preprocessing(version=2, train_crop_size=None, val_resize_size=N
 
 def dataset_imagenet1k(pytorch_preset_version: int, transforms_training=None, transforms_testing=None,
                        train_crop_size=None, val_resize_size=None, val_crop_size=None,
-                       random_erasing=None, enable_memory_cache=False, augmentation=True):
+                       random_erasing=None, enable_memory_cache=False, augmentation=True,
+                       *args, **kwargs):
     dataset_name = str(DatasetType.imagenet1k.name)
     dataset_type = DatasetType.imagenet1k
 
@@ -335,7 +336,8 @@ def dataset_imagenet1k(pytorch_preset_version: int, transforms_training=None, tr
 
 def dataset_imagenet100(pytorch_preset_version: int, transforms_training=None, transforms_testing=None,
                         train_crop_size=None, val_resize_size=None, val_crop_size=None,
-                        random_erasing=None, enable_memory_cache=False, augmentation=True):
+                        random_erasing=None, enable_memory_cache=False, augmentation=True,
+                        *args, **kwargs):
     dataset_path = default_path_imagenet100 if imagenet100_path is None else imagenet100_path
     dataset_name = str(DatasetType.imagenet100.name)
     dataset_type = DatasetType.imagenet100
@@ -358,7 +360,8 @@ def dataset_imagenet100(pytorch_preset_version: int, transforms_training=None, t
 
 def dataset_imagenet10(pytorch_preset_version: int, transforms_training=None, transforms_testing=None,
                        train_crop_size=None, val_resize_size=None, val_crop_size=None,
-                       random_erasing=None, enable_memory_cache=False, augmentation=True):
+                       random_erasing=None, enable_memory_cache=False, augmentation=True,
+                       *args, **kwargs):
     dataset_path = default_path_imagenet10 if imagenet10_path is None else imagenet10_path
     dataset_name = str(DatasetType.imagenet10.name)
     dataset_type = DatasetType.imagenet10
@@ -412,7 +415,7 @@ def dataset_imagenet1k_custom(train_crop_size=224, val_resize_size=256, val_crop
 
 
 def dataset_imagenet1k_sam_mask_random_noise(train_crop_size=224, val_resize_size=256, val_crop_size=224,
-                                return_path=False):
+                                return_path=False, *args, **kwargs):
     dataset_name = str(DatasetType.imagenet1k_sam_mask_random_noise.name)
     dataset_type = DatasetType.imagenet1k_sam_mask_random_noise
     transforms_train = transforms.Compose([
@@ -439,7 +442,7 @@ def dataset_imagenet1k_sam_mask_random_noise(train_crop_size=224, val_resize_siz
 
 
 def dataset_imagenet1k_sam_mask_black(train_crop_size=224, val_resize_size=256, val_crop_size=224,
-                                return_path=False):
+                                return_path=False, *args, **kwargs):
     dataset_name = str(DatasetType.imagenet1k_sam_mask_black.name)
     dataset_type = DatasetType.imagenet1k_sam_mask_black
     transforms_train = transforms.Compose([
@@ -505,25 +508,25 @@ def get_dataset_random(dataset_type, default_dataset_path, override_dataset_path
 
 
 """ Random MNIST """
-def dataset_random_mnist(override_dataset_path=None):
+def dataset_random_mnist(override_dataset_path=None, *args, **kwargs):
     return get_dataset_random(DatasetType.random_mnist, default_path_random_mnist, override_dataset_path, 1, 10)
 
 """ Random CIFAR10 """
-def dataset_random_cifar10(override_dataset_path=None):
+def dataset_random_cifar10(override_dataset_path=None, *args, **kwargs):
     return get_dataset_random(DatasetType.random_cifar10, default_path_random_cifar10, override_dataset_path, 3, 10)
 
 """ Random CIFAR100 """
-def dataset_random_cifar100(override_dataset_path=None):
+def dataset_random_cifar100(override_dataset_path=None, *args, **kwargs):
     return get_dataset_random(DatasetType.random_cifar100, default_path_random_cifar100, override_dataset_path, 3, 100)
 
 """ Random Imagenet """
-def dataset_random_imagenet10(override_dataset_path=None):
+def dataset_random_imagenet10(override_dataset_path=None, *args, **kwargs):
     return get_dataset_random(DatasetType.random_imagenet10, default_path_random_imagenet10, override_dataset_path, 3, 10)
 
-def dataset_random_imagenet100(override_dataset_path=None):
+def dataset_random_imagenet100(override_dataset_path=None, *args, **kwargs):
     return get_dataset_random(DatasetType.random_imagenet100, default_path_random_imagenet100, override_dataset_path, 3, 100)
 
-def dataset_random_imagenet1k(override_dataset_path=None):
+def dataset_random_imagenet1k(override_dataset_path=None, *args, **kwargs):
     return get_dataset_random(DatasetType.random_imagenet1k, default_path_random_imagenet1k, override_dataset_path, 3, 1000)
 
 

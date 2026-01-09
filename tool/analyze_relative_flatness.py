@@ -298,7 +298,7 @@ def main():
         dl_kwargs.update(dict(persistent_workers=True, prefetch_factor=4))
 
     training_dataset_func = ml_setup.dataset_type_to_setup[current_ml_setup.dataset_type]
-    dataset_setup_wo_augmentation = training_dataset_func(augmentation=False)
+    dataset_setup_wo_augmentation = training_dataset_func(pytorch_preset_version=args.torch_preset_version, augmentation=False)
     dataloader = DataLoader(dataset_setup_wo_augmentation.training_data, **dl_kwargs)
 
     criterion = current_ml_setup.criterion
