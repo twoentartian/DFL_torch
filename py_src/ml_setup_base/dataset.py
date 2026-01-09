@@ -117,7 +117,7 @@ def dataset_type_to_random(in_type: DatasetType) -> DatasetType:
 
 
 """ MNIST """
-def dataset_mnist(rescale_to_224=False, random_rotation=5, override_dataset_path=None):
+def dataset_mnist(rescale_to_224=False, random_rotation=5, override_dataset_path=None, augmentation=True):
     dataset_path = default_path_mnist if override_dataset_path is None else override_dataset_path
     mnist_train = datasets.MNIST(root=dataset_path, train=True, download=True)
     mean = mnist_train.data.float().mean() / 255
@@ -131,8 +131,9 @@ def dataset_mnist(rescale_to_224=False, random_rotation=5, override_dataset_path
     train_transforms = []
     test_transforms = []
     # data augmentation
-    if random_rotation != 0:
-        train_transforms.append(transforms.RandomRotation(random_rotation, fill=(0,)))
+    if augmentation:
+        if random_rotation != 0:
+            train_transforms.append(transforms.RandomRotation(random_rotation, fill=(0,)))
     if rescale_to_224:
         train_transforms.append(transforms.Resize((224, 224)))
         test_transforms.append(transforms.Resize((224, 224)))
@@ -145,7 +146,7 @@ def dataset_mnist(rescale_to_224=False, random_rotation=5, override_dataset_path
     return DatasetSetup(dataset_name, dataset_type, train_data, test_data, labels=set(range(10)))
 
 """ CIFAR10 """
-def dataset_cifar10(rescale_to_224=False, transforms_training=None, transforms_testing=None, mean_std=None):
+def dataset_cifar10(rescale_to_224=False, transforms_training=None, transforms_testing=None, mean_std=None, augmentation=True):
     dataset_path = default_path_cifar10
     if rescale_to_224:
         dataset_type = DatasetType.cifar10_224
@@ -157,18 +158,17 @@ def dataset_cifar10(rescale_to_224=False, transforms_training=None, transforms_t
     else:
         stats = ((0.49139968, 0.48215841, 0.44653091), (0.24703223, 0.24348513, 0.26158784))
 
-    train_transforms = []
-    test_transforms = []
     # data augmentation
-    data_augmentation = [transforms.RandomHorizontalFlip(p=0.5)]
-    if rescale_to_224:
-        train_transforms.append(transforms.Resize((224, 224)))
-        test_transforms.append(transforms.Resize((224, 224)))
+    if augmentation:
+        data_augmentation = [transforms.RandomHorizontalFlip(p=0.5), transforms.RandomCrop(32, padding=4, padding_mode='reflect')]
     else:
-        train_transforms.append(transforms.RandomCrop(32, padding=4, padding_mode='reflect'))
-    train_transforms = train_transforms + data_augmentation
-    train_transforms = train_transforms + [transforms.ToTensor(), transforms.Normalize(*stats)]
-    test_transforms = test_transforms + [transforms.ToTensor(), transforms.Normalize(*stats)]
+        data_augmentation = []
+    if rescale_to_224:
+        transform_rescale_to_224 = transforms.Resize((224, 224))
+    else:
+        transform_rescale_to_224 = []
+    train_transforms = data_augmentation + transform_rescale_to_224 + [transforms.ToTensor(), transforms.Normalize(*stats)]
+    test_transforms = transform_rescale_to_224 + [transforms.ToTensor(), transforms.Normalize(*stats)]
 
     if transforms_training is None:
         cifar10_train = datasets.CIFAR10(root=dataset_path, train=True, download=True, transform=transforms.Compose(train_transforms))
@@ -184,7 +184,7 @@ def dataset_cifar10(rescale_to_224=False, transforms_training=None, transforms_t
 
 
 """ CIFAR100 """
-def dataset_cifar100(rescale_to_224=False, transforms_training=None, transforms_testing=None, mean_std=None):
+def dataset_cifar100(rescale_to_224=False, transforms_training=None, transforms_testing=None, mean_std=None, augmentation=True):
     dataset_path = default_path_cifar100
     if rescale_to_224:
         dataset_type = DatasetType.cifar100_224
@@ -196,18 +196,17 @@ def dataset_cifar100(rescale_to_224=False, transforms_training=None, transforms_
     else:
         stats = ((0.5071, 0.4867, 0.4408), (0.2675, 0.2565, 0.2761))
 
-    train_transforms = []
-    test_transforms = []
     # data augmentation
-    data_augmentation = [transforms.RandomHorizontalFlip(p=0.5)]
-    if rescale_to_224:
-        train_transforms.append(transforms.Resize((224, 224)))
-        test_transforms.append(transforms.Resize((224, 224)))
+    if augmentation:
+        data_augmentation = [transforms.RandomHorizontalFlip(p=0.5), transforms.RandomCrop(32, padding=4, padding_mode='reflect')]
     else:
-        train_transforms.append(transforms.RandomCrop(32, padding=4, padding_mode='reflect'))
-    train_transforms = train_transforms + data_augmentation
-    train_transforms = train_transforms + [transforms.ToTensor(), transforms.Normalize(*stats)]
-    test_transforms = test_transforms + [transforms.ToTensor(), transforms.Normalize(*stats)]
+        data_augmentation = []
+    if rescale_to_224:
+        transform_rescale_to_224 = transforms.Resize((224, 224))
+    else:
+        transform_rescale_to_224 = []
+    train_transforms = data_augmentation + transform_rescale_to_224 + [transforms.ToTensor(), transforms.Normalize(*stats)]
+    test_transforms = transform_rescale_to_224 + [transforms.ToTensor(), transforms.Normalize(*stats)]
 
     if transforms_training is None:
         cifar100_train = datasets.CIFAR100(root=dataset_path, train=True, download=True, transform=transforms.Compose(train_transforms))
@@ -220,17 +219,20 @@ def dataset_cifar100(rescale_to_224=False, transforms_training=None, transforms_
     return DatasetSetup(dataset_name, dataset_type, cifar100_train, cifar100_test, labels=set(range(0, 100)))
 
 """ SVHN """
-def dataset_svhn(transforms_training=None, transforms_testing=None, mean_std=None, use_extra=False):
+def dataset_svhn(transforms_training=None, transforms_testing=None, mean_std=None, use_extra=False, augmentation=True):
     dataset_path = default_path_svhn
     if mean_std is None:
         mean_std = ((0.4377, 0.4438, 0.4728), (0.1980, 0.2010, 0.1970))
     dataset_type = DatasetType.svhn
     dataset_name = DatasetType.svhn.name
 
+    if augmentation:
+        data_augmentation = [transforms.RandomCrop(32, padding=4, padding_mode='reflect'), transforms.RandomHorizontalFlip(p=0.5),]
+    else:
+        data_augmentation = [transforms.Resize(32)]
+
     if transforms_training is None:
-        transforms_training = transforms.Compose([
-            transforms.RandomCrop(32, padding=4, padding_mode='reflect'),
-            transforms.RandomHorizontalFlip(p=0.5),
+        transforms_training = transforms.Compose(data_augmentation + [
             transforms.ToTensor(),
             transforms.Normalize(*mean_std),
         ])
@@ -250,8 +252,25 @@ def dataset_svhn(transforms_training=None, transforms_testing=None, mean_std=Non
 """ ImageNet """
 
 """get pytorch preprocessing transforms, version can be 1 or 2"""
-def get_pytorch_preprocessing(version=2, train_crop_size=None, val_resize_size=None, val_crop_size=None, random_erasing=None):
+def get_pytorch_preprocessing(version=2, train_crop_size=None, val_resize_size=None, val_crop_size=None, random_erasing=None, augmentation=True):
     normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+    if not augmentation:
+        train_crop_size = 224 if train_crop_size is None else train_crop_size
+        val_resize_size = 256 if val_resize_size is None else val_resize_size
+        val_crop_size = 224 if val_crop_size is None else val_crop_size
+        transforms_train = transforms.Compose([
+            transforms.Resize(256),
+            transforms.CenterCrop(train_crop_size),
+            transforms.ToTensor(),
+            normalize,
+        ])
+        transforms_test = transforms.Compose([
+            transforms.Resize(val_resize_size),
+            transforms.CenterCrop(val_crop_size),
+            transforms.ToTensor(),
+            normalize,
+        ])
+        return transforms_train, transforms_test
     if version == 1:
         train_crop_size = 224 if train_crop_size is None else train_crop_size
         val_resize_size = 256 if val_resize_size is None else val_resize_size
@@ -295,66 +314,68 @@ def get_pytorch_preprocessing(version=2, train_crop_size=None, val_resize_size=N
 
 def dataset_imagenet1k(pytorch_preset_version: int, transforms_training=None, transforms_testing=None,
                        train_crop_size=None, val_resize_size=None, val_crop_size=None,
-                       random_erasing=None, enable_memory_cache=False):
+                       random_erasing=None, enable_memory_cache=False, augmentation=True):
     dataset_name = str(DatasetType.imagenet1k.name)
     dataset_type = DatasetType.imagenet1k
 
     if transforms_testing is None and transforms_training is None:
-        transforms_train, transforms_test = get_pytorch_preprocessing(version=pytorch_preset_version, train_crop_size=train_crop_size,
+        transforms_train, transforms_val = get_pytorch_preprocessing(version=pytorch_preset_version, train_crop_size=train_crop_size,
                                                                       val_resize_size=val_resize_size, val_crop_size=val_crop_size,
-                                                                      random_erasing=random_erasing)
+                                                                      random_erasing=random_erasing, augmentation=augmentation)
     else:
-        transforms_train, transforms_test = transforms_training, transforms_testing
+        transforms_train, transforms_val = transforms_training, transforms_testing
 
     if enable_memory_cache:
         imagenet_train = ImageDatasetWithCachedInputInSharedMem(os.path.join(imagenet1k_path, "train"), "imagenet1k_train", transform=transforms_train)
-        imagenet_test = ImageDatasetWithCachedInputInSharedMem(os.path.join(imagenet1k_path, "val"), "imagenet1k_test", transform=transforms_test)
+        imagenet_test = ImageDatasetWithCachedInputInSharedMem(os.path.join(imagenet1k_path, "val"), "imagenet1k_test", transform=transforms_val)
     else:
         imagenet_train = datasets.ImageNet(root=imagenet1k_path, split='train', transform=transforms_train)
-        imagenet_test = datasets.ImageNet(root=imagenet1k_path, split='val', transform=transforms_test)
+        imagenet_test = datasets.ImageNet(root=imagenet1k_path, split='val', transform=transforms_val)
     return DatasetSetup(dataset_name, dataset_type, imagenet_train, imagenet_test, labels=set(range(0, 1000)))
 
 def dataset_imagenet100(pytorch_preset_version: int, transforms_training=None, transforms_testing=None,
-                        train_crop_size=None, val_resize_size=None, val_crop_size=None, random_erasing=None, enable_memory_cache=False):
+                        train_crop_size=None, val_resize_size=None, val_crop_size=None,
+                        random_erasing=None, enable_memory_cache=False, augmentation=True):
     dataset_path = default_path_imagenet100 if imagenet100_path is None else imagenet100_path
     dataset_name = str(DatasetType.imagenet100.name)
     dataset_type = DatasetType.imagenet100
 
     if transforms_testing is None and transforms_training is None:
-        transforms_train, transforms_test = get_pytorch_preprocessing(version=pytorch_preset_version, train_crop_size=train_crop_size,
+        transforms_train, transforms_val = get_pytorch_preprocessing(version=pytorch_preset_version, train_crop_size=train_crop_size,
                                                                       val_resize_size=val_resize_size, val_crop_size=val_crop_size,
-                                                                      random_erasing=random_erasing)
+                                                                      random_erasing=random_erasing, augmentation=augmentation)
     else:
-        transforms_train, transforms_test = transforms_training, transforms_testing
+        transforms_train, transforms_val = transforms_training, transforms_testing
 
     if enable_memory_cache:
         imagenet_train = ImageDatasetWithCachedInputInSharedMem(os.path.join(dataset_path, "train"), "imagenet100_train", transform = transforms_train)
-        imagenet_test = ImageDatasetWithCachedInputInSharedMem(os.path.join(dataset_path, "val"), "imagenet100_test", transform = transforms_test)
+        imagenet_test = ImageDatasetWithCachedInputInSharedMem(os.path.join(dataset_path, "val"), "imagenet100_test", transform = transforms_val)
     else:
         imagenet_train = datasets.ImageFolder(os.path.join(dataset_path, "train"), transform = transforms_train)
-        imagenet_test = datasets.ImageFolder(os.path.join(dataset_path, "val"), transform = transforms_test)
+        imagenet_test = datasets.ImageFolder(os.path.join(dataset_path, "val"), transform = transforms_val)
 
     return DatasetSetup(dataset_name, dataset_type, imagenet_train, imagenet_test, labels=set(range(0, 100)))
 
 def dataset_imagenet10(pytorch_preset_version: int, transforms_training=None, transforms_testing=None,
-                       train_crop_size=None, val_resize_size=None, val_crop_size=None, random_erasing=None, enable_memory_cache=False):
+                       train_crop_size=None, val_resize_size=None, val_crop_size=None,
+                       random_erasing=None, enable_memory_cache=False, augmentation=True):
     dataset_path = default_path_imagenet10 if imagenet10_path is None else imagenet10_path
     dataset_name = str(DatasetType.imagenet10.name)
     dataset_type = DatasetType.imagenet10
 
     if transforms_testing is None and transforms_training is None:
-        transforms_train, transforms_test = get_pytorch_preprocessing(version=pytorch_preset_version, train_crop_size=train_crop_size,
+        transforms_train, transforms_val = get_pytorch_preprocessing(version=pytorch_preset_version, train_crop_size=train_crop_size,
                                                                       val_resize_size=val_resize_size, val_crop_size=val_crop_size,
-                                                                      random_erasing=random_erasing)
+                                                                      random_erasing=random_erasing, augmentation=augmentation)
     else:
-        transforms_train, transforms_test = transforms_training, transforms_testing
+        transforms_train, transforms_val = transforms_training, transforms_testing
 
     if enable_memory_cache:
         imagenet_train = ImageDatasetWithCachedInputInSharedMem(os.path.join(dataset_path, "train"), "imagenet10_train", transform = transforms_train)
-        imagenet_test = ImageDatasetWithCachedInputInSharedMem(os.path.join(dataset_path, "val"), "imagenet10_test", transform = transforms_test)
+        imagenet_test = ImageDatasetWithCachedInputInSharedMem(os.path.join(dataset_path, "val"), "imagenet10_test", transform = transforms_val)
     else:
         imagenet_train = datasets.ImageFolder(os.path.join(dataset_path, "train"), transform = transforms_train)
-        imagenet_test = datasets.ImageFolder(os.path.join(dataset_path, "val"), transform = transforms_test)
+        imagenet_test = datasets.ImageFolder(os.path.join(dataset_path, "val"), transform = transforms_val)
 
     return DatasetSetup(dataset_name, dataset_type, imagenet_train, imagenet_test, labels=set(range(0, 10)))
 
@@ -514,7 +535,7 @@ dataset_type_to_setup = {
     DatasetType.cifar100: dataset_cifar100,
     DatasetType.imagenet10: dataset_imagenet10,
     DatasetType.imagenet100: dataset_imagenet100,
-    DatasetType.imagenet1k: dataset_imagenet1k_custom,
+    DatasetType.imagenet1k: dataset_imagenet1k,
     DatasetType.imagenet1k_sam_mask_random_noise: dataset_imagenet1k_sam_mask_random_noise,
     DatasetType.imagenet1k_sam_mask_black: dataset_imagenet1k_sam_mask_black,
 
