@@ -134,7 +134,7 @@ def timm_build_loaders(cfg: dict, data_root: str):
 
 def timm_build_mixup_and_loss(cfg: dict):
     use_mix = (float(cfg.get("mixup", 0)) > 0) or (float(cfg.get("cutmix", 0)) > 0)
-
+    use_mix = False
     mixup_fn = None
     if use_mix:
         mixup_fn = Mixup(
