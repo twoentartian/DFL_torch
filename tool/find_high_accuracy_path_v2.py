@@ -79,7 +79,7 @@ def load_existing_optimizer_stat(optimizer, optimizer_stat_dict_path, logger=Non
     del optimizer_test
 
 # this function pretrain model weights / optimizer weights
-def pre_train(model, optimizer, criterion, dataloader, device, train_iteration=0, train_model_weights=False, train_optimizer=False, logger=None):
+def pre_train(current_ml_setup, model, optimizer, criterion, dataloader, device, train_iteration=0, train_model_weights=False, train_optimizer=False, logger=None):
     if logger is not None:
         if train_model_weights is False and train_optimizer is False:
             logger.info(f"skip pretraining")
@@ -94,6 +94,8 @@ def pre_train(model, optimizer, criterion, dataloader, device, train_iteration=0
     while training_index < train_iteration:
         for data, label in dataloader:
             data, label = data.to(device), label.to(device)
+            if current_ml_setup.mixup_fn is not None:
+                data, label = current_ml_setup.mixup_fn(data, label)
             optimizer.zero_grad(set_to_none=True)
             output = model(data)
             loss = criterion(output, label)
@@ -535,7 +537,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             # pretrain optimizer
             if not runtime_parameter.debug_check_config_mode:
                 if parameter_train.pretrain_optimizer or parameter_train.pretrain_optimizer:
-                    pre_train(target_model, optimizer, criterion, dataloader, device, train_iteration=parameter_train.pretrain_iterations, logger=child_logger,
+                    pre_train(current_ml_setup, target_model, optimizer, criterion, dataloader, device, train_iteration=parameter_train.pretrain_iterations, logger=child_logger,
                               train_optimizer=parameter_train.pretrain_optimizer, train_model_weights=parameter_train.pretrain_model_weights)
             # load existing optimizer
             if not runtime_parameter.debug_check_config_mode:
@@ -672,6 +674,8 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
                 for data, label in dataloader:
                     training_iter_counter += 1
                     data, label = data.to(device, non_blocking=True), label.to(device, non_blocking=True)
+                    if current_ml_setup.mixup_fn is not None:
+                        data, label = current_ml_setup.mixup_fn(data, label)
                     optimizer.zero_grad(set_to_none=True)
                     if runtime_parameter.use_amp:
                         with torch.cuda.amp.autocast():
