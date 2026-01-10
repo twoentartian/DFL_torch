@@ -3,7 +3,7 @@ import torch
 import os
 import sys
 from torch.utils.data import DataLoader
-
+import torch.nn as nn
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from py_src import ml_setup, util
@@ -12,7 +12,7 @@ from py_src import ml_setup, util
 def testing_model(model, current_ml_setup, test_training, batch_size):
     testing_dataset = current_ml_setup.testing_data
     training_dataset = current_ml_setup.training_data
-    criterion = current_ml_setup.criterion
+    criterion = nn.CrossEntropyLoss()
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     dataloader_test = DataLoader(testing_dataset, batch_size=batch_size, shuffle=True, num_workers=8, persistent_workers=True)
