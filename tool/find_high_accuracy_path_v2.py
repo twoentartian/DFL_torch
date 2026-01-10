@@ -242,15 +242,18 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
         runtime_parameter.test_dataset_use_whole = False
 
     """load training data"""
-    training_dataset = current_ml_setup.training_data
-    train_collate_fn = default_collate if current_ml_setup.collate_fn is None else current_ml_setup.collate_fn
-    dataloader_worker = 0 if general_parameter.dataloader_worker is None else general_parameter.dataloader_worker
-    dataloader_prefetch_factor = 4 if general_parameter.dataloader_prefetch_factor is None else general_parameter.dataloader_prefetch_factor
-    persistent_workers = False if dataloader_worker == 0 else True
-    sampler_fn = None if current_ml_setup.sampler_fn is None else current_ml_setup.sampler_fn(training_dataset)
-    dataloader = DataLoader(training_dataset, batch_size=current_ml_setup.training_batch_size, shuffle=True if sampler_fn is None else None,
-                            pin_memory=True, num_workers=dataloader_worker, persistent_workers=persistent_workers,
-                            collate_fn=train_collate_fn, sampler=sampler_fn, prefetch_factor=dataloader_prefetch_factor)
+    if current_ml_setup.override_training_dataset_loader is not None:
+        dataloader = current_ml_setup.override_training_dataset_loader
+    else:
+        training_dataset = current_ml_setup.training_data
+        train_collate_fn = default_collate if current_ml_setup.collate_fn is None else current_ml_setup.collate_fn
+        dataloader_worker = 0 if general_parameter.dataloader_worker is None else general_parameter.dataloader_worker
+        dataloader_prefetch_factor = 4 if general_parameter.dataloader_prefetch_factor is None else general_parameter.dataloader_prefetch_factor
+        persistent_workers = False if dataloader_worker == 0 else True
+        sampler_fn = None if current_ml_setup.sampler_fn is None else current_ml_setup.sampler_fn(training_dataset)
+        dataloader = DataLoader(training_dataset, batch_size=current_ml_setup.training_batch_size, shuffle=True if sampler_fn is None else None,
+                                pin_memory=True, num_workers=dataloader_worker, persistent_workers=persistent_workers,
+                                collate_fn=train_collate_fn, sampler=sampler_fn, prefetch_factor=dataloader_prefetch_factor)
     criterion = current_ml_setup.criterion
 
     """get optimizer"""
@@ -869,8 +872,12 @@ if __name__ == '__main__':
         logger.info(f"totally {paths_to_find_count} paths to process: {paths_to_find}")
     elif args.continue_from_checkpoint is not None:
         logger.info(f"continue algorithm based on checkpoint file {args.continue_from_checkpoint}.")
+        paths_to_find_count = None
+        paths_to_find = None
     else:
         logger.critical(f"this script can only be used with providing start/end folders or providing a checkpoint file.")
+        paths_to_find_count = None
+        paths_to_find = None
 
     # create output folder
     if args.output_folder_name is None:

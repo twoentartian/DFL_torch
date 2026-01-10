@@ -60,6 +60,9 @@ class MlSetup:
 
         self.func_handler_post_training = []
 
+        self.override_training_dataset_loader = None
+        self.override_testing_dataset_loader = None
+
     def self_validate(self):
         pass  # do nothing for now
 
