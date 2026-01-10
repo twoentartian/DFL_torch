@@ -674,6 +674,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
                 for data, label in dataloader:
                     training_iter_counter += 1
                     data, label = data.to(device, non_blocking=True), label.to(device, non_blocking=True)
+                    hard_label = label
                     if current_ml_setup.mixup_fn is not None:
                         data, label = current_ml_setup.mixup_fn(data, label)
                     optimizer.zero_grad(set_to_none=True)
@@ -698,8 +699,8 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
                     _, predicted = torch.max(outputs, 1)
                     training_loss_val = training_loss.item()
                     moving_average.add(training_loss_val)
-                    training_correct_val += (predicted == label).sum().item()
-                    training_total_val += label.size(0)
+                    training_correct_val += (predicted == hard_label).sum().item()
+                    training_total_val += hard_label.size(0)
 
                     if runtime_parameter.verbose:
                         if training_iter_counter % 10 == 0:
