@@ -8,7 +8,7 @@ from py_src.ml_setup_base.dataset import DatasetType
 """ this class records the hyperparameters need for training a model in generate_high_accuracy_model.py """
 class FastTrainingSetup(object):
     @staticmethod
-    def get_optimizer_lr_scheduler_epoch(arg_ml_setup: ml_setup, model, preset=0, override_dataset=None, override_batch_size=None):
+    def get_optimizer_lr_scheduler_epoch(arg_ml_setup: ml_setup.MlSetup, model, preset=0, override_dataset=None, override_batch_size=None):
         not_implemented_error_instance = NotImplementedError(f"cannot find optimizer and lr scheduler for {arg_ml_setup.model_name} @ {arg_ml_setup.dataset_name} preset {preset}")
 
         training_data = arg_ml_setup.training_data if override_dataset is None else override_dataset
