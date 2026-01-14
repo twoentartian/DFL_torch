@@ -1,25 +1,23 @@
 #!/usr/bin/env python3
 """
-Relative flatness κ^φ_Tr(w) for torchvision ResNets (e.g., ResNet-50 on ImageNet-1k).
+Relative flatness κ^φ_Tr(w) for torchvision CNN classifiers with a final nn.Linear head:
+  - ResNet / ResNeXt (model.fc)
+  - RegNet (model.fc)
+  - DenseNet (model.classifier)
+  - VGG (last Linear in model.classifier)
 
-Original code computed the full Hessian wrt fc.weight, then extracted block traces.
-That is feasible for small d*m (e.g., CIFAR-10 + ResNet-18) but infeasible for
-ImageNet-1k + ResNet-50.
-
-This script computes the *same* κ^φ_Tr(w) efficiently for CrossEntropyLoss via
-the analytic Hessian of softmax cross-entropy:
+Efficient analytic computation for CrossEntropyLoss(mean):
 
   κ = (1/N) Σ_i ||φ_i||^2 * Tr( G * H_z(p_i) )
 where:
-  φ_i: penultimate features
-  G  = W W^T  (Gram of fc rows)
-  H_z(p) = diag(p) - p p^T  (Hessian wrt logits for softmax CE)
-and:
-  Tr(G * (diag(p) - p p^T)) = Σ_c G_cc p_c - p^T G p
+  φ_i: input to the final linear layer
+  W: final linear weight, shape [d, m]
+  G = W W^T
+  p = softmax(logits)
+  Tr(G * (diag(p) - p p^T)) = (diag(G)·p) - (p^T G p)
 
-So per-sample contribution is:
+Per-sample contribution:
   ||φ||^2 * ( (diag(G)·p) - (p^T G p) )
-
 """
 
 import argparse
@@ -54,43 +52,45 @@ def setup_logger(verbosity: int) -> logging.Logger:
     return logging.getLogger("relative_flatness")
 
 
-# ------------------------ ResNet feature extraction ------------------------ #
+# ------------------------ Helpers: final linear + hook ------------------------ #
 
-@torch.no_grad()
-def resnet_penultimate_features(model: nn.Module, x: torch.Tensor) -> torch.Tensor:
+def find_last_linear(model: nn.Module) -> nn.Linear:
     """
-    Compute φ(x) = penultimate features of torchvision ResNet (before model.fc).
-
-    Works for torchvision.models.resnet18/resnet34/resnet50/... (standard ResNet class).
+    Return the last nn.Linear encountered in model.modules() order.
+    This matches common torchvision classifiers:
+      - ResNet/ResNeXt/RegNet: fc is last Linear
+      - DenseNet: classifier is last Linear
+      - VGG: classifier contains multiple Linear, last is the output head
     """
-    # Mirrors torchvision.models.resnet.ResNet._forward_impl but stops before fc
-    x = model.conv1(x)
-    x = model.bn1(x)
-    x = model.relu(x)
-    x = model.maxpool(x)
+    last = None
+    for m in model.modules():
+        if isinstance(m, nn.Linear):
+            last = m
+    if last is None:
+        raise TypeError("No nn.Linear found in model; cannot compute κ^φ_Tr(w).")
+    return last
 
-    x = model.layer1(x)
-    x = model.layer2(x)
-    x = model.layer3(x)
-    x = model.layer4(x)
 
-    x = model.avgpool(x)      # [B, C, 1, 1]
-    x = torch.flatten(x, 1)   # [B, m]
-    return x
+class _CaptureInputHook:
+    """Captures the first positional input to a module during forward."""
+    def __init__(self):
+        self.x = None  # captured tensor
+
+    def __call__(self, module, inputs, output):
+        # inputs is a tuple; for Linear it's (phi,)
+        self.x = inputs[0]
 
 
 # ------------------------ κ computation (analytic, CrossEntropy) ------------------------ #
 
 def _is_cross_entropy_mean(criterion: nn.Module) -> bool:
-    # We only support standard mean CE safely (matches your "mean loss" usage).
     if not isinstance(criterion, nn.CrossEntropyLoss):
         return False
-    # In PyTorch, reduction is a string in recent versions.
     return getattr(criterion, "reduction", "mean") == "mean"
 
 
 @torch.no_grad()
-def relative_flatness_kappa_tr_resnet_cross_entropy(
+def relative_flatness_kappa_tr_cross_entropy(
     model: nn.Module,
     dataloader: Iterable,
     criterion: nn.Module,
@@ -100,10 +100,11 @@ def relative_flatness_kappa_tr_resnet_cross_entropy(
     logger: Optional[logging.Logger] = None,
 ) -> float:
     """
-    Efficient κ^φ_Tr(w) for torchvision ResNet final fc layer under CrossEntropyLoss(mean).
+    Efficient κ^φ_Tr(w) for *any* torchvision-style classifier whose final head is nn.Linear,
+    under CrossEntropyLoss(mean).
 
-    This computes the same κ as your original "Hessian then block trace" method, but
-    avoids forming the Hessian, so it scales to ImageNet-1k.
+    This avoids explicit Hessian construction and works for:
+      resnext50_32x4d, regnet_y_400mf, densenet121, vgg11, resnet*, etc.
     """
     if logger is None:
         logger = logging.getLogger("relative_flatness")
@@ -111,66 +112,77 @@ def relative_flatness_kappa_tr_resnet_cross_entropy(
     model.eval()
     model.to(device)
 
-    if not isinstance(getattr(model, "fc", None), nn.Linear):
-        raise TypeError("Expected model.fc to be nn.Linear (torchvision ResNet-style).")
-
     if not _is_cross_entropy_mean(criterion):
         raise TypeError(
-            "This fast κ implementation supports nn.CrossEntropyLoss(reduction='mean') only.\n"
-            "Your original full-Hessian method is not feasible for ImageNet-1k ResNet-50."
+            "This fast κ implementation supports nn.CrossEntropyLoss(reduction='mean') only."
         )
 
-    W = model.fc.weight.detach()  # [d, m]
-    b = model.fc.bias.detach() if model.fc.bias is not None else None
-    W = W.to(device)
-    if b is not None:
-        b = b.to(device)
+    head = find_last_linear(model)
+
+    # Grab W,b from the head
+    W = head.weight.detach().to(device)                    # [d, m]
+    b = head.bias.detach().to(device) if head.bias is not None else None
+
+    logger.info(f"Using final head: {head.__class__.__name__} "
+                f"(out_features={head.out_features}, in_features={head.in_features})")
 
     # Gram matrix of rows: G = W W^T  [d, d]
-    # For ImageNet: 1000x1000 -> ~4MB fp32, OK.
     logger.info("Building Gram matrix G = W W^T ...")
     G = W @ W.t()
-    diagG = torch.diag(G)  # [d]
+    diagG = torch.diag(G)                                  # [d]
+
+    # Hook to capture φ(x) = input to final linear
+    cap = _CaptureInputHook()
+    handle = head.register_forward_hook(cap)
 
     total = 0.0
     total_n = 0
     used_batches = 0
 
     logger.info("Starting κ accumulation over batches...")
-    for batch_idx, (x, y) in enumerate(dataloader):
-        if max_batches is not None and max_batches > 0 and batch_idx >= max_batches:
-            break
+    try:
+        for batch_idx, (x, y) in enumerate(dataloader):
+            if max_batches is not None and max_batches > 0 and batch_idx >= max_batches:
+                break
 
-        x = x.to(device, non_blocking=True)
-        y = y.to(device, non_blocking=True)
+            x = x.to(device, non_blocking=True)
+            y = y.to(device, non_blocking=True)
 
-        # φ: penultimate features
-        phi = resnet_penultimate_features(model, x)         # [B, m]
-        logits = F.linear(phi, W, b)                        # [B, d]
-        p = torch.softmax(logits, dim=1)                    # [B, d]
+            cap.x = None
+            logits = model(x)                               # [B, d]
+            phi = cap.x                                     # [B, m] (captured)
 
-        # per-sample: ||φ||^2
-        phi_norm2 = (phi * phi).sum(dim=1)                  # [B]
+            if phi is None:
+                raise RuntimeError(
+                    "Failed to capture penultimate features via hook. "
+                    "The selected last nn.Linear might not be used in forward."
+                )
 
-        # Tr(G * (diag(p) - p p^T)) = sum_c G_cc p_c - p^T G p
-        # compute p^T G p efficiently
-        pG = p @ G                                          # [B, d]
-        pGp = (pG * p).sum(dim=1)                           # [B]
-        diag_term = (p * diagG).sum(dim=1)                  # [B]
-        trace_term = diag_term - pGp                         # [B]
+            p = torch.softmax(logits, dim=1)                 # [B, d]
 
-        contrib = (phi_norm2 * trace_term).sum()            # scalar
-        bs = x.size(0)
-        total += float(contrib.item())
-        total_n += bs
-        used_batches += 1
+            # per-sample: ||φ||^2
+            phi_norm2 = (phi * phi).sum(dim=1)               # [B]
 
-        if log_every > 0 and ((batch_idx + 1) % log_every == 0):
-            logger.info(
-                f"Progress: batch {batch_idx + 1}"
-                + (f"/{max_batches}" if (max_batches is not None and max_batches > 0) else "")
-                + f", samples={total_n}, running κ={(total / max(total_n, 1)):.6e}"
-            )
+            # Tr(G * (diag(p) - p p^T)) = (diag(G)·p) - (p^T G p)
+            pG = p @ G                                       # [B, d]
+            pGp = (pG * p).sum(dim=1)                        # [B]
+            diag_term = (p * diagG).sum(dim=1)               # [B]
+            trace_term = diag_term - pGp                     # [B]
+
+            contrib = (phi_norm2 * trace_term).sum()         # scalar
+            bs = x.size(0)
+            total += float(contrib.item())
+            total_n += bs
+            used_batches += 1
+
+            if log_every > 0 and ((batch_idx + 1) % log_every == 0):
+                logger.info(
+                    f"Progress: batch {batch_idx + 1}"
+                    + (f"/{max_batches}" if (max_batches is not None and max_batches > 0) else "")
+                    + f", samples={total_n}, running κ={(total / max(total_n, 1)):.6e}"
+                )
+    finally:
+        handle.remove()
 
     kappa = total / max(total_n, 1)
     logger.info(f"Done. Used batches={used_batches}, samples={total_n}, κ={kappa:.6e}")
@@ -231,13 +243,14 @@ def get_model_weights_from_file(path: Path, tick: Optional[int] = None) -> Tuple
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Relative flatness κ^φ_Tr(w) for torchvision ResNets. "
+        description="Relative flatness κ^φ_Tr(w) for torchvision CNNs with final Linear head. "
                     "Efficient analytic computation for CrossEntropyLoss."
     )
     parser.add_argument("model_weights_path", type=str, nargs="?", default=None,
                         help="file containing model weights, can be a .model.pt file or an lmdb directory.")
     parser.add_argument("-t", "--tick", type=int, help="model weights tick index for lmdb mode.")
-    parser.add_argument("-m", "--model", type=str, default=None, help="model name (e.g., resnet50)")
+    parser.add_argument("-m", "--model", type=str, default=None,
+                        help="model name (e.g., resnext50_32x4d, regnet_y_400mf, densenet121, vgg11)")
     parser.add_argument("-d", "--dataset", type=str, default=None, help="dataset name (e.g., imagenet1k)")
     parser.add_argument("--cpu", action="store_true", help="force using CPU")
     parser.add_argument("--max-batches", type=int, default=100,
@@ -247,7 +260,8 @@ def main():
     parser.add_argument("-c", "--core", type=int, default=os.cpu_count(),
                         help="number of CPU cores to use for dataloader")
     parser.add_argument("-v", "--verbose", action="count", default=0, help="increase verbosity")
-    parser.add_argument("-P", "--torch_preset_version", type=int, default=None, help='specify the pytorch data training preset version')
+    parser.add_argument("-P", "--torch_preset_version", type=int, default=None,
+                        help="specify the pytorch data training preset version")
 
     args = parser.parse_args()
     logger = setup_logger(args.verbose)
@@ -277,13 +291,13 @@ def main():
 
     logger.info(f"Model: {model_name}, Dataset: {dataset_name}")
 
-    # Load your existing setup (assumes it can return resnet50+imagenet1k properly)
-    current_ml_setup = ml_setup.get_ml_setup_from_config(model_name, dataset_type=dataset_name, pytorch_preset_version=args.torch_preset_version)
+    current_ml_setup = ml_setup.get_ml_setup_from_config(
+        model_name, dataset_type=dataset_name, pytorch_preset_version=args.torch_preset_version
+    )
 
     number_batch = args.max_batches
     max_batches = None if (number_batch is None or number_batch <= 0) else int(number_batch)
 
-    # Dataloader config
     number_of_core = int(args.core)
     num_workers = min(8, max(0, number_of_core))
     use_workers = num_workers > 0
@@ -298,7 +312,9 @@ def main():
         dl_kwargs.update(dict(persistent_workers=True, prefetch_factor=4))
 
     training_dataset_func = ml_setup.dataset_type_to_setup[current_ml_setup.dataset_type]
-    dataset_setup_wo_augmentation = training_dataset_func(pytorch_preset_version=args.torch_preset_version, augmentation=False)
+    dataset_setup_wo_augmentation = training_dataset_func(
+        pytorch_preset_version=args.torch_preset_version, augmentation=False
+    )
     dataloader = DataLoader(dataset_setup_wo_augmentation.training_data, **dl_kwargs)
 
     criterion = current_ml_setup.criterion
@@ -307,7 +323,7 @@ def main():
     target_model.to(device)
 
     logger.info("Computing κ^φ_Tr(w) ...")
-    kappa = relative_flatness_kappa_tr_resnet_cross_entropy(
+    kappa = relative_flatness_kappa_tr_cross_entropy(
         model=target_model,
         dataloader=dataloader,
         criterion=criterion,
