@@ -458,9 +458,9 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             attention_layer = []
             ignore_move_layers = []
             norm_layers = special_torch_layers.find_normalization_layers(target_model)
-            batch_norm_layer_names, _ = special_torch_layers.find_layers_according_to_name_and_keyword(start_model_stat_dict, norm_layers.batch_normalization, [])
+            batch_norm_layer_names, _ = special_torch_layers.find_layers_according_to_name_and_keyword(start_model_stat_dict, [], norm_layers.batch_normalization)
             batch_norm_layer_names.sort()
-            layer_norm_layer_names, _ = special_torch_layers.find_layers_according_to_name_and_keyword(start_model_stat_dict, norm_layers.layer_normalization, [])
+            layer_norm_layer_names, _ = special_torch_layers.find_layers_according_to_name_and_keyword(start_model_stat_dict, [], norm_layers.layer_normalization)
             layer_norm_layer_names.sort()
             assert len(norm_layers.group_normalization) == 0, "group normalization layers are not supported yet."
             assert len(norm_layers.instance_normalization) == 0, "instance normalization layers are not supported yet."
