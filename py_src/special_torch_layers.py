@@ -12,9 +12,9 @@ def is_keyword_in_layer_name(layer_name, keywords):
 def is_layer_index_with_keyword(layer_name, keywords):
     output = False
     for i in keywords:
-        m = re.search(r'^[^.]+\.(\d+)$', layer_name)
+        m = re.search(r'[^.]+\.(\d+)', layer_name)
         layer_index = int(m.group(1)) if m else None
-        m = re.search(r'^[^.]+\.(\d+)$', i)
+        m = re.search(r'[^.]+\.(\d+)', i)
         layer_index_in_keyword = int(m.group(1)) if m else None
         if layer_name.startswith(i) and layer_index == layer_index_in_keyword:
             output = True
