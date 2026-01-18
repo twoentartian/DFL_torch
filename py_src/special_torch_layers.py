@@ -1,9 +1,22 @@
+import re
 import torch.nn as nn
 
 def is_keyword_in_layer_name(layer_name, keywords):
     output = False
     for i in keywords:
         if i in layer_name:
+            output = True
+            break
+    return output
+
+def is_layer_index_with_keyword(layer_name, keywords):
+    output = False
+    for i in keywords:
+        m = re.search(r'^[^.]+\.(\d+)$', layer_name)
+        layer_index = int(m.group(1)) if m else None
+        m = re.search(r'^[^.]+\.(\d+)$', i)
+        layer_index_in_keyword = int(m.group(1)) if m else None
+        if layer_name.startswith(i) and layer_index == layer_index_in_keyword:
             output = True
             break
     return output
@@ -37,7 +50,7 @@ def is_normalization_layer(model_name, layer_name):
 
 
 
-def find_layers_according_to_name_and_keyword(model_state_dict, layer_names, layer_name_keywords):
+def find_layers_according_to_name_and_keyword(model_state_dict, layer_names=None, layer_name_keywords=None, layer_name_match_layer_index=None):
     found_layers = []
     ignored_layers = []
     if layer_names is None:
@@ -48,10 +61,16 @@ def find_layers_according_to_name_and_keyword(model_state_dict, layer_names, lay
         _layer_name_keywords = []
     else:
         _layer_name_keywords = layer_name_keywords
+    if layer_name_match_layer_index is None:
+        _layer_name_start_with_keyword = []
+    else:
+        _layer_name_start_with_keyword = layer_name_match_layer_index
     for l in model_state_dict.keys():
         if l in _layer_names:
             found_layers.append(l)
         if is_keyword_in_layer_name(l, _layer_name_keywords):
+            found_layers.append(l)
+        if is_layer_index_with_keyword(l, _layer_name_start_with_keyword):
             found_layers.append(l)
     for l in model_state_dict.keys():
         if l not in found_layers:
