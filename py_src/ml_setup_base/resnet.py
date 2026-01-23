@@ -197,7 +197,7 @@ def resnet50_imagenet1k(pytorch_preset_version=2):
 
 def resnet50_imagenet100(pytorch_preset_version=2):
     output_ml_setup = MlSetup()
-    dataset = ml_setup_dataset.dataset_imagenet1k(pytorch_preset_version)
+    dataset = ml_setup_dataset.dataset_imagenet100(pytorch_preset_version)
 
     output_ml_setup.model = models.resnet50(progress=False, num_classes=100)
     output_ml_setup.model_name = str(ModelType.resnet50.name)
