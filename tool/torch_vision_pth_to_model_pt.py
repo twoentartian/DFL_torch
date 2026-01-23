@@ -11,6 +11,7 @@ if __name__ == '__main__':
     parser.add_argument('pth_path', type=str, help='path to .pth file')
     parser.add_argument('-m', '--model_type', type=str, help='model type in .model.pt format')
     parser.add_argument('-d', '--dataset_type', type=str, help='the dataset type can used to train the model')
+    parser.add_argument("-P", '--torch_preset_version', type=int, help='torch training preset version')
     parser.add_argument("--ema", help='extract the ema model')
 
 
@@ -24,7 +25,7 @@ if __name__ == '__main__':
     else:
         model_stat_dict = pth_target['model']
         output_path = f"{args.pth_path}.model.pt"
-    current_ml_setup = ml_setup.get_ml_setup_from_config(args.model_type, args.dataset_type)
+    current_ml_setup = ml_setup.get_ml_setup_from_config(args.model_type, args.dataset_type, pytorch_preset_version=args.torch_preset_version)
     model = current_ml_setup.model
     model.load_state_dict(model_stat_dict)
     util.save_model_state(output_path, model_stat_dict, current_ml_setup.model_name, current_ml_setup.dataset_name)
