@@ -12,7 +12,7 @@ from py_src import ml_setup, util
 def testing_model(model, current_ml_setup, test_training, batch_size):
     testing_dataset = current_ml_setup.testing_data
     training_dataset = current_ml_setup.training_data
-    criterion = nn.CrossEntropyLoss()
+    criterion = current_ml_setup.criterion
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     dataloader_test = DataLoader(testing_dataset, batch_size=batch_size, shuffle=True, num_workers=8, persistent_workers=True)
@@ -44,6 +44,8 @@ def testing_model(model, current_ml_setup, test_training, batch_size):
             for batch_idx, (data, label) in enumerate(dataloader_train):
                 print(f"train batch_idx: {batch_idx}")
                 data, label = data.to(device), label.to(device)
+                if current_ml_setup.mixup_fn is not None:
+                    data, label = current_ml_setup.mixup_fn(data, label)
                 outputs = model(data)
                 loss = criterion(outputs, label)
                 train_loss += loss.item() * data.size(0)
