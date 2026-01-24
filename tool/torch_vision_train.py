@@ -310,7 +310,7 @@ def main(args):
     model = torchvision.models.get_model(args.model, weights=args.weights, num_classes=num_classes)
     if args.load_existing_weights is not None:
         #load existing model from path
-        model_stat, model_name = dfl_util.load_model_state_file(args.load_existing_weights)
+        model_stat, model_name, _ = dfl_util.load_model_state_file(args.load_existing_weights)
         print(f"loading existing model weights from {args.load_existing_weights}")
         model.load_state_dict(model_stat)
     model.to(device)
