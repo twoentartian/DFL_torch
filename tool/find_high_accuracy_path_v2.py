@@ -698,6 +698,8 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
                             nn.utils.clip_grad_norm_(target_model.parameters(), current_ml_setup.clip_grad_norm)
                         optimizer.step()
                     _, predicted = torch.max(outputs, 1)
+                    if current_ml_setup.collate_fn is not None:
+                        hard_label = hard_label.argmax(dim=1)
                     training_loss_val = training_loss.item()
                     moving_average.add(training_loss_val)
                     training_correct_val += (predicted == hard_label).sum().item()
