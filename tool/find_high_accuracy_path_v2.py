@@ -179,7 +179,8 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             current_ml_setup = ml_setup.get_ml_setup_from_config(start_model_name, dataset_type=dataset_name, pytorch_preset_version=runtime_parameter.pytorch_preset_version)
         runtime_parameter.model_name = current_ml_setup.model_name
         runtime_parameter.dataset_name = current_ml_setup.dataset_name
-        child_logger.info(f"find model type is {start_model_name}")
+        child_logger.info(f"find model type is {current_ml_setup.model_name}")
+        child_logger.info(f"find dataset type is {current_ml_setup.dataset_name}")
 
         initial_model_stat = {k: v.detach().clone() for k, v in current_ml_setup.model.state_dict().items()}
         starting_point = {k: v.detach().clone() for k, v in start_model_stat_dict.items()}

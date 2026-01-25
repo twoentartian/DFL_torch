@@ -205,7 +205,7 @@ def resnet50_imagenet100(pytorch_preset_version=2):
     output_ml_setup.get_info_from_dataset(dataset)
     output_ml_setup.training_batch_size = 256
     output_ml_setup.has_normalization_layer = True
-    loss_fn, collate_fn, model_ema_decay, model_ema_steps, sampler_fn = get_pytorch_training_imagenet(pytorch_preset_version)
+    loss_fn, collate_fn, model_ema_decay, model_ema_steps, sampler_fn = get_pytorch_training_imagenet(pytorch_preset_version, enable_collate_and_sampler=False, num_classes=100)
     output_ml_setup.criterion = loss_fn
     output_ml_setup.collate_fn = collate_fn
     output_ml_setup.model_ema = (model_ema_decay, model_ema_steps)
