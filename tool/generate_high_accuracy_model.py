@@ -234,7 +234,7 @@ if __name__ == "__main__":
     logger.info("logging setup complete")
 
     # prepare model and dataset
-    current_ml_setup = ml_setup.get_ml_setup_from_config(model_type, dataset_type=dataset_type)
+    current_ml_setup = ml_setup.get_ml_setup_from_config(model_type, dataset_type=dataset_type, pytorch_preset_version=preset)
     output_model_name = current_ml_setup.model_name
     logger.info(f"model name: {output_model_name}")
 
