@@ -9,7 +9,7 @@ from py_src.ml_setup_base.mnist_models import lenet4_mnist, lenet5_mnist, lenet5
 from py_src.ml_setup_base.regnet import regnet_y_400mf_imagenet1k, regnet_x_200mf_cifar10, regnet_x_200mf_cifar100
 from py_src.ml_setup_base.squeezenet import squeezenet1_1_imagenet1k
 from py_src.ml_setup_base.vgg import vgg11_mnist, vgg11_cifar10, vgg11_bn_cifar10, vgg11_bn_imagenet1k
-from py_src.ml_setup_base.resnet import resnet18_cifar10, resnet18_cifar100, resnet18_imagenet100, resnet18_imagenet1k, \
+from py_src.ml_setup_base.resnet import resnet18_cifar10, resnet18_cifar100, resnet18_imagenet10, resnet18_imagenet100, resnet18_imagenet1k, \
     resnet50_imagenet1k, resnet34_imagenet1k, resnet18_imagenet1k_sam_mask_random_noise, resnet18_imagenet1k_sam_mask_black, resnet50_imagenet100, \
     resnet18_svhn
 from py_src.ml_setup_base.simplenet import simplenet_cifar10, simplenet_cifar100
@@ -31,7 +31,7 @@ __all__ = [ 'MlSetup', 'ModelType', 'DatasetType', 'CriterionType', 'imagenet1k_
             'lenet4_mnist', 'lenet5_mnist', 'lenet5_random_mnist', 'lenet5_large_fc_mnist',
             'regnet_y_400mf_imagenet1k', 'regnet_x_200mf_cifar10', 'regnet_x_200mf_cifar100',
             'vgg11_mnist', 'vgg11_cifar10', 'vgg11_bn_cifar10', 'vgg11_bn_imagenet1k',
-            'resnet18_cifar10', 'resnet18_cifar100', 'resnet18_imagenet100', 'resnet18_imagenet1k', 'resnet18_svhn',
+            'resnet18_cifar10', 'resnet18_cifar100', 'resnet18_imagenet10', 'resnet18_imagenet100', 'resnet18_imagenet1k', 'resnet18_svhn',
             'resnet18_imagenet1k_sam_mask_black', 'resnet18_imagenet1k_sam_mask_random_noise',
             'resnet34_imagenet1k', 'resnet50_imagenet1k', 'resnet50_imagenet100',
             'simplenet_cifar10', 'simplenet_cifar100',
@@ -81,6 +81,8 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default, p
             output_ml_setup = resnet18_cifar10(enable_replace_bn_with_group_norm=enable_replace_bn_with_group_norm)
         elif dataset_type in [dataset_type.cifar100]:
             output_ml_setup = resnet18_cifar100(enable_replace_bn_with_group_norm=enable_replace_bn_with_group_norm)
+        elif dataset_type in [dataset_type.imagenet10]:
+            output_ml_setup = resnet18_imagenet10(enable_replace_bn_with_group_norm=enable_replace_bn_with_group_norm)
         elif dataset_type in [dataset_type.imagenet100]:
             output_ml_setup = resnet18_imagenet100(enable_replace_bn_with_group_norm=enable_replace_bn_with_group_norm)
         elif dataset_type in [dataset_type.imagenet1k]:

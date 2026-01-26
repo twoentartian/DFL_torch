@@ -2,6 +2,7 @@ import os, sys, json
 from enum import Enum, auto
 from torchvision import transforms, datasets
 from torch.utils.data import DataLoader, ConcatDataset
+from torchvision.transforms import InterpolationMode
 from torchvision.transforms.autoaugment import TrivialAugmentWide
 from torchvision.transforms.v2 import RandAugment
 
@@ -20,6 +21,7 @@ default_path_svhn = expand_path('~/dataset/svhn')
 default_path_imagenet1k = expand_path('~/dataset/imagenet1k')
 default_path_imagenet100 = expand_path('~/dataset/imagenet100')
 default_path_imagenet10 = expand_path('~/dataset/imagenet10')
+default_path_flickr30k = expand_path('~/dataset/flickr30k')
 
 default_path_random_mnist = expand_path('~/dataset/random_mnist')
 default_path_random_cifar10 = expand_path('~/dataset/random_cifar10')
@@ -32,6 +34,9 @@ default_path_random_imagenet1k = expand_path('~/dataset/random_imagenet1k')
 imagenet1k_path = None
 imagenet100_path = None
 imagenet10_path = None
+flickr30k_path = None
+
+# load override dataset path from dataset_env.py
 dataset_env_file_path = f"{os.path.dirname(os.path.abspath(__file__))}/dataset_env.py"
 if os.path.exists(dataset_env_file_path):
     import importlib.util
@@ -49,12 +54,16 @@ if os.path.exists(dataset_env_file_path):
     if hasattr(env, "imagenet10_path"):
         imagenet10_path = env.imagenet10_path
         print("override imagenet10_path: ", env.imagenet10_path)
+    if hasattr(env, "flickr30k_path"):
+        flickr30k_path = env.flickr30k_path
 if imagenet1k_path is None:
     imagenet1k_path = default_path_imagenet1k
 if imagenet100_path is None:
     imagenet100_path = default_path_imagenet100
 if imagenet10_path is None:
     imagenet10_path = default_path_imagenet10
+if flickr30k_path is None:
+    flickr30k_path = default_path_flickr30k
 
 """ Dataset Enum """
 class DatasetType(Enum):
@@ -77,6 +86,7 @@ class DatasetType(Enum):
     imagenet1k_sam_mask_random_noise = auto()
     imagenet1k_sam_mask_black = auto()
     svhn = auto()
+    flickr30k = auto()
 
 """ Helper functions """
 def calculate_mean_std(dataset):
@@ -467,6 +477,33 @@ def dataset_imagenet1k_sam_mask_black(train_crop_size=224, val_resize_size=256, 
     output.is_masked_dataset = True
     return output
 
+""" Flickr """
+from . import dataset_flickr
+def dataset_flickr30k(img_transform=None, txt_transform=None, *args, **kwargs):
+    dataset_name = str(DatasetType.flickr30k.name)
+    dataset_type = DatasetType.flickr30k
+
+    mean = [0.485, 0.456, 0.406]
+    std = [0.229, 0.224, 0.225]
+    train_transform = transforms.Compose([
+        transforms.RandomRotation(15),
+        transforms.RandomResizedCrop((224, 224), scale=(0.8, 1.0), interpolation=InterpolationMode.BILINEAR),
+        transforms.RandomHorizontalFlip(0.5),
+        transforms.RandomVerticalFlip(0.1),
+        transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.), # no hue because it distorts the colors
+        transforms.ToTensor(),
+        transforms.Normalize(mean=mean, std=std),
+    ])
+    valid_transform = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=mean, std=std),
+    ])
+
+    dataset_train = dataset_flickr.Flickr30k(flickr30k_path, split='train', img_transform=train_transform)
+    dataset_test = dataset_flickr.Flickr30k(flickr30k_path, split='val', img_transform=valid_transform)
+    output = DatasetSetup(dataset_name, dataset_type, dataset_train, dataset_test, labels=None)
+    return output
 
 def get_dataset_random(dataset_type, default_dataset_path, override_dataset_path, channel, label_count):
     dataset_path = default_dataset_path if override_dataset_path is None else override_dataset_path
@@ -541,6 +578,7 @@ dataset_type_to_setup = {
     DatasetType.imagenet1k: dataset_imagenet1k,
     DatasetType.imagenet1k_sam_mask_random_noise: dataset_imagenet1k_sam_mask_random_noise,
     DatasetType.imagenet1k_sam_mask_black: dataset_imagenet1k_sam_mask_black,
+    DatasetType.flickr30k: dataset_flickr30k,
 
     DatasetType.random_mnist: dataset_random_mnist,
     DatasetType.random_cifar10: dataset_random_cifar10,

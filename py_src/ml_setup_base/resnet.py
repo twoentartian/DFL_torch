@@ -73,6 +73,28 @@ def resnet18_svhn(enable_replace_bn_with_group_norm=False, use_extra=False):
     output_ml_setup.has_normalization_layer = True
     return output_ml_setup
 
+def resnet18_imagenet10(pytorch_preset_version=2, enable_replace_bn_with_group_norm=False):
+    output_ml_setup = MlSetup()
+    dataset = ml_setup_dataset.dataset_imagenet10(pytorch_preset_version)
+
+    if enable_replace_bn_with_group_norm:
+        output_ml_setup.model = models.resnet18(progress=False, num_classes=10, zero_init_residual=False, groups=1, width_per_group=64, replace_stride_with_dilation=None, norm_layer=GroupNorm)
+        output_ml_setup.model_name = str(ModelType.resnet18_gn.name)
+        output_ml_setup.model_type = ModelType.resnet18_gn
+    else:
+        output_ml_setup.model = models.resnet18(progress=False, num_classes=10, zero_init_residual=False, groups=1, width_per_group=64, replace_stride_with_dilation=None)
+        output_ml_setup.model_name = str(ModelType.resnet18_bn.name)
+        output_ml_setup.model_type = ModelType.resnet18_bn
+    output_ml_setup.get_info_from_dataset(dataset)
+    output_ml_setup.training_batch_size = 256
+    output_ml_setup.has_normalization_layer = True
+    loss_fn, collate_fn, model_ema_decay, model_ema_steps, sampler_fn = get_pytorch_training_imagenet(pytorch_preset_version)
+    output_ml_setup.criterion = loss_fn
+    output_ml_setup.collate_fn = collate_fn
+    output_ml_setup.model_ema = (model_ema_decay, model_ema_steps)
+    output_ml_setup.sampler_fn = sampler_fn
+    return output_ml_setup
+
 def resnet18_imagenet100(pytorch_preset_version=2, enable_replace_bn_with_group_norm=False):
     output_ml_setup = MlSetup()
     dataset = ml_setup_dataset.dataset_imagenet100(pytorch_preset_version)

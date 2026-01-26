@@ -35,7 +35,7 @@ class FastTrainingSetup(object):
             epochs = 20
             optimizer = torch.optim.SGD(model.parameters(), lr=0.01, momentum=0.9)
             return optimizer, None, epochs
-        elif arg_ml_setup.model_name == str(ModelType.resnet18_bn.name) or arg_ml_setup.model_name == str(ModelType.resnet18_gn.name):
+        elif arg_ml_setup.model_name in [str(ModelType.resnet18_bn.name), str(ModelType.resnet18_gn.name)]:
             if arg_ml_setup.dataset_name in [DatasetType.imagenet1k.name, DatasetType.imagenet100.name, DatasetType.imagenet10.name]:
                 epochs = 100
                 optimizer = torch.optim.SGD(model.parameters(), lr=1e-1, weight_decay=1e-4, momentum=0.9)
