@@ -208,7 +208,7 @@ if __name__ == "__main__":
     parser.add_argument("--amp", action='store_true', help='enable auto mixed precision')
     parser.add_argument("--random_seed", type=int, help='specify the random seed')
     parser.add_argument("-i", "--start_index", type=int, default=0, help='specify the start index for model names')
-    parser.add_argument("-p", "--preset", type=int, default=0, help='specify the preset training hyperparameters')
+    parser.add_argument("-P", "--preset", type=int, default=0, help='specify the preset training hyperparameters')
     parser.add_argument("-e", "--epoch", type=int, default=None, help='override the epoch')
     parser.add_argument("-t", "--transfer_learn", type=str, default=None, help='specify a model weight file to perform transfer learning from.')
 
