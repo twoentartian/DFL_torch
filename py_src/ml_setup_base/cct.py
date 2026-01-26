@@ -39,7 +39,7 @@ def cct7_3x1_cifar100():
 
 def cct7_7x2_imagenet1k():
     output_ml_setup = MlSetup()
-    dataset = ml_setup_dataset.dataset_imagenet1k(1)
+    dataset = ml_setup_dataset.dataset_imagenet1k(pytorch_preset_version=1)
 
     output_ml_setup.model = cct.cct_7_7x2_224()
     output_ml_setup.model_name = str(ModelType.cct_7_7x2_224.name)
@@ -52,7 +52,7 @@ def cct7_7x2_imagenet1k():
 
 def cct7_7x2_imagenet100():
     output_ml_setup = MlSetup()
-    dataset = ml_setup_dataset.dataset_imagenet100(1)
+    dataset = ml_setup_dataset.dataset_imagenet100(pytorch_preset_version=1)
 
     output_ml_setup.model = cct.cct_7_7x2_224()
     output_ml_setup.model_name = str(ModelType.cct_7_7x2_224.name)
@@ -65,9 +65,9 @@ def cct7_7x2_imagenet100():
 
 def cct7_7x2_imagenet10():
     output_ml_setup = MlSetup()
-    dataset = ml_setup_dataset.dataset_imagenet10(1)
+    dataset = ml_setup_dataset.dataset_imagenet10(pytorch_preset_version=1)
 
-    output_ml_setup.model = cct.cct_7_7x2_224()
+    output_ml_setup.model = cct.cct_7_7x2_224(num_classes=10)
     output_ml_setup.model_name = str(ModelType.cct_7_7x2_224.name)
     output_ml_setup.model_type = ModelType.cct_7_7x2_224
     output_ml_setup.get_info_from_dataset(dataset)
