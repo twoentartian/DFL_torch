@@ -24,7 +24,7 @@ from py_src.ml_setup_base.alexnet import alexnet_imagenet1k
 from py_src.ml_setup_base.resnext import resnext50_32x4d_imagenet1k
 from py_src.ml_setup_base.vit import vit_b_32_imagenet1k
 from py_src.ml_setup_base.wide_resnet50_2 import wide_resnet50_2_imagenet1k
-from py_src.ml_setup_base.dla import dla_cifar10, dla_cifar100
+from py_src.ml_setup_base.dla import dla_cifar10, dla_cifar100, dla_imagenet10
 from py_src.ml_setup_base.ddpm import ddpm_cifar10
 
 __all__ = [ 'MlSetup', 'ModelType', 'DatasetType', 'CriterionType', 'imagenet1k_path','dataset_type_to_random', 'dataset_type_to_setup',
@@ -45,7 +45,7 @@ __all__ = [ 'MlSetup', 'ModelType', 'DatasetType', 'CriterionType', 'imagenet1k_
             'alexnet_imagenet1k',
             'vit_b_32_imagenet1k',
             'wide_resnet50_2_imagenet1k',
-            'dla_cifar10', 'dla_cifar100',
+            'dla_cifar10', 'dla_cifar100', 'dla_imagenet10',
             'ddpm_cifar10',
            ]
 
@@ -106,10 +106,10 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default, p
     elif model_name == ModelType.resnet50:
         if dataset_type in [dataset_type.default, dataset_type.imagenet1k]:
             assert pytorch_preset_version is not None
-            output_ml_setup = resnet50_imagenet1k(pytorch_preset_version)
+            output_ml_setup = resnet50_imagenet1k(pytorch_preset_version=pytorch_preset_version)
         elif dataset_type in [dataset_type.imagenet100]:
             assert pytorch_preset_version is not None
-            output_ml_setup = resnet50_imagenet100(pytorch_preset_version)
+            output_ml_setup = resnet50_imagenet100(pytorch_preset_version=pytorch_preset_version)
         else:
             raise NotImplementedError
     elif model_name == ModelType.simplenet:
@@ -178,7 +178,7 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default, p
     elif model_name == ModelType.efficientnet_b1:
         if dataset_type in [DatasetType.default, DatasetType.imagenet1k]:
             assert pytorch_preset_version is not None
-            output_ml_setup = efficientnet_b1_imagenet1k(pytorch_preset_version)
+            output_ml_setup = efficientnet_b1_imagenet1k(pytorch_preset_version=pytorch_preset_version)
         else:
             raise NotImplementedError
     elif model_name == ModelType.efficientnet_b0:
@@ -237,7 +237,7 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default, p
     elif model_name == ModelType.regnet_y_400mf:
         if dataset_type in [dataset_type.default, dataset_type.imagenet1k]:
             assert pytorch_preset_version is not None
-            output_ml_setup = regnet_y_400mf_imagenet1k(pytorch_preset_version)
+            output_ml_setup = regnet_y_400mf_imagenet1k(pytorch_preset_version=pytorch_preset_version)
         else:
             raise NotImplementedError
     elif model_name == ModelType.convnext_tiny:
@@ -253,13 +253,13 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default, p
     elif model_name == ModelType.resnext50_32x4d:
         if dataset_type in [dataset_type.default, dataset_type.imagenet1k]:
             assert pytorch_preset_version is not None
-            output_ml_setup = resnext50_32x4d_imagenet1k(pytorch_preset_version)
+            output_ml_setup = resnext50_32x4d_imagenet1k(pytorch_preset_version=pytorch_preset_version)
         else:
             raise NotImplementedError
     elif model_name == ModelType.wide_resnet50_2:
         if dataset_type in [dataset_type.default, dataset_type.imagenet1k]:
             assert pytorch_preset_version is not None
-            output_ml_setup = wide_resnet50_2_imagenet1k(pytorch_preset_version)
+            output_ml_setup = wide_resnet50_2_imagenet1k(pytorch_preset_version=pytorch_preset_version)
         else:
             raise NotImplementedError
     elif model_name == ModelType.dla:
@@ -267,6 +267,9 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default, p
             output_ml_setup = dla_cifar10()
         elif dataset_type in [dataset_type.cifar100]:
             output_ml_setup = dla_cifar100()
+        elif dataset_type in [dataset_type.imagenet10]:
+            assert pytorch_preset_version is not None
+            output_ml_setup = dla_imagenet10(pytorch_preset_version=pytorch_preset_version)
         else:
             raise NotImplementedError
     elif model_name == ModelType.ddpm_cifar10:
