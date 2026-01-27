@@ -238,7 +238,11 @@ class FastTrainingSetup(object):
                     lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs * steps_per_epoch)
                 else:
                     raise not_implemented_error_instance
-            elif arg_ml_setup.dataset_name in [str(DatasetType.imagenet10.name)]:
+            else:
+                raise not_implemented_error_instance
+            return optimizer, lr_scheduler, epochs
+        elif arg_ml_setup.model_name == ModelType.dla_46_c.name:
+            if arg_ml_setup.dataset_name in [str(DatasetType.imagenet10.name)]:
                 epochs = 120
                 optimizer = torch.optim.SGD(model.parameters(), lr=1e-1, weight_decay=1e-4, momentum=0.9)
                 lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs * steps_per_epoch)
