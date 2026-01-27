@@ -37,5 +37,6 @@ class ModelType(Enum):
     resnext50_32x4d = auto()
     wide_resnet50_2 = auto()
     dla = auto()
+    dla_46_c = auto()
 
     ddpm_cifar10 = auto()
