@@ -267,7 +267,10 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default, p
             output_ml_setup = dla_cifar10()
         elif dataset_type in [dataset_type.cifar100]:
             output_ml_setup = dla_cifar100()
-        elif dataset_type in [dataset_type.imagenet10]:
+        else:
+            raise NotImplementedError
+    elif model_name == ModelType.dla_46_c:
+        if dataset_type in [dataset_type.imagenet10]:
             assert pytorch_preset_version is not None
             output_ml_setup = dla_imagenet10(pytorch_preset_version=pytorch_preset_version)
         else:
