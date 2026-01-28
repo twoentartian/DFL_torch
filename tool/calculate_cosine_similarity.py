@@ -22,7 +22,7 @@ def _extract_state_dict(obj: Any) -> Dict[str, torch.Tensor]:
         if obj and all(isinstance(k, str) for k in obj.keys()) and all(torch.is_tensor(v) for v in obj.values()):
             return obj  # raw state_dict
 
-        for k in ("state_dict", "model_state_dict", "model", "net", "module"):
+        for k in ("state_dict", "model_state_dict", "model", "net", "module", "model_state"):
             if k in obj and isinstance(obj[k], dict) and obj[k] and all(torch.is_tensor(v) for v in obj[k].values()):
                 return obj[k]
 
