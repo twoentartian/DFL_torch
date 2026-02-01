@@ -284,6 +284,14 @@ class FastTrainingSetup(object):
             else:
                 raise not_implemented_error_instance
             return optimizer, lr_scheduler, epochs
+        elif arg_ml_setup.model_name == ModelType.nanoclip_default.name:
+            if arg_ml_setup.dataset_name in [DatasetType.flickr30k.name]:
+                epochs = 40
+                optimizer = None
+                lr_scheduler = None
+            else:
+                raise not_implemented_error_instance
+            return optimizer, lr_scheduler, epochs
         else:
             raise not_implemented_error_instance
 

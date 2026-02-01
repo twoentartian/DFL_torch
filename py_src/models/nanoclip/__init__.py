@@ -1,2 +1,2 @@
-from .network import ShuffleNet
-
+from .nanoclip import NanoCLIP
+from .loss import ContrastiveLoss

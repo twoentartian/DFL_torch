@@ -479,7 +479,7 @@ def dataset_imagenet1k_sam_mask_black(train_crop_size=224, val_resize_size=256, 
 
 """ Flickr """
 from . import dataset_flickr
-def dataset_flickr30k(img_transform=None, txt_transform=None, *args, **kwargs):
+def dataset_flickr30k(*args, **kwargs):
     dataset_name = str(DatasetType.flickr30k.name)
     dataset_type = DatasetType.flickr30k
 
@@ -502,7 +502,7 @@ def dataset_flickr30k(img_transform=None, txt_transform=None, *args, **kwargs):
 
     dataset_train = dataset_flickr.Flickr30k(flickr30k_path, split='train', img_transform=train_transform)
     dataset_test = dataset_flickr.Flickr30k(flickr30k_path, split='val', img_transform=valid_transform)
-    output = DatasetSetup(dataset_name, dataset_type, dataset_train, dataset_test, labels=None)
+    output = DatasetSetup(dataset_name, dataset_type, dataset_train, dataset_test, labels="non_classifier")
     return output
 
 def get_dataset_random(dataset_type, default_dataset_path, override_dataset_path, channel, label_count):
@@ -543,7 +543,6 @@ def get_dataset_random(dataset_type, default_dataset_path, override_dataset_path
     dataset_test = datasets.ImageFolder(os.path.join(dataset_path, "test"), transform=transforms_test)
     return DatasetSetup(dataset_name, dataset_type, dataset_train, dataset_test, labels=set(range(label_count)))
 
-
 """ Random MNIST """
 def dataset_random_mnist(override_dataset_path=None, *args, **kwargs):
     return get_dataset_random(DatasetType.random_mnist, default_path_random_mnist, override_dataset_path, 1, 10)
@@ -565,8 +564,6 @@ def dataset_random_imagenet100(override_dataset_path=None, *args, **kwargs):
 
 def dataset_random_imagenet1k(override_dataset_path=None, *args, **kwargs):
     return get_dataset_random(DatasetType.random_imagenet1k, default_path_random_imagenet1k, override_dataset_path, 3, 1000)
-
-
 
 # helper functions
 dataset_type_to_setup = {

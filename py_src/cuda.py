@@ -17,6 +17,14 @@ GPU_MAX_WORKERS: Final[int] = 1
 GPU_SINGLE_THREAD_MODE: Final[bool] = True
 MEASURE_MODEL_MEMORY_CONSUMPTION_IN_A_NEW_PROCESS: Final[bool] = False
 
+def to_device(x, device):
+    if torch.is_tensor(x):
+        return x.to(device, non_blocking=True)
+    if isinstance(x, dict):
+        return {k: to_device(v, device) for k, v in x.items()}
+    if isinstance(x, (list, tuple)):
+        return type(x)(to_device(v, device) for v in x)
+    return x  # leave non-tensors as-is (ints/strings/None/etc.)
 
 class CudaDevice:
     def __init__(self, device_index):

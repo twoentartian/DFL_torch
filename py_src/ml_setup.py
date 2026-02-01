@@ -26,6 +26,7 @@ from py_src.ml_setup_base.vit import vit_b_32_imagenet1k
 from py_src.ml_setup_base.wide_resnet50_2 import wide_resnet50_2_imagenet1k
 from py_src.ml_setup_base.dla import dla_cifar10, dla_cifar100, dla_imagenet10
 from py_src.ml_setup_base.ddpm import ddpm_cifar10
+from py_src.ml_setup_base.nanoclip import nanoclip_flickr30k_default
 
 __all__ = [ 'MlSetup', 'ModelType', 'DatasetType', 'CriterionType', 'imagenet1k_path','dataset_type_to_random', 'dataset_type_to_setup',
             'lenet4_mnist', 'lenet5_mnist', 'lenet5_random_mnist', 'lenet5_large_fc_mnist',
@@ -47,9 +48,8 @@ __all__ = [ 'MlSetup', 'ModelType', 'DatasetType', 'CriterionType', 'imagenet1k_
             'wide_resnet50_2_imagenet1k',
             'dla_cifar10', 'dla_cifar100', 'dla_imagenet10',
             'ddpm_cifar10',
+            'nanoclip_flickr30k_default',
            ]
-
-
 
 """ Helper function """
 def get_ml_setup_from_config(model_type: str, dataset_type: str = None, pytorch_preset_version=None):
@@ -278,6 +278,11 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default, p
     elif model_name == ModelType.ddpm_cifar10:
         if dataset_type in [dataset_type.default, dataset_type.cifar10]:
             output_ml_setup = ddpm_cifar10()
+        else:
+            raise NotImplementedError
+    elif model_name == ModelType.nanoclip_default:
+        if dataset_type in [dataset_type.default, dataset_type.flickr30k]:
+            output_ml_setup = nanoclip_flickr30k_default()
         else:
             raise NotImplementedError
     else:

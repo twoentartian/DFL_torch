@@ -51,6 +51,11 @@ class NanoCLIP(L.LightningModule):
         self.txt_encoder = TextEncoder(self.embed_size, self.txt_model, unfreeze_n_blocks)
         self.loss_fn = ContrastiveLoss(temperature=0.05)
 
+        self.num_training_batches_per_epoch = None
+
+    def set_batches_per_epoch(self, count):
+        self.num_training_batches_per_epoch = count
+
     def configure_optimizers(self):
         """
         Define the optimizer and the learning rate scheduler.
@@ -63,21 +68,20 @@ class NanoCLIP(L.LightningModule):
         scheduler = torch.optim.lr_scheduler.MultiStepLR(
             optimizer, milestones=self.milestones, gamma=self.lr_mult
         )
-        return [optimizer], [scheduler]
+        return optimizer, scheduler
 
-    def optimizer_step(self, epoch, batch_idx, optimizer, optimizer_closure):
+    def optimizer_step(self, epoch, batch_idx, optimizer, optimizer_closure=None):
         """
         Define how a single optimization step is executed.
         """
-        if self.trainer.current_epoch < self.warmup_epochs:
-            total_warmup_steps = self.warmup_epochs * self.trainer.num_training_batches
-            lr_scale = min(1.0, (self.trainer.global_step + 1) / total_warmup_steps)
+        if epoch < self.warmup_epochs:
+            total_warmup_steps = self.warmup_epochs * self.num_training_batches_per_epoch
+            lr_scale = min(1.0, (epoch*self.num_training_batches_per_epoch + batch_idx + 1) / total_warmup_steps)
             for pg in optimizer.param_groups:
                 initial_lr = pg.get("initial_lr", self.lr)
                 pg["lr"] = lr_scale * initial_lr
 
         optimizer.step(closure=optimizer_closure)
-        self.log('_LR', optimizer.param_groups[-1]['lr'], prog_bar=False, logger=True)
 
     def forward(self, image, captions, masks):
         """
@@ -118,8 +122,8 @@ class NanoCLIP(L.LightningModule):
 
         loss, batch_accuracy = self.loss_fn(img_descriptors, txt_descriptors)
 
-        self.log("loss", loss, prog_bar=True, logger=True)
-        self.log("batch_acc", batch_accuracy, prog_bar=True, logger=True)
+        # self.log("loss", loss, prog_bar=True, logger=True)
+        # self.log("batch_acc", batch_accuracy, prog_bar=True, logger=True)
         return loss
 
     def on_validation_epoch_start(self):
@@ -151,9 +155,9 @@ class NanoCLIP(L.LightningModule):
 
         # use faiss to calculate recall, images are gallery and texts are queries
         recall_1, recall_5, recall_10 = self._calculate_recall(img_descriptors, txt_descriptors, labels, k_values=[1, 5, 10])
-        self.log("recall@1", recall_1, prog_bar=True, logger=True)
-        self.log("recall@5", recall_5, prog_bar=True, logger=True)
-        self.log("recall@10", recall_10, prog_bar=False, logger=True)
+        # self.log("recall@1", recall_1, prog_bar=True, logger=True)
+        # self.log("recall@5", recall_5, prog_bar=True, logger=True)
+        # self.log("recall@10", recall_10, prog_bar=False, logger=True)
 
         # clear the validation descriptors for the next epoch
         self.validation_descriptors.clear()

@@ -48,6 +48,7 @@ class MlSetup:
         self.mixup_fn = None
         self.model_ema = None
         self.collate_fn = None
+        self.collate_fn_val = None
         self.sampler_fn = None
         self.training_batch_size = None
         self.dataset_label = None

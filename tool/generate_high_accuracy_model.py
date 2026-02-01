@@ -11,9 +11,10 @@ import concurrent.futures
 from torch.utils.data import DataLoader
 import logging
 from PIL import Image
+import lightning as L
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from py_src import ml_setup, complete_ml_setup, util
+from py_src import ml_setup, complete_ml_setup, util, cuda
 from py_src.service import record_model_stat
 from py_src.ml_setup import ModelType
 
@@ -87,7 +88,8 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
     dataset = copy.deepcopy(arg_ml_setup.training_data)
     batch_size = arg_ml_setup.training_batch_size
     num_worker = 16 if thread_per_process > 16 else thread_per_process
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, pin_memory=True, num_workers=num_worker, persistent_workers=True, prefetch_factor=4)
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=arg_ml_setup.collate_fn,
+                            pin_memory=True, num_workers=num_worker, persistent_workers=True, prefetch_factor=4)
     criterion = arg_ml_setup.criterion
 
     if arg_epoch_override is not None:
@@ -108,9 +110,18 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
         arg_ml_setup.re_initialize_model(model)
         if optimizer is None:
             child_logger.info(f"mode: ||||||||    TRAIN FROM INITIALIZATION    ||||||||")
-            optimizer, lr_scheduler, epochs = complete_ml_setup.FastTrainingSetup.get_optimizer_lr_scheduler_epoch(arg_ml_setup, model, arg_preset)
+            if isinstance(model, L.LightningModule):
+                # this is a model in lightning pytorch framework
+                optimizer_from_lighting, lr_scheduler_from_lighting = model.configure_optimizers()
+                optimizer_from_config, lr_scheduler_from_config, epochs_from_config = complete_ml_setup.FastTrainingSetup.get_optimizer_lr_scheduler_epoch(arg_ml_setup, model, arg_preset)
+                optimizer = optimizer_from_lighting if optimizer_from_config is None else optimizer_from_config
+                lr_scheduler = lr_scheduler_from_lighting if lr_scheduler_from_config is None else lr_scheduler_from_config
+                epochs = epochs_from_config
+            else:
+                # this is a normal pytorch model
+                optimizer, lr_scheduler, epochs = complete_ml_setup.FastTrainingSetup.get_optimizer_lr_scheduler_epoch(arg_ml_setup, model, arg_preset)
     else:
-        # load model weights and apply it
+        # load model weights and apply it (transfer learning)
         existing_model_state, existing_model_name, existing_dataset_name = util.load_model_state_file(transfer_learn_model_path)
         child_logger.info(f"load model weights for transfer learning, original model type: {existing_model_name}, dataset type: {existing_dataset_name}")
         model.load_state_dict(existing_model_state)
@@ -124,39 +135,63 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
     epoch_loss_lr_log_file.flush()
 
     child_logger.info(f"begin training")
+    if hasattr(model, 'set_batches_per_epoch'):
+        model.set_batches_per_epoch(len(dataloader))
+
     if arg_amp:
         scaler = torch.amp.GradScaler('cuda')
     for epoch in range(epochs):
         model.train()
         train_loss = 0
         count = 0
-        for data, label in dataloader:
-            data, label = data.to(device), label.to(device)
-            optimizer.zero_grad()
-            if arg_amp:
-                with torch.amp.autocast('cuda'):
+
+        """ Training procedure """
+        if isinstance(model, L.LightningModule):
+            """ Lighting model """
+            for batch_idx, batch in enumerate(dataloader):
+                batch = cuda.to_device(batch, device)
+                optimizer.zero_grad(set_to_none=True)
+
+                loss = model.training_step(batch, batch_idx)
+                loss.backward()
+
+                model.optimizer_step(epoch, batch_idx, optimizer, optimizer_closure=None)
+
+                if lr_scheduler is not None:
+                    lr_scheduler.step()
+                for func in arg_ml_setup.func_handler_post_training:
+                    func(model=model)
+        else:
+            """ Normal PyTorch model """
+            for data, label in dataloader:
+                data, label = data.to(device, non_blocking=True), label.to(device, non_blocking=True)
+                optimizer.zero_grad(set_to_none=True)
+                if arg_amp:
+                    with torch.amp.autocast('cuda'):
+                        outputs = model(data)
+                        if criterion == ml_setup.CriterionType.DiffusionModel:
+                            loss = outputs
+                        else:
+                            loss = criterion(outputs, label)
+                        scaler.scale(loss).backward()
+                        scaler.step(optimizer)
+                        scaler.update()
+                else:
                     outputs = model(data)
                     if criterion == ml_setup.CriterionType.DiffusionModel:
                         loss = outputs
                     else:
                         loss = criterion(outputs, label)
-                    scaler.scale(loss).backward()
-                    scaler.step(optimizer)
-                    scaler.update()
-            else:
-                outputs = model(data)
-                if criterion == ml_setup.CriterionType.DiffusionModel:
-                    loss = outputs
-                else:
-                    loss = criterion(outputs, label)
-                loss.backward()
-                optimizer.step()
-            if lr_scheduler is not None:
-                lr_scheduler.step()
-            for func in arg_ml_setup.func_handler_post_training:
-                func(model=model)
-            train_loss += loss.item()
+                    loss.backward()
+                    optimizer.step()
+                if lr_scheduler is not None:
+                    lr_scheduler.step()
+                for func in arg_ml_setup.func_handler_post_training:
+                    func(model=model)
+                train_loss += loss.item()
             count += 1
+
+        """ print progress """
         lrs = []
         for param_group in optimizer.param_groups:
             lrs.append(param_group['lr'])

@@ -40,3 +40,4 @@ class ModelType(Enum):
     dla_46_c = auto()
 
     ddpm_cifar10 = auto()
+    nanoclip_default = auto()
