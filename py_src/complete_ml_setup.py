@@ -293,7 +293,7 @@ class FastTrainingSetup(object):
                 ]
                 optimizer = torch.optim.AdamW(optimizer_params)
                 lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(
-                    optimizer, milestones=[i*steps_per_epoch for i in model.milestones], gamma=model.lr_mult
+                    optimizer, milestones=[i*steps_per_epoch for i in [10,20,30]], gamma=0.1
                 )
             else:
                 raise not_implemented_error_instance
