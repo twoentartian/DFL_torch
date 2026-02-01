@@ -68,7 +68,8 @@ class NanoCLIP(L.LightningModule):
         scheduler = torch.optim.lr_scheduler.MultiStepLR(
             optimizer, milestones=self.milestones, gamma=self.lr_mult
         )
-        return optimizer, scheduler
+        # return optimizer, scheduler
+        return None, None
 
     def optimizer_step(self, epoch, batch_idx, optimizer, optimizer_closure=None):
         """
