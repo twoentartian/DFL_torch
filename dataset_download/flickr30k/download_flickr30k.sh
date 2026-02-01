@@ -5,10 +5,6 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
-# Get the project root directory
-SCRIPT_DIR="$(dirname "$(realpath "$0")")"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-
 # Check if Kaggle is installed
 if ! command_exists kaggle; then
     echo "Kaggle is not installed. Please install Kaggle using: pip install kaggle"
@@ -17,7 +13,7 @@ fi
 
 # Set the dataset name and download path
 dataset_name="eeshawn/flickr30k" # dataset name on Kaggle
-download_path="$PROJECT_ROOT/datasets/flickr30k" # path to download the dataset
+download_path="./" # path to download the dataset
 
 # Create the download directory if it doesn't exist
 mkdir -p "$download_path"
