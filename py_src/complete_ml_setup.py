@@ -288,12 +288,12 @@ class FastTrainingSetup(object):
             if arg_ml_setup.dataset_name in [DatasetType.flickr30k.name]:
                 epochs = 40
                 optimizer_params = [
-                    {"params": model.img_encoder.parameters(), "lr": 0.001, "weight_decay": 4e-4},
-                    {"params": model.txt_encoder.parameters(), "lr": 0.001, "weight_decay": 4e-4},
+                    {"params": model.img_encoder.parameters(), "lr": model.lr, "weight_decay": model.weight_decay},
+                    {"params": model.txt_encoder.parameters(), "lr": model.lr, "weight_decay": model.weight_decay},
                 ]
                 optimizer = torch.optim.AdamW(optimizer_params)
                 lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(
-                    optimizer, milestones=[i*steps_per_epoch for i in [10,20,30]], gamma=0.1
+                    optimizer, milestones=[i*steps_per_epoch for i in model.milestones], gamma=model.lr_mult
                 )
             else:
                 raise not_implemented_error_instance
