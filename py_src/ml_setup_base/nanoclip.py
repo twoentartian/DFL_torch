@@ -1,10 +1,8 @@
-from torchvision import models
 from transformers import AutoTokenizer
 
 from py_src.ml_setup_base.base import MlSetup
 from py_src.ml_setup_base.model import ModelType
 import py_src.ml_setup_base.dataset as ml_setup_dataset
-from py_src.ml_setup_base.other_setup import get_pytorch_training_imagenet
 
 import py_src.models.nanoclip as nanoclip
 from py_src.ml_setup_base.dataset_flickr import CollateFlickr
@@ -12,7 +10,7 @@ from py_src.ml_setup_base.dataset_flickr import CollateFlickr
 def nanoclip_flickr30k_default():
     output_ml_setup = MlSetup()
     txt_model_name = "sentence-transformers/all-MiniLM-L6-v2"
-    dataset = ml_setup_dataset.dataset_flickr30k(txt_model=txt_model_name, img_model='dinov2_vits14')
+    dataset = ml_setup_dataset.dataset_flickr30k()
 
     output_ml_setup.model = nanoclip.NanoCLIP(txt_model=txt_model_name,
         img_model="dinov2_vits14",
