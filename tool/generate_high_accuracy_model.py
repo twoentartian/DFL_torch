@@ -161,6 +161,8 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
                     lr_scheduler.step()
                 for func in arg_ml_setup.func_handler_post_training:
                     func(model=model)
+                train_loss += loss.item()
+                count += 1
         else:
             """ Normal PyTorch model """
             for data, label in dataloader:
@@ -189,7 +191,7 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
                 for func in arg_ml_setup.func_handler_post_training:
                     func(model=model)
                 train_loss += loss.item()
-            count += 1
+                count += 1
 
         """ print progress """
         lrs = []
