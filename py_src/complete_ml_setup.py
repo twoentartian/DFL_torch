@@ -287,9 +287,11 @@ class FastTrainingSetup(object):
         elif arg_ml_setup.model_name == ModelType.nanoclip_default.name:
             if arg_ml_setup.dataset_name in [DatasetType.flickr30k.name]:
                 epochs = 400
+                weight_decay = 4e-4
+                lr=1e-3
                 optimizer_params = [
-                    {"params": model.img_encoder.parameters(), "lr": model.lr, "weight_decay": model.weight_decay},
-                    {"params": model.txt_encoder.parameters(), "lr": model.lr, "weight_decay": model.weight_decay},
+                    {"params": model.img_encoder.parameters(), "lr": lr, "weight_decay": weight_decay},
+                    {"params": model.txt_encoder.parameters(), "lr": lr, "weight_decay": weight_decay},
                 ]
                 optimizer = torch.optim.AdamW(optimizer_params)
                 # lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(
