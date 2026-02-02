@@ -27,11 +27,8 @@ class NanoCLIP(L.LightningModule):
             img_model='dinov2_vits14',
             embed_size=64,  # output dimension of the encoder
             unfreeze_n_blocks=4,
-            lr=0.0001,
-            warmup_epochs=0,
-            weight_decay=0.0001,
-            milestones=[5, 10, 15],
-            lr_mult=0.1,
+            lr=0.001,
+            freeze_encoder=False,
     ):
         super().__init__()
 
@@ -40,15 +37,11 @@ class NanoCLIP(L.LightningModule):
         self.embed_size = embed_size
         self.unfreeze_n_blocks = unfreeze_n_blocks
         self.lr = lr
-        self.warmup_epochs = warmup_epochs
-        self.weight_decay = weight_decay
-        self.milestones = milestones
-        self.lr_mult = lr_mult
 
-        self.save_hyperparameters()  # save all hyperparameters to hparams file (for reproducibility)
-
-        self.img_encoder = ImageEncoder(self.embed_size, self.img_model, unfreeze_n_blocks)
-        self.txt_encoder = TextEncoder(self.embed_size, self.txt_model, unfreeze_n_blocks)
+        self.img_encoder = ImageEncoder(self.embed_size, self.img_model,
+                                        freeze = freeze_encoder, unfreeze_n_blocks=unfreeze_n_blocks)
+        self.txt_encoder = TextEncoder(self.embed_size, self.txt_model,
+                                       freeze = freeze_encoder, unfreeze_n_blocks=unfreeze_n_blocks)
         self.loss_fn = ContrastiveLoss(temperature=0.05)
 
         self.num_training_batches_per_epoch = None

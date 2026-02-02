@@ -12,15 +12,9 @@ def nanoclip_flickr30k_default():
     txt_model_name = "sentence-transformers/all-MiniLM-L6-v2"
     dataset = ml_setup_dataset.dataset_flickr30k()
 
-    output_ml_setup.model = nanoclip.NanoCLIP(txt_model=txt_model_name,
-        img_model="dinov2_vits14",
-        unfreeze_n_blocks=4,
-        embed_size=64,
-        lr=0.001,
-        weight_decay=4e-4,
-        warmup_epochs=5,
-        milestones=[10, 20, 30],
-        lr_mult=0.1,)
+    output_ml_setup.model = nanoclip.NanoCLIP(txt_model=txt_model_name, img_model="dinov2_vits14",
+                                              unfreeze_n_blocks=4, embed_size=64, lr=0.001,
+                                              freeze_encoder=False)
     output_ml_setup.model_name = str(ModelType.nanoclip_default.name)
     output_ml_setup.model_type = ModelType.nanoclip_default
     output_ml_setup.get_info_from_dataset(dataset)

@@ -19,24 +19,25 @@ class ImageEncoder(nn.Module):
         # 'dinov2_vitg14' # let's not use huge models for this simple task
     ]
 
-    def __init__(self, output_dim=64, img_model='dinov2_vits14', unfreeze_n_blocks=4):
+    def __init__(self, output_dim=64, img_model='dinov2_vits14', freeze=True, unfreeze_n_blocks=4):
         super().__init__()
         if img_model not in self.SUPPORTED_MODELS:
             raise ValueError(f'Invalid model name. Choose between {self.SUPPORTED_MODELS}')
         self.encoder = torch.hub.load('facebookresearch/dinov2', img_model)
 
-        # freeze all parameters
-        for param in self.encoder.parameters():
-            param.requires_grad = False
+        if freeze:
+            # freeze all parameters
+            for param in self.encoder.parameters():
+                param.requires_grad = False
 
-        # unfreeze the last few blocks
-        for block in self.encoder.blocks[- unfreeze_n_blocks:]:
-            for param in block.parameters():
+            # unfreeze the last few blocks
+            for block in self.encoder.blocks[- unfreeze_n_blocks:]:
+                for param in block.parameters():
+                    param.requires_grad = True
+
+            # unfreeze the norm layer
+            for param in self.encoder.norm.parameters():
                 param.requires_grad = True
-
-        # unfreeze the norm layer
-        for param in self.encoder.norm.parameters():
-            param.requires_grad = True
 
         self.fc = nn.Linear(self.encoder.embed_dim, output_dim)
 
@@ -48,23 +49,24 @@ class ImageEncoder(nn.Module):
 
 
 class TextEncoder(nn.Module):
-    def __init__(self, output_dim=64, lang_model="sentence-transformers/all-MiniLM-L6-v2", unfreeze_n_blocks=4):
+    def __init__(self, output_dim=64, lang_model="sentence-transformers/all-MiniLM-L6-v2", freeze=True, unfreeze_n_blocks=4):
         super().__init__()
         self.lang_model = lang_model
         self.encoder = AutoModel.from_pretrained(lang_model)
 
-        # freeze all parameters
-        for param in self.encoder.parameters():
-            param.requires_grad = False
+        if freeze:
+            # freeze all parameters
+            for param in self.encoder.parameters():
+                param.requires_grad = False
 
-        # unfreeze the last few encoder layers
-        for layer in self.encoder.encoder.layer[- unfreeze_n_blocks:]:
-            for param in layer.parameters():
+            # unfreeze the last few encoder layers
+            for layer in self.encoder.encoder.layer[- unfreeze_n_blocks:]:
+                for param in layer.parameters():
+                    param.requires_grad = True
+
+            # unfreeze the pooler layer
+            for param in self.encoder.pooler.parameters():
                 param.requires_grad = True
-
-        # unfreeze the pooler layer
-        for param in self.encoder.pooler.parameters():
-            param.requires_grad = True
 
         self.fc = nn.Linear(self.encoder.config.hidden_size, output_dim)
 
