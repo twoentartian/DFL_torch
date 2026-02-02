@@ -287,6 +287,7 @@ class FastTrainingSetup(object):
         elif arg_ml_setup.model_name == ModelType.nanoclip_default.name:
             if arg_ml_setup.dataset_name in [DatasetType.flickr30k.name]:
                 epochs = 400
+                warmup_epochs = 5
                 weight_decay = 4e-4
                 lr=1e-3
                 optimizer_params = [
@@ -297,7 +298,13 @@ class FastTrainingSetup(object):
                 # lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(
                 #     optimizer, milestones=[i*steps_per_epoch for i in model.milestones], gamma=model.lr_mult
                 # )
-                lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=epochs * steps_per_epoch, eta_min=1e-5)
+                total_steps = epochs * steps_per_epoch
+                warmup_steps = warmup_epochs * steps_per_epoch
+                cosine_steps = total_steps - warmup_steps
+                warmup = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=1e-8, end_factor=1.0, total_iters=warmup_steps)
+                cosine = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cosine_steps, eta_min=1e-5)
+                scheduler = torch.optim.lr_scheduler.SequentialLR(optimizer, schedulers=[warmup, cosine], milestones=[warmup_steps])
+                lr_scheduler = scheduler
             else:
                 raise not_implemented_error_instance
             return optimizer, lr_scheduler, epochs
