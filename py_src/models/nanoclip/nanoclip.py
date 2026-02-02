@@ -68,12 +68,12 @@ class NanoCLIP(L.LightningModule):
         """
         Define how a single optimization step is executed.
         """
-        if epoch < self.warmup_epochs:
-            total_warmup_steps = self.warmup_epochs * self.num_training_batches_per_epoch
-            lr_scale = min(1.0, (epoch*self.num_training_batches_per_epoch + batch_idx + 1) / total_warmup_steps)
-            for pg in optimizer.param_groups:
-                initial_lr = pg.get("initial_lr", self.lr)
-                pg["lr"] = lr_scale * initial_lr
+        # if epoch < self.warmup_epochs:
+        #     total_warmup_steps = self.warmup_epochs * self.num_training_batches_per_epoch
+        #     lr_scale = min(1.0, (epoch*self.num_training_batches_per_epoch + batch_idx + 1) / total_warmup_steps)
+        #     for pg in optimizer.param_groups:
+        #         initial_lr = pg.get("initial_lr", self.lr)
+        #         pg["lr"] = lr_scale * initial_lr
 
         optimizer.step(closure=optimizer_closure)
 
