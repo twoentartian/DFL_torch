@@ -53,14 +53,14 @@ class NanoCLIP(L.LightningModule):
         """
         Define the optimizer and the learning rate scheduler.
         """
-        optimizer_params = [
-            {"params": self.img_encoder.parameters(), "lr": self.lr, "weight_decay": self.weight_decay},
-            {"params": self.txt_encoder.parameters(), "lr": self.lr, "weight_decay": self.weight_decay},
-        ]
-        optimizer = torch.optim.AdamW(optimizer_params)
-        scheduler = torch.optim.lr_scheduler.MultiStepLR(
-            optimizer, milestones=self.milestones, gamma=self.lr_mult
-        )
+        # optimizer_params = [
+        #     {"params": self.img_encoder.parameters(), "lr": self.lr, "weight_decay": self.weight_decay},
+        #     {"params": self.txt_encoder.parameters(), "lr": self.lr, "weight_decay": self.weight_decay},
+        # ]
+        # optimizer = torch.optim.AdamW(optimizer_params)
+        # scheduler = torch.optim.lr_scheduler.MultiStepLR(
+        #     optimizer, milestones=self.milestones, gamma=self.lr_mult
+        # )
         # return optimizer, scheduler
         return None, None
 
