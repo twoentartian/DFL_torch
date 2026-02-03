@@ -12,7 +12,7 @@ Examples:
 import argparse
 import re
 from pathlib import Path
-from typing import Dict, Tuple, Any, Optional, Callable
+from typing import Dict, Tuple, Any, Optional
 
 import torch
 
@@ -34,6 +34,31 @@ def _extract_state_dict(obj: Any) -> Dict[str, torch.Tensor]:
 
 def _normalize_key(key: str) -> str:
     return key[7:] if key.startswith("module.") else key
+
+
+def _is_probably_trainable_param(key: str, t: torch.Tensor) -> bool:
+    """
+    Best-effort heuristic for trainable params from a state_dict (no nn.Module available).
+    Count floating-point tensors, excluding common non-trainable buffers (e.g., BN running stats).
+    """
+    if not torch.is_floating_point(t):
+        return False
+
+    # Common buffers / non-trainable state
+    buffer_suffixes = (
+        "running_mean",
+        "running_var",
+        "num_batches_tracked",
+    )
+    if any(key.endswith(suf) for suf in buffer_suffixes):
+        return False
+
+    # Some frameworks store EMA/shadow weights or other non-trainable copies; ignore common patterns
+    lowered = key.lower()
+    if any(tok in lowered for tok in ("ema.", "shadow", "moving_average", "avg_model")):
+        return False
+
+    return True
 
 
 def _collect_common_tensors(
@@ -102,6 +127,19 @@ def _layer_name_from_key(key: str, layer_level: Optional[int]) -> str:
         return base
     parts = base.split(".")
     return ".".join(parts[:layer_level]) if len(parts) > layer_level else base
+
+
+def _count_trainable_params(common: Dict[str, Tuple[torch.Tensor, torch.Tensor]], group_fn) -> Dict[str, int]:
+    """
+    Counts (estimated) trainable parameters per group, based on state_dict keys.
+    """
+    out: Dict[str, int] = {}
+    for k, (ta, _tb) in common.items():
+        if not _is_probably_trainable_param(k, ta):
+            continue
+        g = group_fn(k)
+        out[g] = out.get(g, 0) + ta.numel()
+    return out
 
 
 @torch.no_grad()
@@ -178,7 +216,6 @@ def cosine_and_norms_per_group(
     return out
 
 
-
 def main():
     ap = argparse.ArgumentParser(description="Cosine similarity between two PyTorch models/checkpoints.")
     ap.add_argument("model_a", type=Path, help="Path to first model checkpoint/state_dict")
@@ -212,7 +249,14 @@ def main():
         raise SystemExit("No common tensors to compare (after filters).")
 
     cos, norm_a, norm_b = cosine_similarity_flat(common)
+
+    # param counts (estimated from common tensors)
+    layer_group_fn = lambda k: _layer_name_from_key(k, None)
+    params_per_layer = _count_trainable_params(common, layer_group_fn)
+    total_params = sum(params_per_layer.values())
+
     print(f"Common tensors used: {len(common)}")
+    print(f"Estimated trainable params (in common tensors): {total_params:,}")
     print(f"||A|| = {norm_a:.6g}   ||B|| = {norm_b:.6g}")
     print(f"Cosine similarity (flattened all common tensors): {cos:.12f}")
 
@@ -226,19 +270,36 @@ def main():
             if len(skipped) > 20:
                 print(f"  ... and {len(skipped) - 20} more")
 
-    group_fn = lambda k: _layer_name_from_key(k, None)
-    per_layer = cosine_and_norms_per_group(common, group_fn)
-
+    per_layer = cosine_and_norms_per_group(common, layer_group_fn)
     items = sorted(per_layer.items(), key=lambda kv: kv[0])
 
-    print(f"\nPer-layer cosine + norms:")
-    print("  layer                                   cos           ||A||         ||B||        B/A")
+    # --- alignment: dynamic column width for the layer name ---
+    name_w = min(80, max(len(name) for name, _ in items))  # cap so it doesn't get silly
+    name_w = max(name_w, len("layer"))
+
+    header = (
+        f"  {'layer':<{name_w}}  "
+        f"{'cos':>14}  {'||A||':>12}  {'||B||':>12}  {'B/A':>10}  {'params':>12}"
+    )
+    print("\nPer-layer cosine + norms + params:")
+    print(header)
+
     for name, stats in items:
-        cos = stats["cos"]
+        cos_v = stats["cos"]
         na = stats["norm_a"]
         nb = stats["norm_b"]
         ratio = float("nan") if na == 0.0 else (nb / na)
-        print(f"  {name:<40} {cos:> .12f}  {na:> .6g}  {nb:> .6g}  {ratio:> .6g}")
+        p = params_per_layer.get(name, 0)
+
+        print(
+            f"  {name:<{name_w}}  "
+            f"{cos_v:> .12f}  "
+            f"{na:>12.6g}  "
+            f"{nb:>12.6g}  "
+            f"{ratio:>10.6g}  "
+            f"{p:>12,}"
+        )
+
 
 
 if __name__ == "__main__":
