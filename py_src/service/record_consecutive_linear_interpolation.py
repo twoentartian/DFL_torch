@@ -32,6 +32,7 @@ class ServiceConsecutiveLinearInterpolationRecorder(Service):
         self.recorded_node_name = recorded_node_name
 
         self.cache_state_model_stat = None
+        self.logger = None
 
     @staticmethod
     def get_service_name() -> str:
@@ -52,8 +53,9 @@ class ServiceConsecutiveLinearInterpolationRecorder(Service):
 
         self.initialize_without_runtime_parameters(output_path, ml_setup.model, ml_setup.criterion, ml_setup.training_data, gpu=gpu, existing_model_for_testing=pre_allocated_model)
 
-    def initialize_without_runtime_parameters(self, output_path, model, criterion, train_dataset, gpu: CudaDevice=None, existing_model_for_testing=None, num_workers=None):
+    def initialize_without_runtime_parameters(self, output_path, model, criterion, train_dataset, logger=None, gpu: CudaDevice=None, existing_model_for_testing=None, num_workers=None):
         self.criterion = criterion
+        self.logger = logger
 
         # set model
         if existing_model_for_testing is None:

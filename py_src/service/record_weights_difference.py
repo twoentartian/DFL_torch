@@ -18,6 +18,8 @@ class ServiceWeightsDifferenceRecorder(Service):
         self.last_l1_distance = None
         self.last_l2_distance = None
 
+        self.logger = None
+
     @staticmethod
     def get_service_name() -> str:
         return "weight_difference_recorder"
@@ -59,7 +61,8 @@ class ServiceWeightsDifferenceRecorder(Service):
         return self.last_l1_distance, self.last_l2_distance
 
     # for manual use, not for simulator use
-    def initialize_without_runtime_parameters(self, model_stats, output_path):
+    def initialize_without_runtime_parameters(self, model_stats, output_path, logger=None):
+        self.logger = logger
         self.l1_save_file = open(os.path.join(output_path, f"{self.l1_save_file_name}"), "w+")
         self.l2_save_file = open(os.path.join(output_path, f"{self.l2_save_file_name}"), "w+")
         self.layer_order = []
@@ -109,6 +112,8 @@ class ServiceDistanceToOriginRecorder(Service):
         self.interval = interval
         self.nodes_to_record = nodes_to_record
 
+        self.logger = None
+
     @staticmethod
     def get_service_name() -> str:
         return "weight_difference_recorder"
@@ -129,7 +134,8 @@ class ServiceDistanceToOriginRecorder(Service):
             self.trigger_without_runtime_parameters(parameters.current_tick, model_stats)
 
     # for manual use, not for simulator use
-    def initialize_without_runtime_parameters(self, node_name_and_model_stat, output_path):
+    def initialize_without_runtime_parameters(self, node_name_and_model_stat, output_path, logger=None):
+        self.logger = logger
         self.layer_order = []
         model_stat = node_name_and_model_stat[next(iter(node_name_and_model_stat))]
         for layer_name, _ in model_stat.items():

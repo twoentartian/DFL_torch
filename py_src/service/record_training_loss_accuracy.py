@@ -11,6 +11,7 @@ class ServiceTrainingLossAccuracyRecorder(Service):
         self.loss_file_name = loss_file_name
         self.accuracy_file_name = accuracy_file_name
         self.interval = interval
+        self.logger = None
 
     @staticmethod
     def get_service_name() -> str:
@@ -23,7 +24,8 @@ class ServiceTrainingLossAccuracyRecorder(Service):
             node_order.append(node_name)
         self.initialize_without_runtime_parameters(output_path, node_order)
 
-    def initialize_without_runtime_parameters(self, output_path, node_order):
+    def initialize_without_runtime_parameters(self, output_path, node_order, logger=None):
+        self.logger = logger
         self.loss_file = open(os.path.join(output_path, f"{self.loss_file_name}"), "w+")
         self.accuracy_file = open(os.path.join(output_path, f"{self.accuracy_file_name}"), "w+")
         self.node_order = node_order

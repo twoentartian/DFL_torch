@@ -14,6 +14,7 @@ class ServiceVarianceRecorder(Service):
         self.header = None
         self.interval = interval
         self.record_phase = phase
+        self.logger = None
 
     @staticmethod
     def get_service_name() -> str:
@@ -45,7 +46,8 @@ class ServiceVarianceRecorder(Service):
                 model_stats.append(model_stat)
             self.trigger_without_runtime_parameters(parameters.current_tick, node_names, model_stats, phase_str=parameters.phase.name)
 
-    def initialize_without_runtime_parameters(self, node_names, model_stats, output_path):
+    def initialize_without_runtime_parameters(self, node_names, model_stats, output_path, logger=None):
+        self.logger = logger
         assert len(node_names) == len(model_stats)
         self.save_path = os.path.join(output_path, "variance")
         os.mkdir(self.save_path)

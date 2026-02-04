@@ -44,6 +44,7 @@ class ServiceTestAccuracyLossRecorder(Service):
         self.test_dataset = None
         self.val_dataset = None
         self.allocated_gpu = None
+        self.logger = None
 
         if test_whole_dataset:
             self.test_val_split = test_val_split
@@ -83,7 +84,8 @@ class ServiceTestAccuracyLossRecorder(Service):
 
         self.initialize_without_runtime_parameters(output_path, node_names, ml_setup.model, ml_setup.criterion, ml_setup.testing_data, gpu=gpu, existing_model_for_testing=pre_allocated_model)
 
-    def initialize_without_runtime_parameters(self, output_path, node_names, model, criterion, test_dataset, gpu: CudaDevice=None, existing_model_for_testing=None, num_workers=None):
+    def initialize_without_runtime_parameters(self, output_path, node_names, model, criterion, test_dataset, logger=None, gpu: CudaDevice=None, existing_model_for_testing=None, num_workers=None):
+        self.logger = logger
         self.accuracy_file = open(os.path.join(output_path, f"{self.accuracy_file_name}"), "w+")
         self.loss_file = open(os.path.join(output_path, f"{self.loss_file_name}"), "w+")
         self.output_var_file = open(os.path.join(output_path, f"{self.output_var_file_name}"), "w+")

@@ -25,6 +25,7 @@ class ModelStatRecorder(Service):
         self.write_count = 0
         self.model_name = model_name
         self.dataset_name = dataset_name
+        self.logger = None
 
     @staticmethod
     def get_service_name() -> str:
@@ -53,7 +54,8 @@ class ModelStatRecorder(Service):
                 model_stats.append(model_stat)
             self.trigger_without_runtime_parameters(parameters.current_tick, node_names, model_stats)
 
-    def initialize_without_runtime_parameters(self, node_names, output_path, save_format="lmdb", lmdb_db_name=None):
+    def initialize_without_runtime_parameters(self, node_names, output_path, logger=None, save_format="lmdb", lmdb_db_name=None):
+        self.logger = logger
         assert save_format in ["lmdb", "file"], "save_format must be one of 'lmdb', 'file'"
         self.save_format = save_format
         if self.save_format == "lmdb":

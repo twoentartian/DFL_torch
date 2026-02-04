@@ -5,7 +5,7 @@ class Service(object):
     def get_service_name() -> str:
         raise NotImplementedError
 
-    def initialize(self, parameters: RuntimeParameters, output_path, *args, **kwargs):
+    def initialize(self, parameters: RuntimeParameters, output_path, logger=None, *args, **kwargs):
         raise NotImplementedError
 
     def trigger(self, parameters: RuntimeParameters, *args, **kwargs):
