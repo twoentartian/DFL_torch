@@ -23,7 +23,7 @@ from find_high_accuracy_path_v2.functions import rebuild_norm_layer_function
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from py_src.simulation_runtime_parameters import SimulationPhase
 from py_src import ml_setup, model_average, model_variance_correct, special_torch_layers, cuda, util, configuration_file
-from py_src.service import record_weights_difference, record_test_accuracy_loss, record_variance, record_model_stat, record_training_loss_accuracy, record_consecutive_linear_interpolation
+from py_src.service import record_weights_difference, record_test_accuracy_loss, record_variance, record_model_stat, record_training_loss_accuracy, record_consecutive_linear_interpolation, record_cosine_similarity
 
 logger = logging.getLogger("find_high_accuracy_path_v2")
 
@@ -252,6 +252,8 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
         train_collate_fn = default_collate if current_ml_setup.collate_fn is None else current_ml_setup.collate_fn
         dataloader_worker = 0 if general_parameter.dataloader_worker is None else general_parameter.dataloader_worker
         dataloader_prefetch_factor = 4 if general_parameter.dataloader_prefetch_factor is None else general_parameter.dataloader_prefetch_factor
+        if dataloader_worker == 0:
+            dataloader_prefetch_factor = None
         persistent_workers = False if dataloader_worker == 0 else True
         sampler_fn = None if current_ml_setup.sampler_fn is None else current_ml_setup.sampler_fn(training_dataset)
         dataloader = DataLoader(training_dataset, batch_size=current_ml_setup.training_batch_size, shuffle=True if sampler_fn is None else None,
@@ -294,12 +296,16 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
     child_logger.info("setting service done: weight_change_service")
 
     distance_to_origin_service = record_weights_difference.ServiceDistanceToOriginRecorder(1, [0])
-    distance_to_origin_service.initialize_without_runtime_parameters({0: start_model_stat_dict}, arg_output_folder_path)
+    distance_to_origin_service.initialize_without_runtime_parameters({0: start_model_stat_dict}, arg_output_folder_path, logger=child_logger)
     child_logger.info("setting service done: distance_to_origin_service")
 
-    variance_service = record_variance.ServiceVarianceRecorder(1)
-    variance_service.initialize_without_runtime_parameters([0], [start_model_stat_dict], arg_output_folder_path)
-    child_logger.info("setting service done: variance_service")
+    record_variance_service = record_variance.ServiceVarianceRecorder(1)
+    record_variance_service.initialize_without_runtime_parameters([0], [start_model_stat_dict], arg_output_folder_path, logger=child_logger)
+    child_logger.info("setting service done: record_variance_service")
+
+    record_cosine_similarity_service = record_cosine_similarity.ServiceVarianceRecorder(1)
+    record_cosine_similarity_service.initialize_without_runtime_parameters({0: start_model_stat_dict}, arg_output_folder_path, logger=child_logger)
+    child_logger.info("setting service done: cosine_similarity_service")
 
     if runtime_parameter.save_format != 'none':
         if not runtime_parameter.save_ticks:
@@ -355,8 +361,8 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             weight_change_service.continue_from_checkpoint(checkpoint_folder_path, runtime_parameter.current_tick)
         if distance_to_origin_service is not None:
             distance_to_origin_service.continue_from_checkpoint(checkpoint_folder_path, runtime_parameter.current_tick)
-        if variance_service is not None:
-            variance_service.continue_from_checkpoint(checkpoint_folder_path, runtime_parameter.current_tick)
+        if record_variance_service is not None:
+            record_variance_service.continue_from_checkpoint(checkpoint_folder_path, runtime_parameter.current_tick)
         if record_model_service is not None:
             record_model_service.continue_from_checkpoint(checkpoint_folder_path, runtime_parameter.current_tick)
         if record_test_accuracy_loss_service is not None:
@@ -753,7 +759,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             weight_change_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, [model_state_of_last_tick, target_model_stat_dict])
             model_state_of_last_tick = copy.deepcopy(target_model_stat_dict)
             distance_to_origin_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, {0: target_model_stat_dict})
-            variance_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, [0], [target_model_stat_dict])
+            record_variance_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, [0], [target_model_stat_dict])
             if record_model_service is not None:
                 record_flag = False
                 if runtime_parameter.save_ticks is None:
@@ -766,6 +772,8 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
             record_test_accuracy_loss_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, {0: target_model_stat_dict})
             record_training_loss_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, {0: training_loss_val}, {0: training_accuracy_val})
             record_consecutive_points_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, SimulationPhase.END_OF_TICK, target_model.state_dict())
+            record_cosine_similarity_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, {0: target_model_stat_dict} )
+
         # update tick
         runtime_parameter.current_tick += 1
 

@@ -118,17 +118,17 @@ class ServiceTestAccuracyLossRecorder(Service):
                 self.val_idx = perm[val_n:]
                 test_ds = Subset(test_dataset, self.test_idx)
                 val_ds = Subset(test_dataset, self.val_idx)
-                if num_workers is None:
+                if num_workers in [None, 0]:
                     self.test_dataset = DataLoader(test_ds, batch_size=self.test_batch_size, shuffle=True, pin_memory=True)
                     self.val_dataset = DataLoader(val_ds, batch_size=self.test_batch_size, shuffle=True, pin_memory=True)
                 else:
-                    self.test_dataset = DataLoader(test_ds, batch_size=self.test_batch_size, shuffle=True, pin_memory=True, num_workers=num_workers, persistent_workers=True)
-                    self.val_dataset = DataLoader(val_ds, batch_size=self.test_batch_size, shuffle=True, pin_memory=True, num_workers=num_workers, persistent_workers=True)
+                    self.test_dataset = DataLoader(test_ds, batch_size=self.test_batch_size, shuffle=True, pin_memory=True, num_workers=num_workers, persistent_workers=True, prefetch_factor=4)
+                    self.val_dataset = DataLoader(val_ds, batch_size=self.test_batch_size, shuffle=True, pin_memory=True, num_workers=num_workers, persistent_workers=True, prefetch_factor=4)
             else:
-                if num_workers is None:
+                if num_workers in [None, 0]:
                     self.test_dataset = DataLoader(test_dataset, batch_size=self.test_batch_size, shuffle=True, pin_memory=True)
                 else:
-                    self.test_dataset = DataLoader(test_dataset, batch_size=self.test_batch_size, shuffle=True, pin_memory=True, num_workers=num_workers, persistent_workers=True)
+                    self.test_dataset = DataLoader(test_dataset, batch_size=self.test_batch_size, shuffle=True, pin_memory=True, num_workers=num_workers, persistent_workers=True, prefetch_factor=4)
         else:
             if self.use_fixed_testing_dataset:
                 """we should iterate whole dataset"""
