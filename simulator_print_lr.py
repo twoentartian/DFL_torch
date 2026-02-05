@@ -5,8 +5,9 @@ import shutil
 import torch
 
 from datetime import datetime
-from py_src import configuration_file, internal_names, initial_checking, cuda, node, dataset, dfl_logging, simulator_common, cpu
+from py_src import configuration_file, internal_names, initial_checking, cuda, node, dfl_logging, simulator_common, cpu
 from py_src.simulation_runtime_parameters import RuntimeParameters, SimulationPhase
+from py_src.ml_setup_base import dataset_intermediate_layer as dataset_il
 
 simulator_base_logger = logging.getLogger(internal_names.logger_simulator_base_name)
 
@@ -50,7 +51,7 @@ def main(config_file_path, output_folder_name):
     simulator_common.save_topology_to_file(topology, runtime_parameters.current_tick, runtime_parameters.output_path, mpi_enabled=True)
 
     # create dataset
-    training_dataset = dataset.DatasetWithFastLabelSelection(config_ml_setup.training_data)
+    training_dataset = dataset_il.DatasetWithFastLabelSelection(config_ml_setup.training_data)
 
     # create nodes
     runtime_parameters.node_container = {}

@@ -7,9 +7,10 @@ import numpy as np
 
 from torch.utils.data import DataLoader
 
-from py_src import dataset, internal_names, util, model_average, cpu
+from py_src import internal_names, util, model_average, cpu
 from py_src.ml_setup import MlSetup
 from py_src.cuda import CudaDevice, CudaEnv
+from py_src.ml_setup_base import dataset_intermediate_layer as dataset_il
 
 logger = logging.getLogger(f"{internal_names.logger_simulator_base_name}.{util.basename_without_extension(__file__)}")
 
@@ -127,7 +128,7 @@ class Node:
         self.next_training_tick = tick
 
     """ dataset_label_distribution == None means using default dataloader """
-    def set_label_distribution(self, dataset_label_distribution=None, dataset_with_fast_label: dataset.DatasetWithFastLabelSelection=None, worker=None):
+    def set_label_distribution(self, dataset_label_distribution=None, dataset_with_fast_label: dataset_il.DatasetWithFastLabelSelection=None, worker=None):
         self.__dataset_label_distribution = dataset_label_distribution
         if dataset_with_fast_label is not None:
             self.__dataset_with_fast_label = dataset_with_fast_label

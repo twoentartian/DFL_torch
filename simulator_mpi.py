@@ -7,9 +7,10 @@ import torch
 from datetime import datetime
 from mpi4py import MPI
 
-from py_src import internal_names, configuration_file, dfl_logging, nx_lib, initial_checking, cuda, mpi_util, dataset, node, simulator_common
+from py_src import internal_names, configuration_file, dfl_logging, nx_lib, initial_checking, cuda, mpi_util, node, simulator_common
 from py_src.simulation_runtime_parameters import RuntimeParameters, SimulationPhase
 from py_src.service.print_memory_consumption import PrintMemoryConsumption
+from py_src.ml_setup_base import dataset_intermediate_layer as dataset_il
 
 simulator_base_logger = logging.getLogger(internal_names.logger_simulator_base_name)
 
@@ -162,7 +163,7 @@ def main(config_file_path, output_folder_name=None):
     current_cuda_env.mpi_prepare_gpu_memory(config_ml_setup.model, config_file, config_ml_setup, self_nodes, self_mpi_process.allocated_gpu.gpu_index)
 
     # create dataset
-    training_dataset = dataset.DatasetWithFastLabelSelection(config_ml_setup.training_data)
+    training_dataset = dataset_il.DatasetWithFastLabelSelection(config_ml_setup.training_data)
 
     # create nodes
     if ENABLE_MEMORY_RECORD:

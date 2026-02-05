@@ -10,7 +10,7 @@ from .dataset_masked import MaskedImageDataset
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from py_src.util import expand_path
-from py_src.dataset import DatasetWithCachedOutputInSharedMem, DatasetWithCachedOutputInMem, ImageDatasetWithCachedInputInSharedMem
+from py_src.ml_setup_base.dataset_intermediate_layer import DatasetWithCachedOutputInSharedMem, DatasetWithCachedOutputInMem, ImageDatasetWithCachedInputInSharedMem
 from py_src.ml_setup_base.base import DatasetSetup
 from py_src.torch_vision_train import presets
 

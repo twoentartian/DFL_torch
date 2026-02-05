@@ -14,7 +14,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import py_src.ml_setup as ml_setup
 from py_src.ml_setup import ModelType
 from py_src.ml_setup_base.dataset import imagenet1k_path
-from py_src.dataset import ImageFolderWithMeta
+from py_src.ml_setup_base.dataset_intermediate_layer import ImageFolderWithMeta
 
 def load_model_dataloader(model_name, device, dataset_path):
     model_name_type = ModelType[model_name]

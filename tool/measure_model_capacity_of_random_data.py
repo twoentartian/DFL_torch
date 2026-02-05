@@ -4,7 +4,8 @@ import torch
 from torch.utils.data import DataLoader
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from py_src import ml_setup, util, dataset_random, complete_ml_setup
+from py_src import ml_setup, util, complete_ml_setup
+from py_src.ml_setup_base import dataset_random
 
 
 logger = logging.getLogger("measure_model_capacity_of_random_data")
