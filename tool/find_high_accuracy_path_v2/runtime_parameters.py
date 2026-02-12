@@ -36,17 +36,19 @@ class RuntimeParameters(object):
     linear_interpolation_dataset_size = None
     variance_sphere_file_path = None
     variance_sphere_model = None
+    stop_when_training_loss_exceeds = None
 
     """real-time values"""
     current_tick = None
     max_tick = None
-
     debug_check_config_mode = None
     test_dataset_use_whole = None
+    verbose = False
+
+    """service args"""
     service_test_accuracy_loss_interval = None
     service_test_accuracy_loss_batch_size = None
-
-    verbose = False
+    service_cosine_similarity_ref_model = None
 
     def print(self):
         s = []

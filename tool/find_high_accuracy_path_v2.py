@@ -304,7 +304,12 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
     child_logger.info("setting service done: record_variance_service")
 
     record_cosine_similarity_service = record_cosine_similarity.ServiceVarianceRecorder(1)
-    record_cosine_similarity_service.initialize_without_runtime_parameters({0: start_model_stat_dict}, arg_output_folder_path, logger=child_logger)
+    if runtime_parameter.service_cosine_similarity_ref_model is None:
+        ref_model = start_model_stat_dict
+    else:
+        ref_model, ref_model_name, _ = util.load_model_state_file(runtime_parameter.service_cosine_similarity_ref_model)
+        assert ref_model_name == runtime_parameter.model_name, f"ref_model_name({ref_model_name}) != runtime_parameter.model_name({runtime_parameter.model_name})"
+    record_cosine_similarity_service.initialize_without_runtime_parameters({0: ref_model}, arg_output_folder_path, logger=child_logger)
     child_logger.info("setting service done: cosine_similarity_service")
 
     if runtime_parameter.save_format != 'none':
@@ -777,6 +782,9 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
         # update tick
         runtime_parameter.current_tick += 1
 
+        if runtime_parameter.stop_when_training_loss_exceeds is not None and training_loss_val > runtime_parameter.stop_when_training_loss_exceeds:
+            child_logger.info(f"training loss({training_loss_val}) is greater than threshold({runtime_parameter.stop_when_training_loss_exceeds}), stop")
+            break
     # save final model and optimizer
     util.save_model_state(os.path.join(arg_output_folder_path, f"{runtime_parameter.current_tick}.model.pt"), target_model.state_dict(), current_ml_setup.model_name, current_ml_setup.dataset_name)
     util.save_optimizer_state(os.path.join(arg_output_folder_path, f"{runtime_parameter.current_tick}.optimizer.pt"), optimizer.state_dict(), current_ml_setup.model_name, current_ml_setup.dataset_name)
@@ -805,12 +813,15 @@ if __name__ == '__main__':
     parser.add_argument("--cpu", action='store_true', help='force using CPU for training')
     parser.add_argument("--amp", action='store_true', help='enable auto mixed precision')
     parser.add_argument("--check_config", action='store_true', help='only check configuration')
+    parser.add_argument("--cosine_similarity_ref", type=str, help='the reference model used to calculate the cosine similarity, otherwise use the starting point as similarity.')
     parser.add_argument("-v", "--verbose", action='store_true', help='verbose mode')
     parser.add_argument("-o", "--output_folder_name", default=None, help='specify the output folder name')
     parser.add_argument("--store_top_accuracy_model_count", type=int, default=5, help='save n highest test accuracy models')
     parser.add_argument("--checkpoint_interval", type=int, default=100, help='save a checkpoint every n ticks')
     parser.add_argument("--continue_from_checkpoint", type=str, help='continue from a checkpoint file')
     parser.add_argument("-A", "--across_vs_lr_policy", type=str, choices=['std', 'var'], default='var', help='set the lr to follow variance or standard derivation of variance sphere')
+
+    parser.add_argument("--stop_when_loss_exceeds", type=float, help='stop when training loss is greater than this value')
 
     parser.add_argument( "--test_interval", type=int, default=1, help='specify the interval of measuring model on the test dataset.')
     parser.add_argument("--test_batch", type=int, default=100, help='specify the batch size of measuring model on the test dataset.')
@@ -843,6 +854,7 @@ if __name__ == '__main__':
     runtime_parameter.verbose = args.verbose
     runtime_parameter.service_test_accuracy_loss_interval = args.test_interval
     runtime_parameter.service_test_accuracy_loss_batch_size = args.test_batch
+    runtime_parameter.service_cosine_similarity_ref_model = args.cosine_similarity_ref
     runtime_parameter.store_top_accuracy_model_count = args.store_top_accuracy_model_count
     runtime_parameter.checkpoint_interval = args.checkpoint_interval
     runtime_parameter.pytorch_preset_version = args.torch_preset_version
@@ -850,6 +862,7 @@ if __name__ == '__main__':
     runtime_parameter.silence_mode = args.silence
     runtime_parameter.linear_interpolation_points_size = args.linear_interpolation_points_size
     runtime_parameter.linear_interpolation_dataset_size = args.linear_interpolation_dataset_size
+    runtime_parameter.stop_when_training_loss_exceeds = args.stop_when_loss_exceeds
 
     # sanity check
     if runtime_parameter.across_vs_lr_policy == 'std':

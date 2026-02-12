@@ -1,9 +1,6 @@
 import yaml, os, sys
 import torch.nn as nn
-from timm.data import create_dataset, create_loader, Mixup
-from timm.loss import SoftTargetCrossEntropy, LabelSmoothingCrossEntropy
 
-import py_src.third_party.compact_transformers.src.cct as cct
 import py_src.ml_setup_base.dataset as ml_setup_dataset
 from py_src.ml_setup_base.base import MlSetup
 from py_src.ml_setup_base.dataset import default_path_imagenet1k
@@ -12,6 +9,7 @@ from py_src.ml_setup_base.other_setup import get_pytorch_training_imagenet
 
 
 def cct7_3x1_cifar10():
+    import py_src.third_party.compact_transformers.src.cct as cct
     output_ml_setup = MlSetup()
     dataset = ml_setup_dataset.dataset_cifar10()
 
@@ -25,6 +23,7 @@ def cct7_3x1_cifar10():
     return output_ml_setup
 
 def cct7_3x1_cifar100():
+    import py_src.third_party.compact_transformers.src.cct as cct
     output_ml_setup = MlSetup()
     dataset = ml_setup_dataset.dataset_cifar100()
 
@@ -38,6 +37,7 @@ def cct7_3x1_cifar100():
     return output_ml_setup
 
 def cct7_7x2_imagenet1k():
+    import py_src.third_party.compact_transformers.src.cct as cct
     output_ml_setup = MlSetup()
     dataset = ml_setup_dataset.dataset_imagenet1k(pytorch_preset_version=1)
 
@@ -51,6 +51,7 @@ def cct7_7x2_imagenet1k():
     return output_ml_setup
 
 def cct7_7x2_imagenet100():
+    import py_src.third_party.compact_transformers.src.cct as cct
     output_ml_setup = MlSetup()
     dataset = ml_setup_dataset.dataset_imagenet100(pytorch_preset_version=1)
 
@@ -64,6 +65,7 @@ def cct7_7x2_imagenet100():
     return output_ml_setup
 
 def cct7_7x2_imagenet10():
+    import py_src.third_party.compact_transformers.src.cct as cct
     output_ml_setup = MlSetup()
     dataset = ml_setup_dataset.dataset_imagenet10(pytorch_preset_version=1)
 
@@ -79,6 +81,7 @@ def cct7_7x2_imagenet10():
 
 
 def timm_build_loaders(cfg: dict, data_root: str):
+    from timm.data import create_dataset, create_loader
     img_size = int(cfg["img_size"])
     input_size = (3, img_size, img_size)
 
@@ -133,6 +136,8 @@ def timm_build_loaders(cfg: dict, data_root: str):
     return train_loader, val_loader
 
 def timm_build_mixup_and_loss(cfg: dict):
+    from timm.data import Mixup
+    from timm.loss import SoftTargetCrossEntropy, LabelSmoothingCrossEntropy
     use_mix = (float(cfg.get("mixup", 0)) > 0) or (float(cfg.get("cutmix", 0)) > 0)
     use_mix = False
     mixup_fn = None
@@ -155,7 +160,7 @@ def timm_build_mixup_and_loss(cfg: dict):
 
 
 def cct14_7x2_imagenet1k():
-
+    import py_src.third_party.compact_transformers.src.cct as cct
     output_ml_setup = MlSetup()
     dataset = ml_setup_dataset.dataset_imagenet1k_custom(auto_augment_policy='imagenet', val_crop_size=224, val_resize_size=256, train_crop_size=224)
 
