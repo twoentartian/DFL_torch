@@ -71,7 +71,7 @@ def ddpm_cifar10():
 
     output_ml_setup.training_batch_size = 128
     output_ml_setup.has_normalization_layer = True
-    output_ml_setup.criterion = CriterionType.DiffusionModel
+    output_ml_setup.criterion = CriterionType.Diffusion
 
     def post_training(model):
         model.update_ema()

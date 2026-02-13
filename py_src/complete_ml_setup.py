@@ -308,8 +308,23 @@ class FastTrainingSetup(object):
             else:
                 raise not_implemented_error_instance
             return optimizer, lr_scheduler, epochs
+        elif arg_ml_setup.model_name == ModelType.transformer_for_grokking.name:
+            if arg_ml_setup.dataset_name in [DatasetType.arithmetic_addition.name]:
+                optimizer = torch.optim.AdamW(model.parameters(), weight_decay=0, lr=1e-3, betas=(0.9, 0.98), eps=1e-8)
+                total_steps = 200000
+                warmup_steps = 10
+                cosine_steps = total_steps - warmup_steps
+                warmup = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=1e-8, end_factor=1.0, total_iters=warmup_steps)
+                cosine = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cosine_steps, eta_min=1e-4)
+                scheduler = torch.optim.lr_scheduler.SequentialLR(optimizer, schedulers=[warmup, cosine], milestones=[warmup_steps])
+                lr_scheduler = scheduler
+                epochs = total_steps
+            else:
+                raise not_implemented_error_instance
+            return optimizer, lr_scheduler, epochs
         else:
             raise not_implemented_error_instance
+
 
 
 

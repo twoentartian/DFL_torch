@@ -1,6 +1,7 @@
 import argparse
 import torch
 import os
+import math
 import sys
 import random
 import copy
@@ -69,7 +70,7 @@ def manually_define_optimizer(arg_ml_setup: ml_setup.MlSetup, model):
 
 def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_setup.MlSetup, arg_use_cpu: bool, random_seed,
                    arg_worker_count, arg_total_cpu_count, arg_save_format, arg_amp, arg_preset, arg_epoch_override,
-                   transfer_learn_model_path, disable_reinit):
+                   transfer_learn_model_path, disable_reinit, enable_validation):
     thread_per_process = arg_total_cpu_count // arg_worker_count
     torch.set_num_threads(thread_per_process)
 
@@ -86,12 +87,30 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
     digit_number_of_models = len(str(arg_number_of_models))
     model: torch.nn.Module = copy.deepcopy(arg_ml_setup.model)
     model.to(device)
-    dataset = copy.deepcopy(arg_ml_setup.training_data)
-    batch_size = arg_ml_setup.training_batch_size
-    num_worker = 16 if thread_per_process > 16 else thread_per_process
-    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=arg_ml_setup.collate_fn,
-                            pin_memory=True, num_workers=num_worker, persistent_workers=True, prefetch_factor=4)
+
     criterion = arg_ml_setup.criterion
+
+    if arg_ml_setup.override_training_dataset_loader is None:
+        batch_size = arg_ml_setup.training_batch_size
+        num_worker = 16 if thread_per_process > 16 else thread_per_process
+        dataloader = DataLoader(arg_ml_setup.training_data, batch_size=batch_size, shuffle=True, collate_fn=arg_ml_setup.collate_fn,
+                                pin_memory=True, num_workers=num_worker, persistent_workers=True, prefetch_factor=4)
+    else:
+        dataloader = arg_ml_setup.override_training_dataset_loader
+
+    if enable_validation:
+        if criterion == ml_setup.CriterionType.Diffusion:
+            dataloader_test = None  # no val accuracy for diffusion models
+        else:
+            if arg_ml_setup.override_testing_dataset_loader is None:
+                batch_size = arg_ml_setup.training_batch_size
+                num_worker = 8 if thread_per_process > 8 else thread_per_process
+                dataloader_test = DataLoader(arg_ml_setup.testing_data, batch_size=batch_size, shuffle=False,
+                                             pin_memory=True, num_workers=num_worker, persistent_workers=True, prefetch_factor=4)
+            else:
+                dataloader_test = arg_ml_setup.override_testing_dataset_loader
+    else:
+        dataloader_test = None
 
     if arg_epoch_override is not None:
         epochs = arg_epoch_override
@@ -136,7 +155,7 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
             optimizer, lr_scheduler, epochs = complete_ml_setup.TransferTrainingSetup.get_optimizer_lr_scheduler_epoch(existing_dataset_name, arg_ml_setup, model, arg_preset)
 
     epoch_loss_lr_log_file = open(os.path.join(output_folder, f"{str(index).zfill(digit_number_of_models)}.log"), "w")
-    epoch_loss_lr_log_file.write("epoch,loss,lrs" + "\n")
+    epoch_loss_lr_log_file.write("epoch,training_loss,training_accuracy,validation_loss,validation_accuracy,lrs" + "\n")
     epoch_loss_lr_log_file.flush()
 
     child_logger.info(f"begin training")
@@ -147,11 +166,23 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
         scaler = torch.amp.GradScaler('cuda')
     for epoch in range(epochs):
         model.train()
+        train_correct = None
         train_loss = 0
-        count = 0
+        train_count = 0
 
         """ Training procedure """
-        if isinstance(model, L.LightningModule):
+        # user defined step function
+        if arg_ml_setup.override_train_step_function is not None:
+            for batch_idx, batch in enumerate(dataloader):
+                batch = cuda.to_device(batch, device)
+                output = arg_ml_setup.override_train_step_function(batch_idx, batch, model, optimizer, lr_scheduler, arg_ml_setup)
+                loss = output.loss_value
+                train_loss += loss * output.sample_count
+                train_count += output.sample_count
+                train_correct = 0 if train_correct is None else train_correct
+                train_correct += output.correct_count
+        # L.LightningModule
+        elif isinstance(model, L.LightningModule):
             """ Lighting model """
             for batch_idx, batch in enumerate(dataloader):
                 batch = cuda.to_device(batch, device)
@@ -166,8 +197,8 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
                     lr_scheduler.step()
                 for func in arg_ml_setup.func_handler_post_training:
                     func(model=model)
-                train_loss += loss.item()
-                count += 1
+                train_loss += loss.item() * batch.size(0)
+                train_count += batch.size(0)
         else:
             """ Normal PyTorch model """
             for data, label in dataloader:
@@ -176,35 +207,73 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
                 if arg_amp:
                     with torch.amp.autocast('cuda'):
                         outputs = model(data)
-                        if criterion == ml_setup.CriterionType.DiffusionModel:
+                        if criterion == ml_setup.CriterionType.Diffusion:
                             loss = outputs
-                        else:
+                        elif isinstance(criterion, torch.nn.modules.loss.CrossEntropyLoss):
                             loss = criterion(outputs, label)
+                        else:
+                            raise NotImplementedError
                         scaler.scale(loss).backward()
                         scaler.step(optimizer)
                         scaler.update()
                 else:
                     outputs = model(data)
-                    if criterion == ml_setup.CriterionType.DiffusionModel:
+                    if criterion == ml_setup.CriterionType.Diffusion:
                         loss = outputs
-                    else:
+                    elif isinstance(criterion, torch.nn.modules.loss.CrossEntropyLoss):
                         loss = criterion(outputs, label)
+                    else:
+                        raise NotImplementedError
                     loss.backward()
                     optimizer.step()
                 if lr_scheduler is not None:
                     lr_scheduler.step()
                 for func in arg_ml_setup.func_handler_post_training:
                     func(model=model)
-                train_loss += loss.item()
-                count += 1
 
-        """ print progress """
+                if isinstance(criterion, torch.nn.modules.loss.CrossEntropyLoss):
+                    _, predicted = torch.max(outputs, 1)
+                    train_correct = 0 if train_correct is None else train_correct
+                    train_correct += (predicted == label).sum().item()
+                train_loss += loss.item() * label.size(0)
+                train_count += label.size(0)
+
+        """ print progress / validation """
         lrs = []
         for param_group in optimizer.param_groups:
             lrs.append(param_group['lr'])
-        child_logger.info(f"epoch[{epoch}] loss={train_loss/count} lrs={lrs}")
-        epoch_loss_lr_log_file.write(f"{epoch},{train_loss/count},{lrs}" + "\n")
-        epoch_loss_lr_log_file.flush()
+        if arg_ml_setup.override_evaluation_step_function is not None:
+            val_loss, val_correct, val_count = 0.0, 0.0, 0
+            for batch_idx, batch in enumerate(dataloader_test):
+                output = arg_ml_setup.override_evaluation_step_function(batch_idx, batch, model, optimizer, lr_scheduler, arg_ml_setup)
+                val_loss += output.loss_value * output.sample_count
+                val_correct += output.correct_count
+                val_count += output.sample_count
+            child_logger.info(f"epoch[{epoch}] loss,accuracy= (train) {train_loss / train_count:.4},{train_correct / train_count:.4} (val) {val_loss / val_count:.4},{val_correct / val_count:.4} lrs={lrs}")
+            epoch_loss_lr_log_file.write(f"{epoch},{train_loss / train_count:.4e},{train_correct / train_count:.4e},{val_loss / val_count:.3e},{val_correct / val_count:.4e},{lrs}" + "\n")
+            epoch_loss_lr_log_file.flush()
+        else:
+            if dataloader_test is None:
+                train_correct = math.nan if train_correct is None else train_correct
+                child_logger.info(f"epoch[{epoch}] training loss={train_loss / train_count:.4} training accuracy={train_correct / train_count:.4} lrs={lrs}")
+                epoch_loss_lr_log_file.write(f"{epoch},{train_loss / train_count:.4e},{train_correct / train_count:.4e},{math.nan},{math.nan},{lrs}" + "\n")
+                epoch_loss_lr_log_file.flush()
+            else:
+                val_loss, val_correct, val_count = 0.0, 0.0, 0
+                for data, label in dataloader_test:
+                    data, label = data.to(device, non_blocking=True), label.to(device, non_blocking=True)
+                    outputs = model(data)
+                    if isinstance(criterion, torch.nn.modules.loss.CrossEntropyLoss):
+                        loss = criterion(outputs, label)
+                    else:
+                        raise NotImplementedError
+                    val_loss += loss.item() * label.size(0)
+                    _, predicted = torch.max(outputs, 1)
+                    val_correct += (predicted == label).sum().item()
+                    val_count += label.size(0)
+                child_logger.info(f"epoch[{epoch}] loss,accuracy= (train) {train_loss / train_count:.4},{train_correct / train_count:.4} (val) {val_loss/val_count:.4},{val_correct/val_count:.4} lrs={lrs}")
+                epoch_loss_lr_log_file.write(f"{epoch},{train_loss / train_count:.4e},{train_correct / train_count:.4e},{val_loss/val_count:.3e},{val_correct/val_count:.4e},{lrs}" + "\n")
+                epoch_loss_lr_log_file.flush()
 
         # services
         if record_model_service is not None:
@@ -231,7 +300,6 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
     util.save_optimizer_state(os.path.join(output_folder, f"{str(index).zfill(digit_number_of_models)}.optimizer.pt"),
                               optimizer.state_dict(), arg_ml_setup.model_name, arg_ml_setup.dataset_name)
 
-    del model, dataset, dataloader, criterion, optimizer, epoch_loss_lr_log_file
     torch.cuda.empty_cache()
 
 
@@ -254,6 +322,7 @@ if __name__ == "__main__":
     parser.add_argument("-e", "--epoch", type=int, default=None, help='override the epoch')
     parser.add_argument("-t", "--transfer_learn", type=str, default=None, help='specify a model weight file to perform transfer learning from.')
     parser.add_argument("--disable_reinit", action='store_true', help='disable reinitialization')
+    parser.add_argument("--enable_eval", action='store_true', help='enable measuring loss and accuracy on validation set')
 
     args = parser.parse_args()
 
@@ -276,8 +345,13 @@ if __name__ == "__main__":
     set_logging(logger, "main")
     logger.info("logging setup complete")
 
+    if use_cpu:
+        device = torch.device("cpu")
+    else:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     # prepare model and dataset
-    current_ml_setup = ml_setup.get_ml_setup_from_config(model_type, dataset_type=dataset_type, pytorch_preset_version=preset)
+    current_ml_setup = ml_setup.get_ml_setup_from_config(model_type, dataset_type=dataset_type, pytorch_preset_version=preset, device=device)
     output_model_name = current_ml_setup.model_name
     logger.info(f"model name: {output_model_name}")
 
@@ -303,7 +377,7 @@ if __name__ == "__main__":
         worker_count = number_of_models
     args = [(output_folder_path, i, number_of_models, current_ml_setup,
              use_cpu, random_seed, worker_count, total_cpu_cores, save_format, amp,
-             preset, epoch_override, transfer_learn_model_path, args.disable_reinit) for i in range(start_index, start_index+number_of_models, 1)]
+             preset, epoch_override, transfer_learn_model_path, args.disable_reinit, args.enable_eval) for i in range(start_index, start_index+number_of_models, 1)]
     if worker_count == 1:
         for arg in args:
             training_model(*arg)

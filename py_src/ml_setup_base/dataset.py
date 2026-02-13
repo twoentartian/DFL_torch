@@ -11,6 +11,7 @@ from .dataset_masked import MaskedImageDataset
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from py_src.util import expand_path
 from py_src.ml_setup_base.dataset_intermediate_layer import DatasetWithCachedOutputInSharedMem, DatasetWithCachedOutputInMem, ImageDatasetWithCachedInputInSharedMem
+from py_src.ml_setup_base.dataset_modular import ArithmeticDataset
 from py_src.ml_setup_base.base import DatasetSetup
 from py_src.torch_vision_train import presets
 
@@ -87,6 +88,7 @@ class DatasetType(Enum):
     imagenet1k_sam_mask_black = auto()
     svhn = auto()
     flickr30k = auto()
+    arithmetic_addition = auto()
 
 """ Helper functions """
 def calculate_mean_std(dataset):
@@ -502,6 +504,16 @@ def dataset_flickr30k(*args, **kwargs):
 
     dataset_train = dataset_flickr.Flickr30k(flickr30k_path, split='train', img_transform=train_transform)
     dataset_test = dataset_flickr.Flickr30k(flickr30k_path, split='val', img_transform=valid_transform)
+    output = DatasetSetup(dataset_name, dataset_type, dataset_train, dataset_test, labels="non_classifier")
+    return output
+
+
+
+""" Arithmetic dataset """
+def dataset_arithmetic_addition(train_percentage, *args, **kwargs):
+    dataset_name = str(DatasetType.arithmetic_addition.name)
+    dataset_type = DatasetType.arithmetic_addition
+    dataset_train, dataset_test = ArithmeticDataset.splits(train_percentage, "+")
     output = DatasetSetup(dataset_name, dataset_type, dataset_train, dataset_test, labels="non_classifier")
     return output
 

@@ -1,6 +1,8 @@
 import os
 import torch
 import random
+from typing import Optional
+from collections.abc import Callable
 import numpy as np
 from enum import Enum, auto
 import torch.nn as nn
@@ -8,7 +10,7 @@ from torch.utils.data import DataLoader
 
 # CriterionType: indicate the criterion function for diffusion models, etc
 class CriterionType(Enum):
-    DiffusionModel = auto()
+    Diffusion = auto()
     # Others = the criterion function
 
 class DatasetSetup:
@@ -22,7 +24,12 @@ class DatasetSetup:
             self.labels = self._get_dataset_labels(self.testing_data)
         else:
             self.labels = labels
-        sample_data = self.testing_data[0][0]
+        if hasattr(self.training_data, "__getitem__"):
+            sample_data = self.training_data[0][0]
+        elif hasattr(self.training_data, "get_first_data_tensor"):
+            sample_data = self.training_data.get_first_data_tensor()
+        else:
+            raise NotImplementedError("cannot get the first element from dataset")
         self.tensor_size = sample_data.shape
 
         self.is_masked_dataset = False
@@ -61,8 +68,12 @@ class MlSetup:
 
         self.func_handler_post_training = []
 
+        """these dataset loader will be used during training and finding paths if they are set"""
         self.override_training_dataset_loader = None
         self.override_testing_dataset_loader = None
+
+        self.override_train_step_function: Optional[Callable[..., TrainStepOutput]] = None
+        self.override_evaluation_step_function: Optional[Callable[..., TrainStepOutput]] = None
 
     def self_validate(self):
         pass  # do nothing for now
@@ -113,3 +124,9 @@ def replace_bn_with_ln(model):
         else:
             # Recursively replace in submodules
             replace_bn_with_ln(module)
+
+class TrainStepOutput:
+    def __init__(self):
+        self.sample_count = None
+        self.correct_count = None
+        self.loss_value = None
