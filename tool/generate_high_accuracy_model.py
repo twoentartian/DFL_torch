@@ -69,7 +69,7 @@ def manually_define_optimizer(arg_ml_setup: ml_setup.MlSetup, model):
     return None, None, None
 
 def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_setup.MlSetup, arg_use_cpu: bool, random_seed,
-                   arg_worker_count, arg_total_cpu_count, arg_save_format, arg_amp, arg_preset, arg_epoch_override,
+                   arg_worker_count, arg_total_cpu_count, arg_save_format, arg_save_interval, arg_amp, arg_preset, arg_epoch_override,
                    transfer_learn_model_path, disable_reinit, enable_validation):
     thread_per_process = arg_total_cpu_count // arg_worker_count
     torch.set_num_threads(thread_per_process)
@@ -112,6 +112,7 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
     else:
         dataloader_test = None
 
+    epochs = None
     if arg_epoch_override is not None:
         epochs = arg_epoch_override
 
@@ -123,7 +124,8 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
         record_model_service = None
 
     # init weights and optimizer
-    optimizer, lr_scheduler, epochs = manually_define_optimizer(arg_ml_setup, model)
+    optimizer, lr_scheduler, epochs_new = manually_define_optimizer(arg_ml_setup, model)
+    epochs = epochs_new if epochs is None else epochs
 
     if transfer_learn_model_path is None:
         # reset random weights
@@ -140,10 +142,11 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
                 optimizer_from_config, lr_scheduler_from_config, epochs_from_config = complete_ml_setup.FastTrainingSetup.get_optimizer_lr_scheduler_epoch(arg_ml_setup, model, arg_preset)
                 optimizer = optimizer_from_lighting if optimizer_from_config is None else optimizer_from_config
                 lr_scheduler = lr_scheduler_from_lighting if lr_scheduler_from_config is None else lr_scheduler_from_config
-                epochs = epochs_from_config
+                epochs = epochs_from_config if epochs is None else epochs
             else:
                 # this is a normal pytorch model
-                optimizer, lr_scheduler, epochs = complete_ml_setup.FastTrainingSetup.get_optimizer_lr_scheduler_epoch(arg_ml_setup, model, arg_preset)
+                optimizer, lr_scheduler, epochs_from_config = complete_ml_setup.FastTrainingSetup.get_optimizer_lr_scheduler_epoch(arg_ml_setup, model, arg_preset)
+                epochs = epochs_from_config if epochs is None else epochs
     else:
         # load model weights and apply it (transfer learning)
         existing_model_state, existing_model_name, existing_dataset_name = util.load_model_state_file(transfer_learn_model_path)
@@ -152,9 +155,10 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
         model.to(device)
         if optimizer is None:
             child_logger.info(f"mode: ||||||||    TRANSFER TRAINING    ||||||||")
-            optimizer, lr_scheduler, epochs = complete_ml_setup.TransferTrainingSetup.get_optimizer_lr_scheduler_epoch(existing_dataset_name, arg_ml_setup, model, arg_preset)
+            optimizer, lr_scheduler, epochs_from_config = complete_ml_setup.TransferTrainingSetup.get_optimizer_lr_scheduler_epoch(existing_dataset_name, arg_ml_setup, model, arg_preset)
+            epochs = epochs_from_config if epochs is None else epochs
 
-    epoch_loss_lr_log_file = open(os.path.join(output_folder, f"{str(index).zfill(digit_number_of_models)}.log"), "w")
+    epoch_loss_lr_log_file = open(os.path.join(output_folder, f"{str(index).zfill(digit_number_of_models)}.log.csv"), "w")
     epoch_loss_lr_log_file.write("epoch,training_loss,training_accuracy,validation_loss,validation_accuracy,lrs" + "\n")
     epoch_loss_lr_log_file.flush()
 
@@ -278,7 +282,8 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
         # services
         if record_model_service is not None:
             model_stat = model.state_dict()
-            record_model_service.trigger_without_runtime_parameters(epoch, [0], [model_stat])
+            if epoch % arg_save_interval == 0:
+                record_model_service.trigger_without_runtime_parameters(epoch, [0], [model_stat])
 
         # post epoch functions
         # ddpm
@@ -315,6 +320,7 @@ if __name__ == "__main__":
     parser.add_argument("--cpu", action='store_true', help='force using CPU for training')
     parser.add_argument("-o", "--output_folder_name", default=None, help='specify the output folder name')
     parser.add_argument("--save_format", type=str, default='none', choices=['none', 'file', 'lmdb'], help='which format to save the training states')
+    parser.add_argument("--save_interval", type=int, default=1, help='save model state per n epoch')
     parser.add_argument("--amp", action='store_true', help='enable auto mixed precision')
     parser.add_argument("--random_seed", type=int, help='specify the random seed')
     parser.add_argument("-i", "--start_index", type=int, default=0, help='specify the start index for model names')
@@ -334,6 +340,7 @@ if __name__ == "__main__":
     use_cpu = args.cpu
     output_folder_name = args.output_folder_name
     save_format = args.save_format
+    save_interval = args.save_interval
     amp = args.amp
     random_seed = args.random_seed
     start_index = args.start_index
@@ -376,7 +383,7 @@ if __name__ == "__main__":
     if worker_count > number_of_models:
         worker_count = number_of_models
     args = [(output_folder_path, i, number_of_models, current_ml_setup,
-             use_cpu, random_seed, worker_count, total_cpu_cores, save_format, amp,
+             use_cpu, random_seed, worker_count, total_cpu_cores, save_format, save_interval, amp,
              preset, epoch_override, transfer_learn_model_path, args.disable_reinit, args.enable_eval) for i in range(start_index, start_index+number_of_models, 1)]
     if worker_count == 1:
         for arg in args:
