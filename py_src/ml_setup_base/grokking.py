@@ -57,7 +57,7 @@ def dataset_arithmetic_addition(device, train_percentage: float=50, operand_leng
     output_ml_setup.model_type = ModelType.transformer_for_grokking
     output_ml_setup.get_info_from_dataset(dataset)
 
-    output_ml_setup.training_batch_size = min(512, math.ceil(dataset.training_data / 2.0))
+    output_ml_setup.training_batch_size = min(512, math.ceil(len(dataset.training_data) / 2.0))
     output_ml_setup.has_normalization_layer = True
 
     output_ml_setup.override_training_dataset_loader = dataset_modular.ArithmeticIterator(dataset.training_data, device, batchsize_hint=-1)
