@@ -248,21 +248,21 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
         lrs = []
         for param_group in optimizer.param_groups:
             lrs.append(param_group['lr'])
-        if arg_ml_setup.override_evaluation_step_function is not None:
-            val_loss, val_correct, val_count = 0.0, 0.0, 0
-            for batch_idx, batch in enumerate(dataloader_test):
-                output = arg_ml_setup.override_evaluation_step_function(batch_idx, batch, model, optimizer, lr_scheduler, arg_ml_setup)
-                val_loss += output.loss_value * output.sample_count
-                val_correct += output.correct_count
-                val_count += output.sample_count
-            child_logger.info(f"epoch[{epoch}] loss,accuracy= (train) {train_loss / train_count:.4},{train_correct / train_count:.4} (val) {val_loss / val_count:.4},{val_correct / val_count:.4} lrs={lrs}")
-            epoch_loss_lr_log_file.write(f"{epoch},{train_loss / train_count:.4e},{train_correct / train_count:.4e},{val_loss / val_count:.3e},{val_correct / val_count:.4e},{lrs}" + "\n")
+        if dataloader_test is None:
+            train_correct = math.nan if train_correct is None else train_correct
+            child_logger.info(f"epoch[{epoch}] training loss={train_loss / train_count:.4} training accuracy={train_correct / train_count:.4} lrs={lrs}")
+            epoch_loss_lr_log_file.write(f"{epoch},{train_loss / train_count:.4e},{train_correct / train_count:.4e},{math.nan},{math.nan},{lrs}" + "\n")
             epoch_loss_lr_log_file.flush()
         else:
-            if dataloader_test is None:
-                train_correct = math.nan if train_correct is None else train_correct
-                child_logger.info(f"epoch[{epoch}] training loss={train_loss / train_count:.4} training accuracy={train_correct / train_count:.4} lrs={lrs}")
-                epoch_loss_lr_log_file.write(f"{epoch},{train_loss / train_count:.4e},{train_correct / train_count:.4e},{math.nan},{math.nan},{lrs}" + "\n")
+            if arg_ml_setup.override_evaluation_step_function is not None:
+                val_loss, val_correct, val_count = 0.0, 0.0, 0
+                for batch_idx, batch in enumerate(dataloader_test):
+                    output = arg_ml_setup.override_evaluation_step_function(batch_idx, batch, model, optimizer, lr_scheduler, arg_ml_setup)
+                    val_loss += output.loss_value * output.sample_count
+                    val_correct += output.correct_count
+                    val_count += output.sample_count
+                child_logger.info(f"epoch[{epoch}] loss,accuracy= (train) {train_loss / train_count:.4},{train_correct / train_count:.4} (val) {val_loss / val_count:.4},{val_correct / val_count:.4} lrs={lrs}")
+                epoch_loss_lr_log_file.write(f"{epoch},{train_loss / train_count:.4e},{train_correct / train_count:.4e},{val_loss / val_count:.3e},{val_correct / val_count:.4e},{lrs}" + "\n")
                 epoch_loss_lr_log_file.flush()
             else:
                 val_loss, val_correct, val_count = 0.0, 0.0, 0

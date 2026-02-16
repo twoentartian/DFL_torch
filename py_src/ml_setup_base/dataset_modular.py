@@ -1,6 +1,10 @@
 import itertools
 import math
+import os.path
+import time
+import json
 import unittest
+from datetime import datetime
 
 from concurrent.futures import ProcessPoolExecutor
 
@@ -15,7 +19,6 @@ from mod import Mod
 
 import blobfile as bf
 
-from py_src.util import expand_path
 
 VALID_OPERATORS = {
     "+": "addition",
@@ -41,11 +44,8 @@ VALID_OPERATORS = {
 }
 EOS_TOKEN = "<|eos|>"
 EQ_TOKEN = "="
-MODULUS = 97
-NUMS = list(range(MODULUS))
-
-DEFAULT_DATA_DIR = expand_path('~/dataset/arithmetic_modular')
-
+# MODULUS = 97
+# NUMS = list(range(MODULUS))
 
 def render(operand, join_str=""):
     if (
@@ -64,14 +64,8 @@ def render(operand, join_str=""):
 
 class ArithmeticTokenizer:
     """Stores the list of token text to token id mappings and converts between them"""
-
-    token_file = "tokens.txt"
-
-    def __init__(self, data_dir=DEFAULT_DATA_DIR) -> None:
-        self.token_file = bf.join(data_dir, self.token_file)
-
-        self.itos = self.get_tokens()
-
+    def __init__(self, modulus) -> None:
+        self.itos = self.get_tokens(modulus)
         self.stoi: Dict[str, int] = dict([(s, i) for i, s in enumerate(self.itos)])
 
     def _encode(self, s: str) -> Tensor:
@@ -117,12 +111,49 @@ class ArithmeticTokenizer:
         """
         return len(self.itos)
 
+    def save_tokens(self, file_path: str):
+        """
+        Save the token vocabulary to a file.
+        This is necessary for loading datasets later.
+
+        :param file_path: Path to save token file
+        """
+
+        # Ensure directory exists
+        bf.makedirs(bf.dirname(file_path))
+
+        # Write tokens to file
+        with bf.BlobFile(file_path, "w") as f:
+            f.write("\n".join(self.itos))
+
+        return file_path
+
     @classmethod
-    def get_tokens(cls):
+    def load_from_file(cls, file_path: str):
+        """
+        Load a tokenizer from a saved token vocabulary file.
+
+        :param file_path: Path to the token file
+        :returns: ArithmeticTokenizer instance with loaded vocabulary
+        """
+        # Read tokens from file
+        with bf.BlobFile(file_path, "r") as f:
+            tokens = f.read().strip().split("\n")
+
+        # Create a new tokenizer instance without calling __init__
+        tokenizer = cls.__new__(cls)
+        tokenizer.itos = tokens
+        tokenizer.stoi = dict([(s, i) for i, s in enumerate(tokens)])
+
+        return tokenizer
+
+    @classmethod
+    def get_tokens(cls, modulus):
+        nums = list(range(modulus))
         tokens = (
             [EOS_TOKEN, EQ_TOKEN]
             + list(sorted(list(VALID_OPERATORS.keys())))
-            + list(map(render, NUMS))
+            + list(map(render, nums,))
             + list(map(render, itertools.permutations(range(5))))  # s5
         )
         return tokens
@@ -136,8 +167,8 @@ class ArithmeticDataset:
         cls,
         train_pct: float,
         operator: str,
+        modulus = 97,
         operand_length: Optional[int] = None,
-        data_dir: str = DEFAULT_DATA_DIR,
     ):
         """
         Creates training and validation datasets
@@ -150,13 +181,13 @@ class ArithmeticDataset:
 
         assert (0 < train_pct) and (train_pct < 100)
 
-        ds_name = cls.get_dsname(operator, operand_length)
-        eqs = cls.make_data(operator, operand_length)
+        ds_name = cls.get_dsname(modulus, operator, operand_length)
+        eqs = cls.make_data(operator, modulus, operand_length)
 
         train_rows, _ = cls.calc_split_len(train_pct, len(eqs))
 
-        train_ds = cls(ds_name, eqs[:train_rows], train=True, data_dir=data_dir)
-        val_ds = cls(ds_name, eqs[train_rows:], train=False, data_dir=data_dir)
+        train_ds = cls(ds_name, eqs[:train_rows], modulus, train=True)
+        val_ds = cls(ds_name, eqs[train_rows:], modulus, train=False)
 
         return train_ds, val_ds
 
@@ -166,11 +197,12 @@ class ArithmeticDataset:
         val_rows = ds_len - train_rows
         return train_rows, val_rows
 
-    def __init__(self, name, data: Union[Tensor, List[str]], train, data_dir) -> None:
+    def __init__(self, name, data: Union[Tensor, List[str]], modulus, train, tokenizer=None) -> None:
         """
         :param data: A list of equations strings. Each equation must have an '=' in it.
         """
-        self.tokenizer = ArithmeticTokenizer(data_dir)
+        self.tokenizer = ArithmeticTokenizer(modulus) if tokenizer is None else tokenizer
+        self.modulus = modulus
         self.name = name
         self.train = train
         if isinstance(data, list):
@@ -187,6 +219,57 @@ class ArithmeticDataset:
     def get_first_data_tensor(self):
         return self.data[0]
 
+    def save_to_file(self, filepath: str) -> str:
+        """
+        Save the dataset to a human-readable text file.
+
+        :param filepath: Path to save the file. If None, uses default naming based on dataset name.
+        :param save_tokenizer: If True, also saves the tokenizer vocabulary file (tokens.txt)
+        :returns: The filepath where the dataset was saved
+        """
+
+        # Ensure directory exists
+        bf.makedirs(bf.dirname(filepath))
+
+        # Decode all equations to human-readable format
+        equations = []
+        for i in range(len(self.data)):
+            eq_tokens = self.data[i]
+            eq_str = self.tokenizer.decode(eq_tokens)
+            equations.append(eq_str)
+
+        # Write to file
+        with bf.BlobFile(filepath, "w") as f:
+            f.write("\n".join(equations))
+
+        return filepath
+
+    @classmethod
+    def load_from_file(cls, filepath: str, modulus: int, name: str = None, train: bool = True, tokenizer_path=None):
+        """
+        Load a dataset from a text file.
+
+        :param filepath: Path to the text file containing equations
+        :param name: Name for the dataset. If None, derived from filename
+        :param train: Whether this is a training dataset
+        :param data_dir: Directory containing tokens.txt. If None, uses directory of filepath
+        :returns: ArithmeticDataset instance
+        """
+        if name is None:
+            # Extract name from filepath
+            name = bf.basename(filepath).replace(".txt", "")
+
+        tokenizer = None
+        if tokenizer_path is not None:
+            tokenizer = ArithmeticTokenizer.load_from_file(tokenizer_path)
+
+        # Read equations from file
+        with bf.BlobFile(filepath, "r") as f:
+            equations = f.read().strip().split("\n")
+
+        print(f"Loaded {len(equations)} equations from {filepath}")
+        return cls(name, equations, modulus, train)
+
     # @classmethod
     # def _render(cls, operand):
     #    return render(operand, join_str=" ")
@@ -196,7 +279,8 @@ class ArithmeticDataset:
     #    return " ".join(map(render, parts))
 
     @classmethod
-    def _make_binary_operation_data(cls, operator: str, operands=None) -> List[str]:
+    def _make_binary_operation_data(cls, operator: str, modulus, operands=None) -> List[str]:
+        nums = list(range(modulus))
         if operator == "s5":
             operands = operands or list(range(5))
             elems = map(np.array, itertools.permutations(operands))
@@ -210,7 +294,7 @@ class ArithmeticDataset:
             elems = [Mod(i, modulo) for i in range(modulo)]
             tuples = itertools.product(elems, repeat=2)
         else:
-            operands = operands or NUMS
+            operands = operands or nums
             tuples = itertools.product(operands, repeat=2)
 
         # if operator == "s5":
@@ -223,7 +307,7 @@ class ArithmeticDataset:
                     continue
                 else:
                     c = a
-                    a = (b * c) % MODULUS
+                    a = (b * c) % modulus
             elif operator == "s5":
                 c = b[a]
             elif operator == "s5conj":
@@ -232,20 +316,20 @@ class ArithmeticDataset:
                 c = a * b * a
             elif operator == "+*":
                 if a % 2 == 0:
-                    c = (a + b) % MODULUS
+                    c = (a + b) % modulus
                 else:
-                    c = (a * b) % MODULUS
+                    c = (a * b) % modulus
             elif operator == "+-":
                 if a % 2 == 0:
-                    c = (a + b) % MODULUS
+                    c = (a + b) % modulus
                 else:
-                    c = (a - b) % MODULUS
+                    c = (a - b) % modulus
             elif "_mod_" in operator:
                 expression = operator.split("_mod_")[0]
                 function = eval(f"lambda x, y: ({expression})")
                 c = function(a, b)
             else:
-                c = eval(f"({a} {operator} {b}) % {MODULUS}")
+                c = eval(f"({a} {operator} {b}) % {modulus}")
             eq = " ".join(map(render, [a, operator, b, "=", c]))
             eqs.append(eq)
 
@@ -308,20 +392,13 @@ class ArithmeticDataset:
     #    return eqs
 
     @classmethod
-    def get_dsname(cls, operator, operand_length) -> str:
+    def get_dsname(cls, modulus, operator, operand_length) -> str:
         operator, noise_level = cls._get_operator_and_noise_level(operator)
-        ds_name = VALID_OPERATORS[operator]
-        if operand_length is not None:
-            ds_name += f"_length-{operand_length}"
+        ds_name = f"modulus{modulus}_{VALID_OPERATORS[operator]}_length{operand_length}"
         if noise_level > 0:
-            ds_name += f"_noise-{noise_level}"
+            ds_name += f"_noise{noise_level}"
+        ds_name += datetime.now().strftime("_%Y-%m-%d_%H-%M-%S")
         return ds_name
-
-    @classmethod
-    def get_file_path(cls, operator, operand_length=None, data_dir=DEFAULT_DATA_DIR):
-        ds_name = cls.get_dsname(operator, operand_length)
-        ds_file = bf.join(data_dir, f"{ds_name}_data.txt")
-        return ds_file, ds_name
 
     @classmethod
     def _get_operator_and_noise_level(cls, operator):
@@ -332,16 +409,18 @@ class ArithmeticDataset:
             return operator, 0
 
     @classmethod
-    def make_data(cls, operator, operands=None, shuffle=True, seed=0) -> List[str]:
+    def make_data(cls, operator, modulus, operands=None, shuffle=True, seed=None) -> List[str]:
         operator, noise_level = cls._get_operator_and_noise_level(operator)
         assert operator in VALID_OPERATORS
 
         if operator not in ["sort", "reverse", "copy"]:
-            data = cls._make_binary_operation_data(operator)
+            data = cls._make_binary_operation_data(operator, modulus)
         else:
             data = cls._make_unary_operation_data(operator, operands)
 
-        rng = np.random.RandomState(seed=seed)
+        if seed is None:
+            seed = time.time_ns()
+        rng = np.random.default_rng(seed)
         if shuffle:
             rng.shuffle(data)
 
@@ -357,16 +436,6 @@ class ArithmeticDataset:
 
         return data
 
-    @classmethod
-    def _make_lists(cls, sizes=[2, 3], nums=NUMS):
-        lists: dict = {}
-        for size in sizes:
-            lists[size] = torch.tensor(
-                list(itertools.permutations(nums, r=size)),
-                dtype=torch.int,
-            )
-        return lists
-
 
 class ArithmeticIterator(torch.utils.data.IterableDataset):
     """
@@ -377,7 +446,7 @@ class ArithmeticIterator(torch.utils.data.IterableDataset):
         self,
         dataset: ArithmeticDataset,
         device: torch.device,
-        batchsize_hint: float = 0,
+        batchsize_hint: float|int = 0,
         shuffle: bool = True,
     ) -> None:
         """
@@ -465,7 +534,6 @@ class TestStringMethods(unittest.TestCase):
         (train_dataset, val_dataset,) = ArithmeticDataset.splits(
             train_pct=50,  # type: ignore
             operator="+",  # type: ignore
-            data_dir=".",  # type: ignore
         )
         iterator = ArithmeticIterator(
             train_dataset,
@@ -477,3 +545,174 @@ class TestStringMethods(unittest.TestCase):
             tok = train_dataset.tokenizer
             print(f"text: {tok.decode(batch["text"][0])}")
             print(f"target: {tok.decode(batch["target"][0])}")
+
+    def test_example_1_basic_with_tokenizer(self):
+        test_data_folder_name = "test_data"
+        modulus = 97
+
+        """Example showing tokenizer is saved automatically"""
+        print("=" * 70)
+        print("Generating datasets...")
+        print("=" * 70)
+
+        # Generate datasets
+        train_dataset, val_dataset = ArithmeticDataset.splits(
+            train_pct=50,
+            operator="+",
+        )
+
+        print(f"\nGenerated {len(train_dataset)} train examples")
+        print(f"Generated {len(val_dataset)} validation examples")
+
+        # Save datasets (tokenizer saved automatically)
+        print("\n" + "=" * 70)
+        print("Saving datasets...")
+        print("=" * 70)
+
+        train_file = train_dataset.save_to_file(f"./{test_data_folder_name}/{train_dataset.name}/train.txt")
+        val_file = val_dataset.save_to_file(f"./{test_data_folder_name}/{val_dataset.name}/val.txt")
+        tokenizer_file = train_dataset.tokenizer.save_tokens(f"./{test_data_folder_name}/{val_dataset.name}/tokenizer.txt")
+
+        # Now tokens.txt exists in ./my_data/ directory
+        print("\nFiles created:")
+        print(f"  - {train_file}")
+        print(f"  - {val_file}")
+        print(f"  - {tokenizer_file} (tokenizer vocabulary)")
+
+        # Load them back
+        print("\n" + "=" * 70)
+        print("Loading datasets...")
+        print("=" * 70)
+
+        loaded_train = ArithmeticDataset.load_from_file(
+            f"{train_file}",
+            modulus,
+            train=True,
+        )
+
+        loaded_val = ArithmeticDataset.load_from_file(
+            f"{val_file}",
+            modulus,
+            train=False,
+        )
+
+        # Verify
+        print("\n" + "=" * 70)
+        print("Verification:")
+        print("=" * 70)
+        print(f"Train datasets match: {torch.equal(train_dataset.data, loaded_train.data)}")
+        print(f"Val datasets match: {torch.equal(val_dataset.data, loaded_val.data)}")
+
+    def test_example_2_s5(self):
+        test_data_folder_name = "test_data"
+        modulus = 97
+
+        """Example showing tokenizer is saved automatically"""
+        print("=" * 70)
+        print("Generating datasets...")
+        print("=" * 70)
+
+        # Generate datasets
+        train_dataset, val_dataset = ArithmeticDataset.splits(
+            train_pct=50,
+            operator="s5",
+        )
+
+        print(f"\nGenerated {len(train_dataset)} train examples")
+        print(f"Generated {len(val_dataset)} validation examples")
+
+        # Save datasets (tokenizer saved automatically)
+        print("\n" + "=" * 70)
+        print("Saving datasets...")
+        print("=" * 70)
+
+        train_file = train_dataset.save_to_file(f"./{test_data_folder_name}/{train_dataset.name}/train.txt")
+        val_file = val_dataset.save_to_file(f"./{test_data_folder_name}/{val_dataset.name}/val.txt")
+        tokenizer_file = train_dataset.tokenizer.save_tokens(f"./{test_data_folder_name}/{val_dataset.name}/tokenizer.txt")
+
+        # Now tokens.txt exists in ./my_data/ directory
+        print("\nFiles created:")
+        print(f"  - {train_file}")
+        print(f"  - {val_file}")
+        print(f"  - {tokenizer_file} (tokenizer vocabulary)")
+
+        # Load them back
+        print("\n" + "=" * 70)
+        print("Loading datasets...")
+        print("=" * 70)
+
+        loaded_train = ArithmeticDataset.load_from_file(
+            f"{train_file}",
+            modulus,
+            train=True,
+        )
+
+        loaded_val = ArithmeticDataset.load_from_file(
+            f"{val_file}",
+            modulus,
+            train=False,
+        )
+
+        # Verify
+        print("\n" + "=" * 70)
+        print("Verification:")
+        print("=" * 70)
+        print(f"Train datasets match: {torch.equal(train_dataset.data, loaded_train.data)}")
+        print(f"Val datasets match: {torch.equal(val_dataset.data, loaded_val.data)}")
+
+    def test_example_3_noisy(self):
+        test_data_folder_name = "test_data"
+        modulus = 97
+
+        """Example showing tokenizer is saved automatically"""
+        print("=" * 70)
+        print("Generating datasets...")
+        print("=" * 70)
+
+        # Generate datasets
+        train_dataset, val_dataset = ArithmeticDataset.splits(
+            train_pct=50,
+            operator="+_noisy_10",
+        )
+
+        print(f"\nGenerated {len(train_dataset)} train examples")
+        print(f"Generated {len(val_dataset)} validation examples")
+
+        # Save datasets (tokenizer saved automatically)
+        print("\n" + "=" * 70)
+        print("Saving datasets...")
+        print("=" * 70)
+
+        train_file = train_dataset.save_to_file(f"./{test_data_folder_name}/{train_dataset.name}/train.txt")
+        val_file = val_dataset.save_to_file(f"./{test_data_folder_name}/{val_dataset.name}/val.txt")
+        tokenizer_file = train_dataset.tokenizer.save_tokens(f"./{test_data_folder_name}/{val_dataset.name}/tokenizer.txt")
+
+        # Now tokens.txt exists in ./my_data/ directory
+        print("\nFiles created:")
+        print(f"  - {train_file}")
+        print(f"  - {val_file}")
+        print(f"  - {tokenizer_file} (tokenizer vocabulary)")
+
+        # Load them back
+        print("\n" + "=" * 70)
+        print("Loading datasets...")
+        print("=" * 70)
+
+        loaded_train = ArithmeticDataset.load_from_file(
+            f"{train_file}",
+            modulus,
+            train=True,
+        )
+
+        loaded_val = ArithmeticDataset.load_from_file(
+            f"{val_file}",
+            modulus,
+            train=False,
+        )
+
+        # Verify
+        print("\n" + "=" * 70)
+        print("Verification:")
+        print("=" * 70)
+        print(f"Train datasets match: {torch.equal(train_dataset.data, loaded_train.data)}")
+        print(f"Val datasets match: {torch.equal(val_dataset.data, loaded_val.data)}")
