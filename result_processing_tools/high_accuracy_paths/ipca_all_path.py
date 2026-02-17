@@ -143,6 +143,7 @@ def incremental_pca_all_path(arg_path_folder, arg_output_folder, arg_node_name: 
                 logger.info(f"loading lmdb: {model_state_file_path}")
                 tick_and_models = load_models_from_lmdb(model_state_file_path, arg_node_name, desired_length=sample_points, model_state_cache=model_state_cache)
             elif model_state_file_type == "file":
+                logger.info(f"loading model state folder: {model_state_file_path}")
                 tick_and_models = load_models_from_file(model_state_file_path, arg_node_name, desired_length=sample_points, model_state_cache=model_state_cache)
             else:
                 raise NotImplementedError
@@ -181,6 +182,7 @@ def incremental_pca_all_path(arg_path_folder, arg_output_folder, arg_node_name: 
                     logger.info(f"loading lmdb: {model_state_file_path}")
                     tick_and_models = load_models_from_lmdb(model_state_file_path, arg_node_name, desired_length=sample_points, model_state_cache=model_state_cache)
                 elif model_state_file_type == "file":
+                    logger.info(f"loading model state folder: {model_state_file_path}")
                     tick_and_models = load_models_from_file(model_state_file_path, arg_node_name, desired_length=sample_points, model_state_cache=model_state_cache)
                 else:
                     raise NotImplementedError
