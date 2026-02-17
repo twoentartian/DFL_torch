@@ -309,7 +309,7 @@ class FastTrainingSetup(object):
                 raise not_implemented_error_instance
             return optimizer, lr_scheduler, epochs
         elif arg_ml_setup.model_name == ModelType.transformer_for_grokking.name:
-            if arg_ml_setup.dataset_name in [DatasetType.arithmetic_addition.name]:
+            if arg_ml_setup.dataset_name in [DatasetType.arithmetic_addition.name, DatasetType.arithmetic_cubepoly.name]:
                 optimizer = torch.optim.AdamW(model.parameters(), weight_decay=0, lr=1e-3, betas=(0.9, 0.98), eps=1e-8)
                 total_steps = 150000
                 warmup_steps = 10
