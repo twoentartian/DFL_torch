@@ -70,7 +70,7 @@ def manually_define_optimizer(arg_ml_setup: ml_setup.MlSetup, model):
 
 def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_setup.MlSetup, arg_use_cpu: bool, random_seed,
                    arg_worker_count, arg_total_cpu_count, arg_save_format, arg_save_interval, arg_amp, arg_preset, arg_epoch_override,
-                   transfer_learn_model_path, disable_reinit, enable_validation):
+                   transfer_learn_model_path, disable_reinit, enable_validation, inverse_train_val):
     thread_per_process = arg_total_cpu_count // arg_worker_count
     torch.set_num_threads(thread_per_process)
 
@@ -90,10 +90,17 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
 
     criterion = arg_ml_setup.criterion
 
+    training_data = arg_ml_setup.training_data
+    testing_data = arg_ml_setup.testing_data
+    if inverse_train_val:
+        temp = training_data
+        training_data = testing_data
+        testing_data = temp
+
     if arg_ml_setup.override_training_dataset_loader is None:
         batch_size = arg_ml_setup.training_batch_size
         num_worker = 16 if thread_per_process > 16 else thread_per_process
-        dataloader = DataLoader(arg_ml_setup.training_data, batch_size=batch_size, shuffle=True, collate_fn=arg_ml_setup.collate_fn,
+        dataloader = DataLoader(training_data, batch_size=batch_size, shuffle=True, collate_fn=arg_ml_setup.collate_fn,
                                 pin_memory=True, num_workers=num_worker, persistent_workers=True, prefetch_factor=4)
     else:
         dataloader = arg_ml_setup.override_training_dataset_loader
@@ -105,7 +112,7 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
             if arg_ml_setup.override_testing_dataset_loader is None:
                 batch_size = arg_ml_setup.training_batch_size
                 num_worker = 8 if thread_per_process > 8 else thread_per_process
-                dataloader_test = DataLoader(arg_ml_setup.testing_data, batch_size=batch_size, shuffle=False,
+                dataloader_test = DataLoader(testing_data, batch_size=batch_size, shuffle=False,
                                              pin_memory=True, num_workers=num_worker, persistent_workers=True, prefetch_factor=4)
             else:
                 dataloader_test = arg_ml_setup.override_testing_dataset_loader
@@ -324,13 +331,14 @@ if __name__ == "__main__":
     parser.add_argument("--save_format", type=str, default='none', choices=['none', 'file', 'lmdb'], help='which format to save the training states')
     parser.add_argument("--save_interval", type=int, default=1, help='save model state per n epoch')
     parser.add_argument("--amp", action='store_true', help='enable auto mixed precision')
-    parser.add_argument("--random_seed", type=int, help='specify the random seed')
+    parser.add_argument("-s","--random_seed", type=int, help='specify the random seed')
     parser.add_argument("-i", "--start_index", type=int, default=0, help='specify the start index for model names')
     parser.add_argument("-P", "--preset", type=int, default=0, help='specify the preset training hyperparameters')
     parser.add_argument("-e", "--epoch", type=int, default=None, help='override the epoch')
     parser.add_argument("-t", "--transfer_learn", type=str, default=None, help='specify a model weight file to perform transfer learning from.')
     parser.add_argument("--disable_reinit", action='store_true', help='disable reinitialization')
     parser.add_argument("--enable_eval", action='store_true', help='enable measuring loss and accuracy on validation set')
+    parser.add_argument("--inverse_train_val", action='store_true', help='inverse train and validation set')
 
     args = parser.parse_args()
 
@@ -386,7 +394,7 @@ if __name__ == "__main__":
         worker_count = number_of_models
     args = [(output_folder_path, i, number_of_models, current_ml_setup,
              use_cpu, random_seed, worker_count, total_cpu_cores, save_format, save_interval, amp,
-             preset, epoch_override, transfer_learn_model_path, args.disable_reinit, args.enable_eval) for i in range(start_index, start_index+number_of_models, 1)]
+             preset, epoch_override, transfer_learn_model_path, args.disable_reinit, args.enable_eval, args.inverse_train_val) for i in range(start_index, start_index+number_of_models, 1)]
     if worker_count == 1:
         for arg in args:
             training_model(*arg)
