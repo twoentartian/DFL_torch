@@ -206,7 +206,7 @@ def incremental_pca_all_path(arg_path_folder, arg_output_folder, arg_node_name: 
                         column_names = [f"PCA Dimension {i}" for i in range(d)]
                         df = pd.DataFrame(result, columns=[column_names])
                         df.insert(0, "tick", pd.Series(ticks_ordered))
-                        df.to_csv(output_file_path)
+                        df.to_csv(str(output_file_path))
 
     info_file = "info.json"
     info_file_path = os.path.join(arg_output_folder, info_file)
