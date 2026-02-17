@@ -54,6 +54,15 @@ def deduplicate_weights_dbscan(weights_trajectory, shrink_ratio: float | None = 
         print(f"De-duplicate extra sampling rate: {sample_rate}")
         return weights_trajectory_reduced[::sample_rate], index_reduced[::sample_rate]
 
+def collect_log_csv_files(folder_path):
+    pattern = re.compile(r"^(\d+)\.log\.csv$")
+    dfs = {
+        int(m.group(1)): pd.read_csv(p)
+        for p in folder_path.iterdir()
+        if p.is_file() and (m := pattern.match(p.name))
+    }
+    return dfs
+
 def plot_pca_all_path(info_file_path, data_path, shrink_ratio=None, plot_color="index", plot_line=False):
     with open(info_file_path) as f:
         info_target = json.load(f)
@@ -70,6 +79,7 @@ def plot_pca_all_path(info_file_path, data_path, shrink_ratio=None, plot_color="
     all_layers = filtered_layers
     all_dimensions = info_target["dimension"]
 
+    log_csv_cache = {}
     for d in all_dimensions:
         if d == 2:
             for layer_index, layer in enumerate(all_layers):
@@ -83,12 +93,19 @@ def plot_pca_all_path(info_file_path, data_path, shrink_ratio=None, plot_color="
                     csv_file_path = os.path.join(data_path, f"{target}_{layer}_{d}d.csv")
                     df = pd.read_csv(csv_file_path)
 
-                    test_accuracy_df, test_loss_df = None, None
+                    test_accuracy_df, test_loss_df, log_csvs = None, None, None
                     csv_folder_path = os.path.dirname(csv_file_path)
                     if plot_color == "test_accuracy":
                         test_accuracy_df = pd.read_csv(os.path.join(csv_folder_path, "test_accuracy.csv"))
-                    if plot_color == "test_loss":
+                    elif plot_color == "test_loss":
                         test_loss_df = pd.read_csv(os.path.join(csv_folder_path, "test_loss.csv"))
+                    elif plot_color in ["log_train_accuracy", "log_val_accuracy"]:
+                        raw_result_path = Path(target).resolve()
+                        raw_result_folder_path = raw_result_path.parent
+                        node_name = int(raw_result_path.name)
+                        if str(raw_result_folder_path) not in log_csv_cache.keys():
+                            log_csv_cache[str(raw_result_folder_path)] = collect_log_csv_files(raw_result_folder_path)
+                        log_csvs = log_csv_cache[str(raw_result_folder_path)][node_name]
 
                     pattern = r'^PCA Dimension \d+$'
                     pca_dimensions = [col for col in df.columns if re.match(pattern, col)]
@@ -111,6 +128,10 @@ def plot_pca_all_path(info_file_path, data_path, shrink_ratio=None, plot_color="
                         color = test_loss_df[f"{target_name}"]
                     elif plot_color == "index":
                         color = df["tick"]
+                    elif plot_color == "log_train_accuracy":
+                        color = log_csvs["training_accuracy"]
+                    elif plot_color == "log_val_accuracy":
+                        color = log_csvs["validation_accuracy"]
                     else:
                         raise NotImplemented
                     if plot_line:
@@ -140,12 +161,13 @@ if __name__ == '__main__':
     parser.add_argument("--raw", action='store_true', help="plot all data points in PCA results")
     parser.add_argument("-i","--info", type=str, help="info file path, default: {PCA results path}/info.json")
     parser.add_argument("-s", "--shrink", type=float, default=0.1, help="shrink ratio, a value between 0 and 1 to reduce output image size")
-    parser.add_argument("-c", "--color", type=str, choices=["index", "test_accuracy", "test_loss"], default="index", help="specify which value to use for color")
+    parser.add_argument("-c", "--color", type=str, choices=["index", "test_accuracy", "test_loss", "log_train_accuracy", "log_val_accuracy"],
+                        default="index", help="specify which file(test_accuracy.csv|test_loss.csv) to use for color, default is index")
     parser.add_argument("-l", "--line", action='store_true', help="plot all data points with lines")
 
     args = parser.parse_args()
 
-    path = Path(args.path)
+    path = Path( args.path).resolve()
     shrink_ratio = args.shrink
     plot_line = True if args.line else False
     if args.info is None:
