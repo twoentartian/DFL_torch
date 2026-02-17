@@ -27,7 +27,7 @@ from py_src.ml_setup_base.wide_resnet50_2 import wide_resnet50_2_imagenet1k
 from py_src.ml_setup_base.dla import dla_cifar10, dla_cifar100, dla_imagenet10
 from py_src.ml_setup_base.ddpm import ddpm_cifar10
 from py_src.ml_setup_base.nanoclip import nanoclip_flickr30k_default
-from py_src.ml_setup_base.grokking import dataset_arithmetic_addition
+from py_src.ml_setup_base.grokking import arithmetic_addition_grokking, arithmetic_cubepoly_grokking
 
 __all__ = [ 'MlSetup', 'ModelType', 'DatasetType', 'CriterionType', 'imagenet1k_path','dataset_type_to_random', 'dataset_type_to_setup',
             'lenet4_mnist', 'lenet5_mnist', 'lenet5_random_mnist', 'lenet5_large_fc_mnist',
@@ -50,6 +50,7 @@ __all__ = [ 'MlSetup', 'ModelType', 'DatasetType', 'CriterionType', 'imagenet1k_
             'dla_cifar10', 'dla_cifar100', 'dla_imagenet10',
             'ddpm_cifar10',
             'nanoclip_flickr30k_default',
+            'arithmetic_addition_grokking', 'arithmetic_cubepoly_grokking',
            ]
 
 """ Helper function """
@@ -289,7 +290,10 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default, p
     elif model_name == ModelType.transformer_for_grokking:
         if dataset_type in [dataset_type.default, dataset_type.arithmetic_addition]:
             assert device is not None
-            output_ml_setup = dataset_arithmetic_addition(device)
+            output_ml_setup = arithmetic_addition_grokking(device)
+        elif dataset_type in [dataset_type.arithmetic_cubepoly]:
+            assert device is not None
+            output_ml_setup = arithmetic_cubepoly_grokking(device)
         else:
             raise NotImplementedError
     else:

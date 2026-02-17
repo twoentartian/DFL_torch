@@ -49,9 +49,29 @@ def train_step(batch_index, batch, model: transformer_for_grokking.Transformer, 
 def evaluation_step(batch_index, batch, model: transformer_for_grokking.Transformer, optimizer: torch.optim.Optimizer, lr_scheduler, arg_ml_setup: MlSetup) -> TrainStepOutput:
     return step(batch_index, batch, model, optimizer, lr_scheduler, arg_ml_setup, train=False)
 
-def dataset_arithmetic_addition(device, train_percentage: float=50, operand_length: Optional[int]=None):
+def arithmetic_addition_grokking(device, train_percentage: float=50, operand_length: Optional[int]=None):
     output_ml_setup = MlSetup()
     dataset = ml_setup_dataset.dataset_arithmetic_addition(train_percentage=train_percentage, operand_length=operand_length)
+    output_ml_setup.model = transformer_for_grokking.Transformer(n_layers=2, n_heads=4, d_model=128, max_context_len=50)
+    output_ml_setup.model_name = str(ModelType.transformer_for_grokking.name)
+    output_ml_setup.model_type = ModelType.transformer_for_grokking
+    output_ml_setup.get_info_from_dataset(dataset)
+
+    output_ml_setup.training_batch_size = min(512, math.ceil(len(dataset.training_data) / 2.0))
+    output_ml_setup.has_normalization_layer = True
+
+    output_ml_setup.override_training_dataset_loader = dataset_modular.ArithmeticIterator(dataset.training_data, device, batchsize_hint=-1)
+    output_ml_setup.override_testing_dataset_loader = dataset_modular.ArithmeticIterator(dataset.testing_data, device, batchsize_hint=-1)
+    output_ml_setup.criterion = nn.CrossEntropyLoss()
+
+    output_ml_setup.override_train_step_function = train_step
+    output_ml_setup.override_evaluation_step_function = evaluation_step
+
+    return output_ml_setup
+
+def arithmetic_cubepoly_grokking(device, train_percentage: float=50, operand_length: Optional[int]=None):
+    output_ml_setup = MlSetup()
+    dataset = ml_setup_dataset.dataset_arithmetic_cubepoly(train_percentage=train_percentage, operand_length=operand_length)
     output_ml_setup.model = transformer_for_grokking.Transformer(n_layers=2, n_heads=4, d_model=128, max_context_len=50)
     output_ml_setup.model_name = str(ModelType.transformer_for_grokking.name)
     output_ml_setup.model_type = ModelType.transformer_for_grokking
