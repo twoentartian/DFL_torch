@@ -289,10 +289,12 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default, p
             raise NotImplementedError
     elif model_name == ModelType.transformer_for_grokking:
         if dataset_type in [dataset_type.default, dataset_type.arithmetic_addition]:
-            assert device is not None
+            if device is None:
+                device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
             output_ml_setup = arithmetic_addition_grokking(device)
         elif dataset_type in [dataset_type.arithmetic_cubepoly]:
-            assert device is not None
+            if device is None:
+                device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
             output_ml_setup = arithmetic_cubepoly_grokking(device)
         else:
             raise NotImplementedError

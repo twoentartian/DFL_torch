@@ -10,7 +10,8 @@ from py_src.ml_setup_base.model import ModelType
 from py_src.ml_setup_base import dataset_modular, transformer_for_grokking
 
 def step(batch_index, batch, model: transformer_for_grokking.Transformer, optimizer: torch.optim.Optimizer, lr_scheduler, arg_ml_setup: MlSetup, train=False):
-    optimizer.zero_grad(set_to_none=True)
+    if train:
+        optimizer.zero_grad(set_to_none=True)
 
     x = batch["text"]
     y = batch["target"]
