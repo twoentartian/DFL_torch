@@ -92,6 +92,7 @@ class DatasetType(Enum):
     flickr30k = auto()
     arithmetic_addition = auto()
     arithmetic_cubepoly = auto()
+    arithmetic_cube2 = auto()
 
 """ Helper functions """
 def calculate_mean_std(dataset):
@@ -547,6 +548,28 @@ def dataset_arithmetic_cubepoly(*args, **kwargs):
         if os.path.isdir(item_path) and regex.match(item):
             matching_folders.append(item)
     assert len(matching_folders) == 1, f"there can only be 1 modulus cubepoly dataset, get {len(matching_folders)}: {matching_folders}"
+    base_dir_name = matching_folders[0]
+    base_dir = os.path.join(default_path_arithmetic, base_dir_name)
+    match = re.search(pattern, base_dir)
+    modulus = int(match.group(1))
+    dataset_train = ArithmeticDataset.load_from_file(f"{base_dir}/train.txt", modulus, name=base_dir, train=True, tokenizer_path=f"{base_dir}/tokenizer.txt")
+    dataset_test = ArithmeticDataset.load_from_file(f"{base_dir}/val.txt", modulus, name=base_dir, train=False, tokenizer_path=f"{base_dir}/tokenizer.txt")
+
+    output = DatasetSetup(dataset_name, dataset_type, dataset_train, dataset_test, labels="non_classifier")
+    return output
+
+def dataset_arithmetic_cube2(*args, **kwargs):
+    dataset_name = str(DatasetType.arithmetic_cube2.name)
+    dataset_type = DatasetType.arithmetic_cube2
+
+    matching_folders = []
+    pattern = r'modulus(\d+)_cube2'
+    regex = re.compile(pattern)
+    for item in os.listdir(default_path_arithmetic):
+        item_path = os.path.join(default_path_arithmetic, item)
+        if os.path.isdir(item_path) and regex.match(item):
+            matching_folders.append(item)
+    assert len(matching_folders) == 1, f"there can only be 1 modulus cube2 dataset, get {len(matching_folders)}: {matching_folders}"
     base_dir_name = matching_folders[0]
     base_dir = os.path.join(default_path_arithmetic, base_dir_name)
     match = re.search(pattern, base_dir)

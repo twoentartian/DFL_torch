@@ -27,7 +27,7 @@ from py_src.ml_setup_base.wide_resnet50_2 import wide_resnet50_2_imagenet1k
 from py_src.ml_setup_base.dla import dla_cifar10, dla_cifar100, dla_imagenet10
 from py_src.ml_setup_base.ddpm import ddpm_cifar10
 from py_src.ml_setup_base.nanoclip import nanoclip_flickr30k_default
-from py_src.ml_setup_base.grokking import arithmetic_addition_grokking, arithmetic_cubepoly_grokking
+from py_src.ml_setup_base.grokking import arithmetic_addition_grokking, arithmetic_cubepoly_grokking, arithmetic_cube2_grokking
 
 __all__ = [ 'MlSetup', 'ModelType', 'DatasetType', 'CriterionType', 'imagenet1k_path','dataset_type_to_random', 'dataset_type_to_setup',
             'lenet4_mnist', 'lenet5_mnist', 'lenet5_random_mnist', 'lenet5_large_fc_mnist',
@@ -50,7 +50,7 @@ __all__ = [ 'MlSetup', 'ModelType', 'DatasetType', 'CriterionType', 'imagenet1k_
             'dla_cifar10', 'dla_cifar100', 'dla_imagenet10',
             'ddpm_cifar10',
             'nanoclip_flickr30k_default',
-            'arithmetic_addition_grokking', 'arithmetic_cubepoly_grokking',
+            'arithmetic_addition_grokking', 'arithmetic_cubepoly_grokking', 'arithmetic_cube2_grokking'
            ]
 
 """ Helper function """
@@ -288,14 +288,14 @@ def get_ml_setup_from_model_type(model_name, dataset_type=DatasetType.default, p
         else:
             raise NotImplementedError
     elif model_name == ModelType.transformer_for_grokking:
+        if device is None:
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         if dataset_type in [dataset_type.default, dataset_type.arithmetic_addition]:
-            if device is None:
-                device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
             output_ml_setup = arithmetic_addition_grokking(device)
         elif dataset_type in [dataset_type.arithmetic_cubepoly]:
-            if device is None:
-                device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
             output_ml_setup = arithmetic_cubepoly_grokking(device)
+        elif dataset_type in [dataset_type.arithmetic_cube2]:
+            output_ml_setup = arithmetic_cube2_grokking(device)
         else:
             raise NotImplementedError
     else:
