@@ -15,9 +15,15 @@ def testing_model(model, current_ml_setup, test_training, batch_size):
     criterion = current_ml_setup.criterion
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    dataloader_test = DataLoader(testing_dataset, batch_size=batch_size, shuffle=True, num_workers=8, persistent_workers=True)
+    if current_ml_setup.override_testing_dataset_loader is not None:
+        dataloader_test = current_ml_setup.override_testing_dataset_loader
+    else:
+        dataloader_test = DataLoader(testing_dataset, batch_size=batch_size, shuffle=True, num_workers=8, persistent_workers=True)
     if test_training:
-        dataloader_train = DataLoader(training_dataset, batch_size=batch_size, shuffle=True, num_workers=8, persistent_workers=True)
+        if current_ml_setup.override_training_dataset_loader is not None:
+            dataloader_train = current_ml_setup.override_training_dataset_loader
+        else:
+            dataloader_train = DataLoader(training_dataset, batch_size=batch_size, shuffle=True, num_workers=8, persistent_workers=True)
     else:
         dataloader_train = None
 
@@ -28,32 +34,52 @@ def testing_model(model, current_ml_setup, test_training, batch_size):
     correct = 0
     total = 0
     with torch.no_grad():
-        for batch_idx, (data, label) in enumerate(dataloader_test):
-            print(f"test batch_idx: {batch_idx}")
-            data, label = data.to(device), label.to(device)
-            outputs = model(data)
-            loss = criterion(outputs, label)
-            test_loss += loss.item() * data.size(0)
-            _, predicted = outputs.max(1)
-            total += label.size(0)
-            correct += predicted.eq(label).sum().item()
-        test_loss = test_loss / total
-        test_accuracy = correct / total
-
-        if dataloader_train is not None:
-            for batch_idx, (data, label) in enumerate(dataloader_train):
-                print(f"train batch_idx: {batch_idx}")
+        if current_ml_setup.override_evaluation_step_function is not None:
+            val_loss, val_correct, val_count = 0.0, 0.0, 0
+            for batch_idx, batch in enumerate(dataloader_test):
+                output = current_ml_setup.override_evaluation_step_function(batch_idx, batch, model, None, None, current_ml_setup)
+                val_loss += output.loss_value * output.sample_count
+                val_correct += output.correct_count
+                val_count += output.sample_count
+            test_loss = val_loss / val_count
+            test_accuracy = val_correct / val_count
+        else:
+            for batch_idx, (data, label) in enumerate(dataloader_test):
+                print(f"test batch_idx: {batch_idx}")
                 data, label = data.to(device), label.to(device)
-                if current_ml_setup.mixup_fn is not None:
-                    data, label = current_ml_setup.mixup_fn(data, label)
                 outputs = model(data)
                 loss = criterion(outputs, label)
-                train_loss += loss.item() * data.size(0)
+                test_loss += loss.item() * data.size(0)
                 _, predicted = outputs.max(1)
                 total += label.size(0)
                 correct += predicted.eq(label).sum().item()
-            train_loss = train_loss / total
-            train_accuracy = correct / total
+            test_loss = test_loss / total
+            test_accuracy = correct / total
+
+        if dataloader_train is not None:
+            if current_ml_setup.override_evaluation_step_function is not None:
+                val_loss, val_correct, val_count = 0.0, 0.0, 0
+                for batch_idx, batch in enumerate(dataloader_train):
+                    output = current_ml_setup.override_evaluation_step_function(batch_idx, batch, model, None, None, current_ml_setup)
+                    val_loss += output.loss_value * output.sample_count
+                    val_correct += output.correct_count
+                    val_count += output.sample_count
+                train_loss = val_loss / val_count
+                train_accuracy = val_correct / val_count
+            else:
+                for batch_idx, (data, label) in enumerate(dataloader_train):
+                    print(f"train batch_idx: {batch_idx}")
+                    data, label = data.to(device), label.to(device)
+                    if current_ml_setup.mixup_fn is not None:
+                        data, label = current_ml_setup.mixup_fn(data, label)
+                    outputs = model(data)
+                    loss = criterion(outputs, label)
+                    train_loss += loss.item() * data.size(0)
+                    _, predicted = outputs.max(1)
+                    total += label.size(0)
+                    correct += predicted.eq(label).sum().item()
+                train_loss = train_loss / total
+                train_accuracy = correct / total
         else:
             train_loss = 0
             train_accuracy = 0
