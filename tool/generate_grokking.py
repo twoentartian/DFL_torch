@@ -41,7 +41,7 @@ def generate_dataset(output_folder_path, train_pct, expression, modulus, train_s
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Generate some high accuracy models')
     parser.add_argument("-n", "--number_of_models", type=int, default=1)
-    parser.add_argument("-c", '--core', type=int, default=os.cpu_count(), help='specify the number of CPU cores to use')
+    parser.add_argument("-c", '--core', type=int, default=4, help='specify the number of CPU cores to use')
     parser.add_argument("-w", "--worker", type=int, default=1, help='specify how many models to train in parallel')
     parser.add_argument("-o", "--output_folder_name", default=None, help='specify the output folder name')
 
