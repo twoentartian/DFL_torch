@@ -180,7 +180,7 @@ class ArithmeticDataset:
         :returns: (train_dataset, validation_dataset)
         """
 
-        assert (0 < train_pct) and (train_pct < 100)
+        assert (0 < train_pct) and (train_pct <= 100)
 
         ds_name = cls.get_dsname(modulus, operator, operand_length, train_pct, train_split_type)
         eqs_train, eqs_val = cls.make_data(operator, modulus, operand_length, train_split_type=train_split_type, train_pct=train_pct)
@@ -456,7 +456,8 @@ class ArithmeticDataset:
                         train_eqs.append(eq_wrapped)
                     else:
                         val_eqs.append(eq_wrapped)
-
+            if len(val_eqs) == 0:
+                val_eqs.append(train_eqs[0])
             if shuffle:
                 rng.shuffle(train_eqs)
                 rng.shuffle(val_eqs)
@@ -477,6 +478,9 @@ class ArithmeticDataset:
             train_rows, _ = cls.calc_split_len(train_pct, len(data))
             train_eqs = data[:train_rows]
             val_eqs = data[train_rows:]
+
+            if len(val_eqs) == 0:
+                val_eqs.append(train_eqs[0])
 
             return train_eqs, val_eqs
 
