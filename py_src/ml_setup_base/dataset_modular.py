@@ -41,6 +41,7 @@ VALID_OPERATORS = {
     "sort": "sort",
     "reverse": "reverse",
     "copy": "copy",
+    "unknown": "unknown",
 }
 EOS_TOKEN = "<|eos|>"
 EQ_TOKEN = "="
@@ -69,7 +70,8 @@ class ArithmeticTokenizer:
         self.stoi: Dict[str, int] = dict([(s, i) for i, s in enumerate(self.itos)])
 
     def _encode(self, s: str) -> Tensor:
-        return LongTensor([self.stoi[t] for t in s.split(" ")])
+        tokens = [self.stoi[t] if t in self.stoi.keys() else self.stoi["unknown"] for t in s.split(" ")]
+        return LongTensor(tokens)
 
     def encode(self, obj: Union[str, List]) -> Tensor:
         """
@@ -152,9 +154,9 @@ class ArithmeticTokenizer:
         nums = list(range(modulus))
         tokens = (
             [EOS_TOKEN, EQ_TOKEN]
-            + list(sorted(list(VALID_OPERATORS.keys())))
             + list(map(render, nums,))
             + list(map(render, itertools.permutations(range(5))))  # s5
+            + list(sorted(list(VALID_OPERATORS.keys())))
         )
         return tokens
 
@@ -417,8 +419,6 @@ class ArithmeticDataset:
     @classmethod
     def make_data(cls, operator, modulus, operands=None, shuffle=True, seed=None, train_split_type="random", train_pct: float = 0.5) -> tuple[List[str], List[str]]:
         operator, noise_level = cls._get_operator_and_noise_level(operator)
-        assert operator in VALID_OPERATORS
-
         data, data_table = None, None
         if operator not in ["sort", "reverse", "copy"]:
             data, data_table = cls._make_binary_operation_data(operator, modulus)
