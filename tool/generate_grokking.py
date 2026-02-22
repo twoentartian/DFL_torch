@@ -91,7 +91,6 @@ if __name__ == "__main__":
     # logger
     util.set_logging(logger, "main")
     logger.info("logging setup complete")
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model_type = args.model_type
@@ -120,8 +119,8 @@ if __name__ == "__main__":
         train_ds, val_ds = val_ds, train_ds
 
     batch_size = current_ml_setup.training_batch_size if arg_bs is None else arg_bs
-    train_dl = ArithmeticIterator(train_ds, device, batchsize_hint=batch_size)
-    val_dl = ArithmeticIterator(val_ds, device, batchsize_hint=batch_size)
+    train_dl = ArithmeticIterator(train_ds, device, batchsize_hint=-1)
+    val_dl = ArithmeticIterator(val_ds, device, batchsize_hint=-1)
     tokenizer = train_ds.tokenizer
     criterion = current_ml_setup.criterion
 

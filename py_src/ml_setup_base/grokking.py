@@ -118,7 +118,7 @@ def arithmetic_unknown_exp_grokking(device):
     output_ml_setup.model_name = str(ModelType.transformer_for_grokking.name)
     output_ml_setup.model_type = ModelType.transformer_for_grokking
 
-    output_ml_setup.training_batch_size = 512
+    output_ml_setup.training_batch_size = -1
     output_ml_setup.has_normalization_layer = True
     output_ml_setup.criterion = nn.CrossEntropyLoss()
 
