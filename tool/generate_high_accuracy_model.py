@@ -21,42 +21,6 @@ from py_src.ml_setup import ModelType
 
 logger = logging.getLogger("generate_high_accuracy_model")
 
-def set_logging(target_logger, task_name, log_file_path=None):
-    class ExitOnExceptionHandler(logging.StreamHandler):
-        def emit(self, record):
-            if record.levelno == logging.CRITICAL:
-                raise SystemExit(-1)
-
-    formatter = logging.Formatter(f"[%(asctime)s] [%(levelname)8s] [{task_name}] --- %(message)s (%(filename)s:%(lineno)s)")
-
-    console = logging.StreamHandler(sys.stdout)
-    console.setLevel(logging.INFO)
-    console.setFormatter(formatter)
-
-    target_logger.setLevel(logging.DEBUG)
-    target_logger.addHandler(console)
-    target_logger.addHandler(ExitOnExceptionHandler())
-
-    if log_file_path is not None:
-        file = logging.FileHandler(log_file_path)
-        file.setLevel(logging.DEBUG)
-        file.setFormatter(formatter)
-        target_logger.addHandler(file)
-
-    del console, formatter
-
-def set_seed(seed: int, logger=None) -> None:
-    np.random.seed(seed)
-    random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    # When running on the CuDNN backend, two further options must be set
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
-    # Set a fixed value for the hash seed
-    os.environ["PYTHONHASHSEED"] = str(seed)
-    if logger is not None:
-        logger.info(f"Random seed set as {seed}")
 
 def manually_define_optimizer(arg_ml_setup: ml_setup.MlSetup, model):
     # lr = 0.1
@@ -75,10 +39,10 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
     torch.set_num_threads(thread_per_process)
 
     child_logger = logging.getLogger(f"find_high_accuracy_path.{index}")
-    set_logging(child_logger, f"{index}")
+    util.set_logging(child_logger, f"{index}")
 
     if random_seed is not None:
-        set_seed(random_seed, child_logger)
+        util.set_seed(random_seed, child_logger)
 
     if arg_use_cpu:
         device = torch.device("cpu")
@@ -359,7 +323,7 @@ if __name__ == "__main__":
     transfer_learn_model_path = args.transfer_learn
 
     # logger
-    set_logging(logger, "main")
+    util.set_logging(logger, "main")
     logger.info("logging setup complete")
 
     if use_cpu:

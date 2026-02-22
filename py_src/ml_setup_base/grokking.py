@@ -5,11 +5,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 from py_src.ml_setup_base.base import MlSetup, TrainStepOutput
 import py_src.ml_setup_base.dataset as ml_setup_dataset
+from py_src.ml_setup_base.dataset import DatasetType
 
 from py_src.ml_setup_base.model import ModelType
 from py_src.ml_setup_base import dataset_modular, transformer_for_grokking
 
-def step(batch_index, batch, model: transformer_for_grokking.Transformer, optimizer: torch.optim.Optimizer, lr_scheduler, arg_ml_setup: MlSetup, train=False):
+def step(batch_index, batch, model: transformer_for_grokking.Transformer, optimizer: torch.optim.Optimizer, lr_scheduler, tokenizer, train=False):
     if train:
         optimizer.zero_grad(set_to_none=True)
 
@@ -18,7 +19,6 @@ def step(batch_index, batch, model: transformer_for_grokking.Transformer, optimi
     y_hat, attentions, values = model.forward(x=x)
     y_hat = y_hat.transpose(-2, -1)
 
-    tokenizer = arg_ml_setup.training_data.tokenizer
     eq_token_index = tokenizer.stoi["="]
     eq_position_t = torch.nonzero(y[0, :] == eq_token_index, as_tuple=False)
     eq_position = int(eq_position_t.squeeze())
@@ -45,10 +45,10 @@ def step(batch_index, batch, model: transformer_for_grokking.Transformer, optimi
     return output
 
 def train_step(batch_index, batch, model: transformer_for_grokking.Transformer, optimizer: torch.optim.Optimizer, lr_scheduler, arg_ml_setup: MlSetup) -> TrainStepOutput:
-    return step(batch_index, batch, model, optimizer, lr_scheduler, arg_ml_setup, train=True)
+    return step(batch_index, batch, model, optimizer, lr_scheduler, arg_ml_setup.training_data.tokenizer, train=True)
 
 def evaluation_step(batch_index, batch, model: transformer_for_grokking.Transformer, optimizer: torch.optim.Optimizer, lr_scheduler, arg_ml_setup: MlSetup) -> TrainStepOutput:
-    return step(batch_index, batch, model, optimizer, lr_scheduler, arg_ml_setup, train=False)
+    return step(batch_index, batch, model, optimizer, lr_scheduler, arg_ml_setup.training_data.tokenizer, train=False)
 
 def arithmetic_addition_grokking(device, train_percentage: float=50, operand_length: Optional[int]=None):
     output_ml_setup = MlSetup()
@@ -103,6 +103,23 @@ def arithmetic_cube2_grokking(device, train_percentage: float=50, operand_length
 
     output_ml_setup.override_training_dataset_loader = dataset_modular.ArithmeticIterator(dataset.training_data, device, batchsize_hint=-1)
     output_ml_setup.override_testing_dataset_loader = dataset_modular.ArithmeticIterator(dataset.testing_data, device, batchsize_hint=-1)
+    output_ml_setup.criterion = nn.CrossEntropyLoss()
+
+    output_ml_setup.override_train_step_function = train_step
+    output_ml_setup.override_evaluation_step_function = evaluation_step
+
+    return output_ml_setup
+
+def arithmetic_unknown_exp_grokking(device):
+    output_ml_setup = MlSetup()
+    output_ml_setup.dataset_name = DatasetType.arithmetic_exp_unknown.name
+    output_ml_setup.dataset_type = DatasetType.arithmetic_exp_unknown
+    output_ml_setup.model = transformer_for_grokking.Transformer(n_layers=2, n_heads=4, d_model=128, max_context_len=50)
+    output_ml_setup.model_name = str(ModelType.transformer_for_grokking.name)
+    output_ml_setup.model_type = ModelType.transformer_for_grokking
+
+    output_ml_setup.training_batch_size = 512
+    output_ml_setup.has_normalization_layer = True
     output_ml_setup.criterion = nn.CrossEntropyLoss()
 
     output_ml_setup.override_train_step_function = train_step

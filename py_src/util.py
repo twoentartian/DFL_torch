@@ -1,6 +1,8 @@
 import torch
 import logging
 import sys
+import os
+import random
 from pathlib import Path
 from collections import deque
 import numpy as np
@@ -130,6 +132,19 @@ def set_logging(target_logger, task_name, log_file_path=None):
         target_logger.addHandler(file)
 
     del console, formatter
+
+def set_seed(seed: int, logger=None) -> None:
+    np.random.seed(seed)
+    random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    # When running on the CuDNN backend, two further options must be set
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    # Set a fixed value for the hash seed
+    os.environ["PYTHONHASHSEED"] = str(seed)
+    if logger is not None:
+        logger.info(f"Random seed set as {seed}")
 
 def get_layer_info(state_dict, layer_name: str = None):
     layer_info = {}

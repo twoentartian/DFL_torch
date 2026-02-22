@@ -11,7 +11,7 @@ from concurrent.futures import ProcessPoolExecutor
 import torch
 from torch import Tensor, LongTensor
 import numpy as np
-from typing import List, Dict, Union, Optional
+from typing import List, Dict, Union, Optional, Literal
 from tqdm import tqdm
 
 from sympy.combinatorics.permutations import Permutation
@@ -169,6 +169,7 @@ class ArithmeticDataset:
         operator: str,
         modulus = 97,
         operand_length: Optional[int] = None,
+        train_split_type: Literal["random", "chessboard", "updown", "leftright", "tl_to_br", "tr_to_bl", "interlace_row", "interlace_col"] = "random",
     ):
         """
         Creates training and validation datasets
@@ -181,13 +182,11 @@ class ArithmeticDataset:
 
         assert (0 < train_pct) and (train_pct < 100)
 
-        ds_name = cls.get_dsname(modulus, operator, operand_length)
-        eqs = cls.make_data(operator, modulus, operand_length)
+        ds_name = cls.get_dsname(modulus, operator, operand_length, train_pct, train_split_type)
+        eqs_train, eqs_val = cls.make_data(operator, modulus, operand_length, train_split_type=train_split_type, train_pct=train_pct)
 
-        train_rows, _ = cls.calc_split_len(train_pct, len(eqs))
-
-        train_ds = cls(ds_name, eqs[:train_rows], modulus, train=True)
-        val_ds = cls(ds_name, eqs[train_rows:], modulus, train=False)
+        train_ds = cls(ds_name, eqs_train, modulus, train=True)
+        val_ds = cls(ds_name, eqs_val, modulus, train=False)
 
         return train_ds, val_ds
 
@@ -268,7 +267,7 @@ class ArithmeticDataset:
             equations = f.read().strip().split("\n")
 
         print(f"Loaded {len(equations)} equations from {filepath}")
-        return cls(name, equations, modulus, train)
+        return cls(name, equations, modulus, train, tokenizer=tokenizer)
 
     # @classmethod
     # def _render(cls, operand):
@@ -279,7 +278,7 @@ class ArithmeticDataset:
     #    return " ".join(map(render, parts))
 
     @classmethod
-    def _make_binary_operation_data(cls, operator: str, modulus, operands=None) -> List[str]:
+    def _make_binary_operation_data(cls, operator: str, modulus, operands=None) -> tuple[List[str], dict[tuple[int, int], str]]:
         nums = list(range(modulus))
         if operator == "s5":
             operands = operands or list(range(5))
@@ -301,6 +300,7 @@ class ArithmeticDataset:
         #     print("elems", list(elems))
         #     print("tuples", list(tuples))
         eqs = []
+        eqs_table = dict()
         for a, b in tuples:
             if operator == "/":
                 if b == 0:
@@ -332,10 +332,11 @@ class ArithmeticDataset:
                 c = eval(f"({a} {operator} {b}) % {modulus}")
             eq = " ".join(map(render, [a, operator, b, "=", c]))
             eqs.append(eq)
+            eqs_table[(a, b)] = eq
 
         # if operator == "s5":
         #     print("eqs", eqs)
-        return eqs
+        return eqs, eqs_table
 
     # @staticmethod
     # def _render_unop_example(operator, lhs, rhs):
@@ -392,9 +393,14 @@ class ArithmeticDataset:
     #    return eqs
 
     @classmethod
-    def get_dsname(cls, modulus, operator, operand_length) -> str:
+    def get_dsname(cls, modulus, operator, operand_length, train_pct, split_type) -> str:
         operator, noise_level = cls._get_operator_and_noise_level(operator)
-        ds_name = f"modulus{modulus}_{VALID_OPERATORS[operator]}_length{operand_length}"
+        if operator in VALID_OPERATORS:
+            ds_name = f"modulus{modulus}_{VALID_OPERATORS[operator]}_train{train_pct}_{split_type}"
+        else:
+            ds_name = f"modulus{modulus}_{operator}_train{train_pct}_{split_type}"
+        if operand_length is not None:
+            ds_name += f"_{operand_length}"
         if noise_level > 0:
             ds_name += f"_noise{noise_level}"
         ds_name += datetime.now().strftime("_%Y-%m-%d_%H-%M-%S")
@@ -409,32 +415,144 @@ class ArithmeticDataset:
             return operator, 0
 
     @classmethod
-    def make_data(cls, operator, modulus, operands=None, shuffle=True, seed=None) -> List[str]:
+    def make_data(cls, operator, modulus, operands=None, shuffle=True, seed=None, train_split_type="random", train_pct: float = 0.5) -> tuple[List[str], List[str]]:
         operator, noise_level = cls._get_operator_and_noise_level(operator)
         assert operator in VALID_OPERATORS
 
+        data, data_table = None, None
         if operator not in ["sort", "reverse", "copy"]:
-            data = cls._make_binary_operation_data(operator, modulus)
+            data, data_table = cls._make_binary_operation_data(operator, modulus)
         else:
             data = cls._make_unary_operation_data(operator, operands)
 
         if seed is None:
             seed = time.time_ns()
         rng = np.random.default_rng(seed)
-        if shuffle:
-            rng.shuffle(data)
 
-        if noise_level > 0:
-            random_answer_eqns = rng.choice(data, size=noise_level)
-            random_answers = [
-                random_eq.split(" = ")[1] for random_eq in random_answer_eqns
-            ]
-            for i in range(noise_level):
-                data[i] = data[i].split(" = ")[0] + " = " + random_answers[i]
+        if train_split_type != "random":
+            assert train_pct is not None, ("train_pct must be provided for spatial train_split_type")
+            assert data_table is not None, ("Spatial splits are only supported for binary-operation datasets")
+            assert noise_level == 0, ("noise level has to be 0 for non-random splits")
+            train_mask, val_mask = cls._get_spatial_train_val_masks(operator, modulus, train_pct, train_split_type)
 
-        data = [EOS_TOKEN + " " + eq + " " + EOS_TOKEN for eq in data]
+            elems_a = list(range(modulus))
+            elems_b = list(range(modulus))
 
-        return data
+            n = len(elems_a)
+            train_eqs, val_eqs = [], []
+            for i in range(n):
+                for j in range(n):
+                    a, b = elems_a[i], elems_b[j]
+                    key = (a, b)
+                    # data_table may use the raw operand objects as keys
+                    # for integer operators the keys are plain ints
+                    eq = data_table.get(key) or data_table.get(
+                        (elems_a[i], elems_b[j])
+                    )
+                    if eq is None:
+                        continue  # e.g. division by zero was skipped
+                    eq_wrapped = EOS_TOKEN + " " + eq + " " + EOS_TOKEN
+                    if train_mask[i, j]:
+                        train_eqs.append(eq_wrapped)
+                    else:
+                        val_eqs.append(eq_wrapped)
+
+            if shuffle:
+                rng.shuffle(train_eqs)
+                rng.shuffle(val_eqs)
+
+            return train_eqs, val_eqs
+        else:
+            data = [EOS_TOKEN + " " + eq + " " + EOS_TOKEN for eq in data]
+            if shuffle:
+                rng.shuffle(data)
+            if noise_level > 0:
+                random_answer_eqns = rng.choice(data, size=noise_level)
+                random_answers = [
+                    random_eq.split(" = ")[1] for random_eq in random_answer_eqns
+                ]
+                for i in range(noise_level):
+                    data[i] = data[i].split(" = ")[0] + " = " + random_answers[i]
+
+            train_rows, _ = cls.calc_split_len(train_pct, len(data))
+            train_eqs = data[:train_rows]
+            val_eqs = data[train_rows:]
+
+            return train_eqs, val_eqs
+
+    @classmethod
+    def _get_spatial_train_val_masks(cls, operator, modulus, train_pct, train_split_type):
+        """
+        Build boolean train/val masks over the n×n grid of (a, b) operand pairs.
+
+        The grid has shape (n, n) where n = modulus (or len(permutations) for s5).
+        Row index = first operand a, column index = second operand b.
+
+        Returns
+        -------
+        train_mask : np.ndarray of bool, shape (n, n)
+        val_mask   : np.ndarray of bool, shape (n, n)
+        """
+        if operator in ["s5", "s5conj", "s5aba"]:
+            import math as _math
+            n = _math.factorial(5)  # 120
+        elif "_mod_" in operator:
+            n = int(operator.split("_mod_")[-1])
+        else:
+            n = modulus
+
+        frac = train_pct / 100.0
+        rows = np.arange(n)
+        cols = np.arange(n)
+        i, j = np.meshgrid(rows, cols, indexing="ij")  # i=row (a), j=col (b)
+
+        if train_split_type == "chessboard":
+            train_mask = (i + j) % 2 == 0
+
+        elif train_split_type == "updown":
+            # Top rows → train, bottom rows → val
+            cutoff = round(n * frac)
+            train_mask = i < cutoff
+
+        elif train_split_type == "leftright":
+            # Left cols → train, right cols → val
+            cutoff = round(n * frac)
+            train_mask = j < cutoff
+
+        elif train_split_type == "tl_to_br":
+            # Triangle from top-left: train where i + j < cutoff diagonal
+            # Total cells = n*n, train cells ≈ frac * n*n
+            # For the triangle sum_{d=0}^{D-1} min(d+1, n) cells; use simple threshold on i+j
+            total = n * n
+            target_train = round(total * frac)
+            # Count cells with i+j <= threshold
+            diag_sum = i + j
+            # Find threshold T such that #{i+j <= T} ~= target_train
+            counts = np.array([(diag_sum <= T).sum() for T in range(2 * n - 1)])
+            T = int(np.searchsorted(counts, target_train, side="left"))
+            train_mask = diag_sum <= T
+
+        elif train_split_type == "tr_to_bl":
+            # Triangle from top-right: train where (n-1-j) + i < cutoff diagonal
+            # Equivalent to selecting from top-right corner sweeping to bottom-left
+            diag_sum = i + (n - 1 - j)
+            total = n * n
+            target_train = round(total * frac)
+            counts = np.array([(diag_sum <= T).sum() for T in range(2 * n - 1)])
+            T = int(np.searchsorted(counts, target_train, side="left"))
+            train_mask = diag_sum <= T
+
+        elif train_split_type == "interlace_row":
+            train_mask = i % 2 == 0  # even rows → train, odd rows → val
+
+        elif train_split_type == "interlace_col":
+            train_mask = j % 2 == 0  # even cols → train, odd cols → val
+
+        else:
+            raise ValueError(f"Unknown train_split_type: {train_split_type}")
+
+        val_mask = ~train_mask
+        return train_mask, val_mask
 
 
 class ArithmeticIterator(torch.utils.data.IterableDataset):
@@ -557,8 +675,9 @@ class TestStringMethods(unittest.TestCase):
 
         # Generate datasets
         train_dataset, val_dataset = ArithmeticDataset.splits(
-            train_pct=50,
+            train_pct=80,
             operator="+",
+            train_split_type="interlace_row",
         )
 
         print(f"\nGenerated {len(train_dataset)} train examples")
