@@ -26,7 +26,8 @@ from pathlib import Path
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
-
+from matplotlib.colors import Normalize
+from matplotlib import cm
 
 # ---------------------------------------------------------------------------
 # Tokenizer / vocabulary helpers
@@ -90,13 +91,12 @@ def parse_equation(eq: str, operators: list[str],
     if not eq:
         return None
 
-    # Everything left of ' = ' is the LHS
     parts = eq.split(" = ")
     if len(parts) < 2:
         return None
     lhs = parts[0].strip()
+    c_str = parts[1].strip().split()[0]
 
-    # Find the operator (longest-match, searched as ' OP ' substring)
     op_found = None
     for op in operators:
         if f" {op} " in lhs:
@@ -115,25 +115,60 @@ def parse_equation(eq: str, operators: list[str],
     if a_idx is None or b_idx is None:
         return None
 
-    return a_idx, b_idx
+    return a_idx, b_idx, c_str
 
 
-def load_coords(txt_path: Path, operators: list[str],
-                operand_index: dict[str, int]) -> list[tuple[int, int]]:
-    coords = []
+def load_data(txt_path, operators, operand_index):
+    results = []
     for line in txt_path.read_text().splitlines():
-        result = parse_equation(line, operators, operand_index)
-        if result is not None:
-            coords.append(result)
-    return coords
+        r = parse_equation(line, operators, operand_index)
+        if r is not None:
+            results.append(r)
+    return results
 
+
+def resolve_out(folder, filename):
+    p = folder / filename
+    try:
+        p.touch()
+        p.unlink()
+        return p
+    except OSError:
+        fallback = Path.cwd() / filename
+        print(f"  (folder is read-only -- saving {filename} to {fallback})")
+        return fallback
+
+
+def build_output_grid(all_data, operand_index, n):
+    """
+    Returns
+        val_grid   : float (n,n), NaN where missing; numeric output value
+                     (or vocabulary index for non-integer tokens like s5 perms)
+        label_grid : str   (n,n), raw c_str for text display
+        numeric    : bool, True when all outputs are plain integers
+    """
+    val_grid   = np.full((n, n), np.nan)
+    label_grid = np.full((n, n), "", dtype=object)
+    numeric    = True
+
+    for a, b, c_str in all_data:
+        if not (0 <= a < n and 0 <= b < n):
+            continue
+        label_grid[a, b] = c_str
+        try:
+            val_grid[a, b] = int(c_str)
+        except ValueError:
+            c_idx = operand_index.get(c_str)
+            val_grid[a, b] = float(c_idx) if c_idx is not None else np.nan
+            numeric = False
+
+    return val_grid, label_grid, numeric
 
 # ---------------------------------------------------------------------------
 # Plotting
 # ---------------------------------------------------------------------------
 
-def plot_splits(train_coords, val_coords, n: int, out_path: Path,
-                title: str = "Train / Val Split"):
+def plot_splits(train_data, val_data, n, out_path, title="Train / Val Split"):
     """
     Draw an n×n grid coloured by split membership.
 
@@ -142,8 +177,10 @@ def plot_splits(train_coords, val_coords, n: int, out_path: Path,
     Green → overlap (both)
     White → missing
     """
-    grid = np.full((n, n), fill_value=-1, dtype=np.int8)
+    train_coords = [(a, b) for a, b, _ in train_data]
+    val_coords = [(a, b) for a, b, _ in val_data]
 
+    grid = np.full((n, n), fill_value=-1, dtype=np.int8)
     for a, b in train_coords:
         if 0 <= a < n and 0 <= b < n:
             grid[a, b] = 0
@@ -152,24 +189,23 @@ def plot_splits(train_coords, val_coords, n: int, out_path: Path,
             grid[a, b] = 2 if grid[a, b] == 0 else 1
 
     cmap = {
-        -1: (1.00, 1.00, 1.00, 1.0),   # white  – missing
-         0: (0.20, 0.45, 0.75, 1.0),   # blue   – train
-         1: (0.85, 0.25, 0.25, 1.0),   # red    – val
-         2: (0.20, 0.70, 0.30, 1.0),   # green  – overlap
+        -1: (1.00, 1.00, 1.00, 1.0),
+        0: (0.20, 0.45, 0.75, 1.0),
+        1: (0.85, 0.25, 0.25, 1.0),
+        2: (0.20, 0.70, 0.30, 1.0),
     }
     img = np.zeros((n, n, 4))
     for v, color in cmap.items():
         img[grid == v] = color
 
     n_train = int((grid == 0).sum())
-    n_val   = int((grid == 1).sum())
-    n_both  = int((grid == 2).sum())
-    n_miss  = int((grid == -1).sum())
-    total   = n * n
+    n_val = int((grid == 1).sum())
+    n_both = int((grid == 2).sum())
+    n_miss = int((grid == -1).sum())
+    total = n * n
 
     fig, axes = plt.subplots(1, 2, figsize=(14, 6),
                              gridspec_kw={"width_ratios": [3, 1]})
-
     ax = axes[0]
     ax.imshow(img, origin="upper", aspect="equal",
               extent=[-0.5, n - 0.5, n - 0.5, -0.5])
@@ -186,21 +222,19 @@ def plot_splits(train_coords, val_coords, n: int, out_path: Path,
         mpatches.Patch(color=cmap[1][:3], label=f"Val   ({n_val:,})"),
     ]
     if n_both:
-        patches.append(mpatches.Patch(color=cmap[2][:3],
-                                      label=f"Both  ({n_both:,})"))
+        patches.append(mpatches.Patch(color=cmap[2][:3], label=f"Both  ({n_both:,})"))
     if n_miss:
-        patches.append(mpatches.Patch(color=(0.9, 0.9, 0.9),
-                                      label=f"Missing ({n_miss:,})"))
+        patches.append(mpatches.Patch(color=(0.9, 0.9, 0.9), label=f"Missing ({n_miss:,})"))
     ax.legend(handles=patches, loc="upper right", framealpha=0.85, fontsize=10)
 
     ax2 = axes[1]
     ax2.axis("off")
     stats = [
-        ("Grid size",   f"{n} × {n}  =  {total:,}"),
-        ("Train cells", f"{n_train:,}  ({100*n_train/total:.1f}%)"),
-        ("Val cells",   f"{n_val:,}  ({100*n_val/total:.1f}%)"),
-        ("Overlap",     f"{n_both:,}  ({100*n_both/total:.1f}%)"),
-        ("Missing",     f"{n_miss:,}  ({100*n_miss/total:.1f}%)"),
+        ("Grid size", f"{n} x {n}  =  {total:,}"),
+        ("Train cells", f"{n_train:,}  ({100 * n_train / total:.1f}%)"),
+        ("Val cells", f"{n_val:,}  ({100 * n_val / total:.1f}%)"),
+        ("Overlap", f"{n_both:,}  ({100 * n_both / total:.1f}%)"),
+        ("Missing", f"{n_miss:,}  ({100 * n_miss / total:.1f}%)"),
     ]
     y = 0.85
     for label, value in stats:
@@ -211,64 +245,155 @@ def plot_splits(train_coords, val_coords, n: int, out_path: Path,
 
     plt.tight_layout()
     plt.savefig(out_path, dpi=150, bbox_inches="tight")
-    print(f"Saved plot → {out_path}")
-    plt.show()
+    print(f"Saved -> {out_path}")
+    plt.close(fig)
 
+
+def plot_output_heatmap(all_data, operand_index, n, out_path,
+                        title="Output Value Heatmap"):
+    """
+    Each cell coloured by its output value (viridis scale).
+    Grey = no equation for that (a, b) pair.
+    """
+    val_grid, _, numeric = build_output_grid(all_data, operand_index, n)
+
+    fig, ax = plt.subplots(figsize=(9, 8))
+
+    cmap_img = plt.get_cmap("viridis").copy()
+    cmap_img.set_bad(color=(0.85, 0.85, 0.85))   # grey for missing cells
+
+    masked = np.ma.masked_invalid(val_grid)
+    im = ax.imshow(masked, origin="upper", aspect="equal",
+                   extent=[-0.5, n - 0.5, n - 0.5, -0.5],
+                   cmap=cmap_img, interpolation="nearest")
+
+    cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
+    cbar.set_label("Output value" if numeric else "Output token index", fontsize=11)
+
+    ax.set_xlabel("b  (column operand)", fontsize=11)
+    ax.set_ylabel("a  (row operand)", fontsize=11)
+    ax.set_title(title, fontsize=13, fontweight="bold")
+    step = max(1, n // 10)
+    ticks = list(range(0, n, step))
+    ax.set_xticks(ticks)
+    ax.set_yticks(ticks)
+
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=150, bbox_inches="tight")
+    print(f"Saved -> {out_path}")
+    plt.close(fig)
+
+
+
+def plot_output_numbers(all_data, operand_index, n, out_path,
+                        title="Output Values (Numbers)"):
+    """
+    Prints the output value as text inside each cell.
+    Background colour is the same viridis scale as the heatmap.
+    White/black text chosen automatically for readability.
+    """
+    val_grid, label_grid, numeric = build_output_grid(all_data, operand_index, n)
+
+    fontsize = max(3, min(10, int(180 / n)))
+    fig_side = max(8, min(24, n * 0.20))
+    fig, ax = plt.subplots(figsize=(fig_side, fig_side * 0.92))
+
+    cmap_img = plt.get_cmap("viridis").copy()
+    cmap_img.set_bad(color=(0.85, 0.85, 0.85))
+
+    vmin = np.nanmin(val_grid) if not np.all(np.isnan(val_grid)) else 0
+    vmax = np.nanmax(val_grid) if not np.all(np.isnan(val_grid)) else 1
+    norm = Normalize(vmin=vmin, vmax=vmax)
+
+    masked = np.ma.masked_invalid(val_grid)
+    ax.imshow(masked, origin="upper", aspect="equal",
+              extent=[-0.5, n - 0.5, n - 0.5, -0.5],
+              cmap=cmap_img, norm=norm, interpolation="nearest")
+
+    scalar_map = cm.ScalarMappable(norm=norm, cmap=cmap_img)
+    for row in range(n):
+        for col in range(n):
+            label = label_grid[row, col]
+            if not label:
+                continue
+            v = val_grid[row, col]
+            if np.isnan(v):
+                continue
+            rgba = scalar_map.to_rgba(v)
+            lum  = 0.299 * rgba[0] + 0.587 * rgba[1] + 0.114 * rgba[2]
+            ax.text(col, row, label, ha="center", va="center",
+                    fontsize=fontsize, color="white" if lum < 0.5 else "black",
+                    fontfamily="monospace")
+
+    ax.set_xlabel("b  (column operand)", fontsize=11)
+    ax.set_ylabel("a  (row operand)", fontsize=11)
+    ax.set_title(title, fontsize=13, fontweight="bold")
+    step = max(1, n // 10)
+    ticks = list(range(0, n, step))
+    ax.set_xticks(ticks)
+    ax.set_yticks(ticks)
+
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=150, bbox_inches="tight")
+    print(f"Saved -> {out_path}")
+    plt.close(fig)
 
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
 def main():
-    parser = argparse.ArgumentParser(
-        description="Plot train/val split locations. Pass the folder containing "
-                    "train.txt, val.txt, and tokenizer.txt."
-    )
-    parser.add_argument("folder", help="Folder containing train.txt, val.txt, tokenizer.txt")
+    parser = argparse.ArgumentParser(description="Plot train/val split and output-value grids. Pass the folder containing train.txt, val.txt, tokenizer.txt.")
+    parser.add_argument("folder",help="Folder containing train.txt, val.txt, tokenizer.txt")
     args = parser.parse_args()
 
     folder = Path(args.folder)
-    train_path     = folder / "train.txt"
-    val_path       = folder / "val.txt"
+    train_path = folder / "train.txt"
+    val_path = folder / "val.txt"
     tokenizer_path = folder / "tokenizer.txt"
 
     for p in (train_path, val_path, tokenizer_path):
         if not p.exists():
             sys.exit(f"ERROR: expected file not found: {p}")
 
-    print(f"Reading vocabulary from {tokenizer_path} …")
-    tokens         = load_tokens(tokenizer_path)
-    operators      = extract_operators(tokens)
-    operand_index  = build_operand_index(tokens)
-    n              = len(operand_index)  # grid side length
+    print(f"Reading vocabulary from {tokenizer_path} ...")
+    tokens = load_tokens(tokenizer_path)
+    operators = extract_operators(tokens)
+    operand_index = build_operand_index(tokens)
+    n = len(operand_index)
 
     print(f"  {len(operators)} operator(s) found: {operators}")
-    print(f"  {n} operand tokens → {n}×{n} grid")
+    print(f"  {n} operand tokens -> {n}x{n} grid")
 
-    print("Parsing equations …")
-    train_coords = load_coords(train_path, operators, operand_index)
-    val_coords   = load_coords(val_path,   operators, operand_index)
-    print(f"  {len(train_coords):,} train  |  {len(val_coords):,} val")
+    print("Parsing equations ...")
+    train_data = load_data(train_path, operators, operand_index)
+    val_data = load_data(val_path, operators, operand_index)
+    all_data = train_data + val_data
+    print(f"  {len(train_data):,} train  |  {len(val_data):,} val")
 
-    # Infer actual grid size from data — avoids bloat when the tokenizer
-    # contains both integer tokens (0-96) and s5 permutation tokens (120)
-    # but only one type is actually used in the equations.
-    all_coords = train_coords + val_coords
-    if all_coords:
-        n = max(max(a, b) for a, b in all_coords) + 1
-        print(f"  Actual grid size inferred from data: {n}×{n}")
+    if all_data:
+        n = max(max(a, b) for a, b, _ in all_data) + 1
+        print(f"  Actual grid size inferred from data: {n}x{n}")
 
-    # Save alongside the data if possible, else fall back to cwd
-    out_path = folder / "split_plot.png"
-    try:
-        out_path.touch()
-        out_path.unlink()
-    except OSError:
-        out_path = Path.cwd() / "split_plot.png"
-        print(f"  (folder is read-only — saving to {out_path})")
+    print("\nGenerating figures ...")
 
-    plot_splits(train_coords, val_coords, n=n, out_path=out_path,
-                title=f"Train / Val Split  (grid {n}×{n})")
+    plot_splits(
+        train_data, val_data, n=n,
+        out_path=resolve_out(folder, "split_plot.pdf"),
+        title=f"Train / Val Split  (grid {n}x{n})",
+    )
+
+    plot_output_heatmap(
+        all_data, operand_index, n=n,
+        out_path=resolve_out(folder, "output_heatmap.pdf"),
+        title=f"Output Value Heatmap  (grid {n}x{n})",
+    )
+
+    plot_output_numbers(
+        all_data, operand_index, n=n,
+        out_path=resolve_out(folder, "output_numbers.pdf"),
+        title=f"Output Values  (grid {n}x{n})",
+    )
 
 
 if __name__ == "__main__":
