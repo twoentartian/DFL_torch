@@ -406,8 +406,8 @@ class ArithmeticDataset:
         if noise_level > 0:
             ds_name += f"_noise{noise_level}"
         ds_name += datetime.now().strftime("_%Y-%m-%d_%H-%M-%S")
-        ds_name.replace("**", "^")
-        ds_name.replace("*", "")
+        ds_name = ds_name.replace("**", "^")
+        ds_name = ds_name.replace("*", "")
         return ds_name
 
     @classmethod
