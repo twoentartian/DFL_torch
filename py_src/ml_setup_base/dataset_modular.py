@@ -406,6 +406,8 @@ class ArithmeticDataset:
         if noise_level > 0:
             ds_name += f"_noise{noise_level}"
         ds_name += datetime.now().strftime("_%Y-%m-%d_%H-%M-%S")
+        ds_name.replace("**", "^")
+        ds_name.replace("*", "")
         return ds_name
 
     @classmethod
@@ -483,6 +485,8 @@ class ArithmeticDataset:
                 val_eqs.append(train_eqs[0])
 
             return train_eqs, val_eqs
+
+
 
     @classmethod
     def _get_spatial_train_val_masks(cls, operator, modulus, train_pct, train_split_type):
