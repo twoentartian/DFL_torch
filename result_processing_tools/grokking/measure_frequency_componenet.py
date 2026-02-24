@@ -16,10 +16,8 @@ import py_src.ml_setup as ml_setup
 #   [2..21]   sorted operator tokens (20 operators)
 #   [22..118] arithmetic numbers 0..96  (P=97 numbers)
 #   [119+]    s5 permutations
-ARITH_TOKEN_OFFSET = 22   # index of number '0' in the vocabulary
-S5_TOKEN_OFFSET = 119
 
-def compute_fourier_components(state_dict, P=97, token_offset=ARITH_TOKEN_OFFSET):
+def compute_fourier_components(state_dict, token_offset, P=97):
     """
     Compute Fourier components of W_E and W_L as in Figure 3 of
     Nanda et al. (2023), accounting for the correct token index offset.
@@ -111,14 +109,14 @@ def compute_fourier_components(state_dict, P=97, token_offset=ARITH_TOKEN_OFFSET
     }
 
 
-def plot_fourier_components(results, save_path):
+def plot_fourier_components(results, offset, modulus, save_path):
     freqs = results['freqs']
     fig, axes = plt.subplots(1, 3, figsize=(18, 4))
 
     ax = axes[0]
     ax.plot(freqs, results['W_E_sin_norms'], label='sin', color='steelblue')
     ax.plot(freqs, results['W_E_cos_norms'], label='cos', color='darkorange')
-    ax.set_title('Fourier Components of W_E (arith tokens [22:119])')
+    ax.set_title(f'Fourier Components of W_E (arith tokens [{offset}:{offset+modulus}])')
     ax.set_xlabel('Frequency k')
     ax.set_ylabel('Norm of Fourier Component')
     ax.legend()
@@ -172,8 +170,8 @@ def _get_weight(state_dict, candidate_keys):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("calculate the fourier frequency component of model weights")
     parser.add_argument("path", type=Path, help="File or directory path containing .model.pt files.")
+    parser.add_argument("--offset", type=int, default=2, help="Index of number '0' in the vocabulary")
     parser.add_argument("-m", "--modulus", type=int, default=97, help="the modulus, default=97")
-    parser.add_argument("--s5", action='store_true', help="use s5 as the token offset")
     args = parser.parse_args()
 
     modulus = args.modulus
@@ -197,12 +195,9 @@ if __name__ == "__main__":
         if global_ml_setup is None:
             global_ml_setup = ml_setup.get_ml_setup_from_config(global_model_name, global_dataset_name, pytorch_preset_version=0, device=torch.device('cpu'))
 
-
-        offset = ARITH_TOKEN_OFFSET
-        if args.s5:
-            offset = S5_TOKEN_OFFSET
-        result = compute_fourier_components(model_state, P=modulus, token_offset=offset)
+        offset = args.offset
+        result = compute_fourier_components(model_state, offset, P=modulus)
         save_folder = f"{str(Path(p).parent)}_fourier_components"
         os.makedirs(save_folder, exist_ok=True)
         save_path = os.path.join(save_folder, f"{str(Path(p).name)}.pdf")
-        plot_fourier_components(result, save_path)
+        plot_fourier_components(result, offset, modulus, save_path)
