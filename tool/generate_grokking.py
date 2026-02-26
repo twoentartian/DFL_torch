@@ -144,7 +144,7 @@ if __name__ == "__main__":
     for index in range(arg_number_of_models):
         model: transformer_for_grokking.Transformer = copy.deepcopy(current_ml_setup.model)
 
-        if all(x is not None for x in [m_nlayer, m_n_heads, m_d_model, m_context_len, m_pos_encoding]):
+        if any(x is not None for x in [m_nlayer, m_n_heads, m_d_model, m_context_len, m_pos_encoding]):
             logger.info(f"use non-default model")
             m_nlayer = 2 if m_nlayer is None else m_nlayer
             m_n_heads = 4 if m_n_heads is None else m_n_heads
