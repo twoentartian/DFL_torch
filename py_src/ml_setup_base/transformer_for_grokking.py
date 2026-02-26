@@ -282,6 +282,7 @@ class Transformer(nn.Module):
             vocab_len: int = 2000,
             non_linearity: str = "relu",
             weight_noise: float = 0.0,
+            trainable_position_encoding: bool = False,
     ) -> None:
         super().__init__()
 
@@ -295,9 +296,10 @@ class Transformer(nn.Module):
         self.vocab_len = vocab_len
 
         self.embedding = Embedding(vocab_len, d_model, weight_noise=weight_noise)  # type: ignore
-        self.register_buffer(
-            "position_encoding", self._position_encoding(max_context_len, d_model)
-        )
+        if trainable_position_encoding:
+            self.position_encoding = nn.Parameter(self._position_encoding(max_context_len, d_model))
+        else:
+            self.register_buffer("position_encoding", self._position_encoding(max_context_len, d_model))
         self.register_buffer("self_attn_mask", self.make_mask(max_context_len))
 
         self.decoder = Decoder(

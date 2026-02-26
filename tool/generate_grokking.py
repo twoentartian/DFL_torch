@@ -72,6 +72,12 @@ if __name__ == "__main__":
     parser.add_argument("--disable_reinit", action='store_true', help='disable reinitialization')
     parser.add_argument("--inverse_train_val", action='store_true', help='inverse train and validation set')
 
+    parser.add_argument("-m_nlayer", default=None, type=int, help='specify the number of transformer layers')
+    parser.add_argument("-m_n_heads", default=None, type=int, help='specify the number of transformer layers')
+    parser.add_argument("-m_d_model", default=None, type=int, help='specify the number of transformer layers')
+    parser.add_argument("-m_context_len", default=None, type=int, help='specify the number of transformer layers')
+    parser.add_argument("-m_pos_encoding", default=None, type=str, choices=["default", "trainable"], help='specify the type of positional encoding')
+
     args = parser.parse_args()
 
 
@@ -84,6 +90,12 @@ if __name__ == "__main__":
     arg_transfer_learn_model_path = args.transfer_learn
     arg_number_of_models = args.number_of_models
     arg_disable_reinit = args.disable_reinit
+
+    m_nlayer = args.m_nlayer
+    m_n_heads = args.m_n_heads
+    m_d_model = args.m_d_model
+    m_context_len = args.m_context_len
+    m_pos_encoding = args.m_pos_encoding
 
     # random seed
     random_seed = args.random_seed
@@ -131,6 +143,17 @@ if __name__ == "__main__":
     digit_number_of_models = len(str(arg_number_of_models))
     for index in range(arg_number_of_models):
         model: transformer_for_grokking.Transformer = copy.deepcopy(current_ml_setup.model)
+
+        if all(x is not None for x in [m_nlayer, m_n_heads, m_d_model, m_context_len, m_pos_encoding]):
+            logger.info(f"use non-default model")
+            m_nlayer = 2 if m_nlayer is None else m_nlayer
+            m_n_heads = 4 if m_n_heads is None else m_n_heads
+            m_d_model = 128 if m_d_model is None else m_d_model
+            m_context_len = 50 if m_context_len is None else m_context_len
+            m_pos_encoding = "default" if m_pos_encoding is None else m_pos_encoding
+            trainable_position_encoding = m_pos_encoding == "trainable"
+            model = transformer_for_grokking.Transformer(n_layers=m_nlayer, n_heads=m_n_heads, d_model=m_d_model,
+                                                         max_context_len=m_context_len, trainable_position_encoding=trainable_position_encoding)
 
         # transfer learning?
         if arg_transfer_learn_model_path is None:
