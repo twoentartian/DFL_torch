@@ -125,6 +125,11 @@ def plot_log(csv_path: Path, max_epoch: Optional[int]) -> bool:
     out_png_path = csv_path.with_suffix("").with_suffix(".log.png")
     fig.savefig(out_pdf_path, bbox_inches="tight")
     fig.savefig(out_png_path, dpi=300, bbox_inches="tight")
+    ax_loss.set_yscale("log")
+    out_pdf_path = csv_path.with_suffix("").with_suffix(".log.log_loss.pdf")
+    out_png_path = csv_path.with_suffix("").with_suffix(".log.log_loss.png")
+    fig.savefig(out_pdf_path, bbox_inches="tight")
+    fig.savefig(out_png_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
 
     print(f"  Saved -> {out_pdf_path}")

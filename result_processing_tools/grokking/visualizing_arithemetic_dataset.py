@@ -432,30 +432,19 @@ def process_folder(folder: Path) -> bool:
 def main():
     parser = argparse.ArgumentParser(description=("Plot train/val split and output-value grids. Pass a folder containing train.txt / val.txt / tokenizer.txt, or use --recursive to scan all matching subfolders."))
     parser.add_argument("folder",help="Root folder to process (directly or recursively)",)
-    parser.add_argument("-r", "--recursive",action="store_true", help=("Recurse into subfolders and process every directory that contains train.txt, val.txt, and tokenizer.txt."))
     args = parser.parse_args()
 
     root = Path(args.folder)
     if not root.is_dir():
         sys.exit(f"ERROR: not a directory: {root}")
 
-    if args.recursive:
-        folders = find_dataset_folders(root)
-        if not folders:
-            sys.exit(
-                "No subfolders containing train.txt + val.txt + tokenizer.txt "
-                f"were found under {root}"
-            )
-        print(f"Found {len(folders)} dataset folder(s) under {root}\n")
-    else:
-        required = {"train.txt", "val.txt", "tokenizer.txt"}
-        missing = required - {f.name for f in root.iterdir() if f.is_file()}
-        if missing:
-            sys.exit(
-                f"ERROR: missing file(s) in {root}: {', '.join(sorted(missing))}\n"
-                "Tip: use --recursive to scan subfolders automatically."
-            )
-        folders = [root]
+    folders = find_dataset_folders(root)
+    if not folders:
+        sys.exit(
+            "No subfolders containing train.txt + val.txt + tokenizer.txt "
+            f"were found under {root}"
+        )
+    print(f"Found {len(folders)} dataset folder(s) under {root}\n")
 
     n_ok = n_fail = 0
     for i, folder in enumerate(folders, 1):
