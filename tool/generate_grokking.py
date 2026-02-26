@@ -72,11 +72,11 @@ if __name__ == "__main__":
     parser.add_argument("--disable_reinit", action='store_true', help='disable reinitialization')
     parser.add_argument("--inverse_train_val", action='store_true', help='inverse train and validation set')
 
-    parser.add_argument("-m_nlayer", default=None, type=int, help='specify the number of transformer layers')
-    parser.add_argument("-m_n_heads", default=None, type=int, help='specify the number of transformer layers')
-    parser.add_argument("-m_d_model", default=None, type=int, help='specify the number of transformer layers')
-    parser.add_argument("-m_context_len", default=None, type=int, help='specify the number of transformer layers')
-    parser.add_argument("-m_pos_encoding", default=None, type=str, choices=["default", "trainable"], help='specify the type of positional encoding')
+    parser.add_argument("--m_nlayer", default=None, type=int, help='specify the number of transformer layers')
+    parser.add_argument("--m_n_heads", default=None, type=int, help='specify the number of transformer layers')
+    parser.add_argument("--m_d_model", default=None, type=int, help='specify the number of transformer layers')
+    parser.add_argument("--m_context_len", default=None, type=int, help='specify the number of transformer layers')
+    parser.add_argument("--m_pos_encoding", default=None, type=str, choices=["default", "trainable"], help='specify the type of positional encoding')
 
     args = parser.parse_args()
 
