@@ -150,8 +150,7 @@ if __name__ == "__main__":
         wd = 0 if arg_wd is None else arg_wd
         lr = 1e-3 if arg_lr is None else arg_lr
         min_lr = 1e-4 if arg_min_lr is None else arg_min_lr
-        # total_epoch = 150000 if arg_epoch is None else arg_epoch
-        total_epoch = 1 if arg_epoch is None else arg_epoch
+        total_epoch = 150000 if arg_epoch is None else arg_epoch
 
         optimizer = torch.optim.AdamW(model.parameters(), weight_decay=wd, lr=lr, betas=(0.9, 0.98), eps=1e-8)
         warmup_epoch = 10
