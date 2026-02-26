@@ -20,6 +20,7 @@ works with any operator, including ones not seen at development time.
 import argparse
 import re
 import sys
+import os
 from itertools import permutations
 from pathlib import Path
 
@@ -164,8 +165,25 @@ def build_output_grid(all_data, operand_index, n):
 
     return val_grid, label_grid, numeric
 
+def find_dataset_folders(root: Path) -> list[Path]:
+    """
+    Return all directories (under root, including root itself) that contain
+    train.txt, val.txt, and tokenizer.txt.
+
+    Fast path: rglob for tokenizer.txt only, then check that the other two
+    required files exist in the same directory.  This avoids enumerating
+    every file and directory in the tree.
+    """
+    others = {"train.txt", "val.txt"}
+    matches = []
+    for tokenizer in sorted(root.rglob("tokenizer.txt")):
+        folder = tokenizer.parent
+        if all((folder / name).is_file() for name in others):
+            matches.append(folder)
+    return matches
+
 # ---------------------------------------------------------------------------
-# Plotting
+# Figure 1 -- Train / Val split membership
 # ---------------------------------------------------------------------------
 
 def plot_splits(train_data, val_data, n, out_path, title="Train / Val Split"):
@@ -248,6 +266,9 @@ def plot_splits(train_data, val_data, n, out_path, title="Train / Val Split"):
     print(f"Saved -> {out_path}")
     plt.close(fig)
 
+# ---------------------------------------------------------------------------
+# Figure 2 -- Output value heatmap
+# ---------------------------------------------------------------------------
 
 def plot_output_heatmap(all_data, operand_index, n, out_path,
                         title="Output Value Heatmap"):
@@ -284,6 +305,9 @@ def plot_output_heatmap(all_data, operand_index, n, out_path,
     plt.close(fig)
 
 
+# ---------------------------------------------------------------------------
+# Figure 3 -- Output values as numbers in each cell
+# ---------------------------------------------------------------------------
 
 def plot_output_numbers(all_data, operand_index, n, out_path,
                         title="Output Values (Numbers)"):
@@ -338,62 +362,116 @@ def plot_output_numbers(all_data, operand_index, n, out_path,
     print(f"Saved -> {out_path}")
     plt.close(fig)
 
+
+# ---------------------------------------------------------------------------
+# Core: process a single folder
+# ---------------------------------------------------------------------------
+
+def process_folder(folder: Path) -> bool:
+    """
+    Generate the three figures for one dataset folder.
+    Returns True on success, False if parsing yields no data.
+    """
+    train_path     = folder / "train.txt"
+    val_path       = folder / "val.txt"
+    tokenizer_path = folder / "tokenizer.txt"
+
+    output_path_split_plot = resolve_out(folder, "split_plot.pdf")
+    output_path_output_heatmap = resolve_out(folder, "output_heatmap.pdf")
+    output_path_output_numbers = resolve_out(folder, "output_numbers.pdf")
+
+    if os.path.exists(output_path_split_plot) and os.path.exists(output_path_output_heatmap) and os.path.exists(output_path_output_numbers):
+        return True
+
+    tokens        = load_tokens(tokenizer_path)
+    operators     = extract_operators(tokens)
+    operand_index = build_operand_index(tokens)
+    n             = len(operand_index)
+
+    train_data = load_data(train_path, operators, operand_index)
+    val_data   = load_data(val_path,   operators, operand_index)
+    all_data   = train_data + val_data
+
+    print(f"  {len(train_data):,} train  |  {len(val_data):,} val  "
+          f"|  {len(operators)} operator(s)")
+
+    if not all_data:
+        print("  WARNING: no parseable equations found, skipping.")
+        return False
+
+    # Infer actual grid size from data
+    n = max(max(a, b) for a, b, _ in all_data) + 1
+
+
+    if not os.path.exists(output_path_split_plot):
+        plot_splits(
+            train_data, val_data, n=n,
+            out_path=output_path_split_plot,
+            title=f"Train / Val Split  (grid {n}x{n})",
+        )
+
+    if not os.path.exists(output_path_output_heatmap):
+        plot_output_heatmap(
+            all_data, operand_index, n=n,
+            out_path=output_path_output_heatmap,
+            title=f"Output Value Heatmap  (grid {n}x{n})",
+        )
+
+    if not os.path.exists(output_path_output_numbers):
+        plot_output_numbers(
+            all_data, operand_index, n=n,
+            out_path=output_path_output_numbers,
+            title=f"Output Values  (grid {n}x{n})",
+        )
+    return True
+
 # ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
 def main():
-    parser = argparse.ArgumentParser(description="Plot train/val split and output-value grids. Pass the folder containing train.txt, val.txt, tokenizer.txt.")
-    parser.add_argument("folder",help="Folder containing train.txt, val.txt, tokenizer.txt")
+    parser = argparse.ArgumentParser(description=("Plot train/val split and output-value grids. Pass a folder containing train.txt / val.txt / tokenizer.txt, or use --recursive to scan all matching subfolders."))
+    parser.add_argument("folder",help="Root folder to process (directly or recursively)",)
+    parser.add_argument("-r", "--recursive",action="store_true", help=("Recurse into subfolders and process every directory that contains train.txt, val.txt, and tokenizer.txt."))
     args = parser.parse_args()
 
-    folder = Path(args.folder)
-    train_path = folder / "train.txt"
-    val_path = folder / "val.txt"
-    tokenizer_path = folder / "tokenizer.txt"
+    root = Path(args.folder)
+    if not root.is_dir():
+        sys.exit(f"ERROR: not a directory: {root}")
 
-    for p in (train_path, val_path, tokenizer_path):
-        if not p.exists():
-            sys.exit(f"ERROR: expected file not found: {p}")
+    if args.recursive:
+        folders = find_dataset_folders(root)
+        if not folders:
+            sys.exit(
+                "No subfolders containing train.txt + val.txt + tokenizer.txt "
+                f"were found under {root}"
+            )
+        print(f"Found {len(folders)} dataset folder(s) under {root}\n")
+    else:
+        required = {"train.txt", "val.txt", "tokenizer.txt"}
+        missing = required - {f.name for f in root.iterdir() if f.is_file()}
+        if missing:
+            sys.exit(
+                f"ERROR: missing file(s) in {root}: {', '.join(sorted(missing))}\n"
+                "Tip: use --recursive to scan subfolders automatically."
+            )
+        folders = [root]
 
-    print(f"Reading vocabulary from {tokenizer_path} ...")
-    tokens = load_tokens(tokenizer_path)
-    operators = extract_operators(tokens)
-    operand_index = build_operand_index(tokens)
-    n = len(operand_index)
+    n_ok = n_fail = 0
+    for i, folder in enumerate(folders, 1):
+        print(f"[{i}/{len(folders)}] Processing: {folder}")
+        try:
+            ok = process_folder(folder)
+            if ok:
+                n_ok += 1
+            else:
+                n_fail += 1
+        except Exception as exc:
+            print(f"  ERROR: {exc}")
+            n_fail += 1
+        print()
 
-    print(f"  {len(operators)} operator(s) found: {operators}")
-    print(f"  {n} operand tokens -> {n}x{n} grid")
-
-    print("Parsing equations ...")
-    train_data = load_data(train_path, operators, operand_index)
-    val_data = load_data(val_path, operators, operand_index)
-    all_data = train_data + val_data
-    print(f"  {len(train_data):,} train  |  {len(val_data):,} val")
-
-    if all_data:
-        n = max(max(a, b) for a, b, _ in all_data) + 1
-        print(f"  Actual grid size inferred from data: {n}x{n}")
-
-    print("\nGenerating figures ...")
-
-    plot_splits(
-        train_data, val_data, n=n,
-        out_path=resolve_out(folder, "split_plot.pdf"),
-        title=f"Train / Val Split  (grid {n}x{n})",
-    )
-
-    plot_output_heatmap(
-        all_data, operand_index, n=n,
-        out_path=resolve_out(folder, "output_heatmap.pdf"),
-        title=f"Output Value Heatmap  (grid {n}x{n})",
-    )
-
-    plot_output_numbers(
-        all_data, operand_index, n=n,
-        out_path=resolve_out(folder, "output_numbers.pdf"),
-        title=f"Output Values  (grid {n}x{n})",
-    )
+    print(f"Done. {n_ok} succeeded, {n_fail} failed.")
 
 
 if __name__ == "__main__":
