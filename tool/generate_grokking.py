@@ -2,6 +2,8 @@ import os, sys, argparse, logging, re, copy
 from datetime import datetime
 from pathlib import Path
 import torch
+import pandas as pd
+from itertools import chain
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from py_src import util, ml_setup, complete_ml_setup
@@ -148,7 +150,8 @@ if __name__ == "__main__":
         wd = 0 if arg_wd is None else arg_wd
         lr = 1e-3 if arg_lr is None else arg_lr
         min_lr = 1e-4 if arg_min_lr is None else arg_min_lr
-        total_epoch = 150000 if arg_epoch is None else arg_epoch
+        # total_epoch = 150000 if arg_epoch is None else arg_epoch
+        total_epoch = 1 if arg_epoch is None else arg_epoch
 
         optimizer = torch.optim.AdamW(model.parameters(), weight_decay=wd, lr=lr, betas=(0.9, 0.98), eps=1e-8)
         warmup_epoch = 10
@@ -208,5 +211,21 @@ if __name__ == "__main__":
                 if epoch % arg_save_interval == 0:
                     record_model_service.trigger_without_runtime_parameters(epoch, [0], [model_stat])
 
+        # final record
+        ## record final correct position
+        final_correct_position = {"lhs": [], "rhs": [], "correct?": []}
+        for batch_idx, batch in enumerate(chain(train_dl, val_dl)):
+            output = step(batch_idx, batch, model, optimizer, lr_scheduler, tokenizer, train=False)
+            x = batch["text"]
+            num_0 = [int(tokenizer.itos[val.item()]) for val in x[:, 1]]
+            num_1 = [int(tokenizer.itos[val.item()]) for val in x[:, 3]]
+            final_correct_position["lhs"].extend(num_0)
+            final_correct_position["rhs"].extend(num_1)
+            final_correct_position["correct?"].extend(output.correct_location.tolist())
+        final_correct_position = pd.DataFrame(final_correct_position)
+        final_correct_position = final_correct_position.sort_values(by=["lhs", "rhs"])
+        final_correct_position.to_csv(os.path.join(output_folder_path, "final_correct_position.csv"), index=False)
+
+        ## save final model state
         util.save_model_state(os.path.join(output_folder_path, f"{str(index).zfill(digit_number_of_models)}.model.pt"),
                               model.state_dict(), current_ml_setup.model_name, current_ml_setup.dataset_name)

@@ -42,6 +42,7 @@ def step(batch_index, batch, model: transformer_for_grokking.Transformer, optimi
     output.loss_value = loss.item()
     output.sample_count = y.shape[0]
     output.correct_count = correct_count.item()
+    output.correct_location = row_accuracy
     return output
 
 def train_step(batch_index, batch, model: transformer_for_grokking.Transformer, optimizer: torch.optim.Optimizer, lr_scheduler, arg_ml_setup: MlSetup) -> TrainStepOutput:

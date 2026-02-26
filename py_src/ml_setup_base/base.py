@@ -130,3 +130,4 @@ class TrainStepOutput:
         self.sample_count = None
         self.correct_count = None
         self.loss_value = None
+        self.correct_location = None
