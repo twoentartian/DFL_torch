@@ -560,7 +560,7 @@ class ArithmeticDataset:
             M = ((i + j) % 2 == 0).astype(np.int8)
 
             rng = np.random.default_rng(int(frac * 1e9))  # reproducible
-            num_swaps = n * n * 5  # enough passes for thorough mixing
+            num_swaps = n * n * 50  # enough passes for thorough mixing
             max_attempts = num_swaps * 20
 
             swaps_done = 0
@@ -573,14 +573,14 @@ class ArithmeticDataset:
                 # Check anti-diagonal pattern in the 2x2 block
                 if M[r0, c0] == 1 and M[r1, c1] == 1 and M[r0, c1] == 0 and M[r1, c0] == 0:
                     # Swap the 2x2 block
-                    M[r0, c0] = 0;
+                    M[r0, c0] = 0
                     M[r0, c1] = 1
-                    M[r1, c0] = 1;
+                    M[r1, c0] = 1
                     M[r1, c1] = 0
                     # Mirror the same swap across the diagonal (transpose indices)
-                    M[c0, r0] = 0;
+                    M[c0, r0] = 0
                     M[c1, r0] = 1
-                    M[c0, r1] = 1;
+                    M[c0, r1] = 1
                     M[c1, r1] = 0
                     swaps_done += 1
 
