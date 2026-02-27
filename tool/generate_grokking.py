@@ -53,7 +53,7 @@ if __name__ == "__main__":
     parser.add_argument("-dexp", "--dataset_exp", type=str, default=None)
     parser.add_argument("--modulus", type=int, default=97)
     parser.add_argument("-tp", "--train_pct", type=float, default=50)
-    parser.add_argument("-st", "--split_type", type=str, default='random', choices=["random", "chessboard", "updown", "leftright", "tl_to_br", "tr_to_bl", "interlace_row", "interlace_col"])
+    parser.add_argument("-st", "--split_type", type=str, default='random', choices=["random", "chessboard", "updown", "leftright", "tl_to_br", "tr_to_bl", "interlace_row", "interlace_col", "chessboard_random"])
     parser.add_argument("-ol", "--operand_length", type=int, default=None)
 
     parser.add_argument("-lr", "--learning_rate", type=float, default=None)
