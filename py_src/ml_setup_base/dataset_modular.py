@@ -556,6 +556,36 @@ class ArithmeticDataset:
         elif train_split_type == "interlace_col":
             train_mask = j % 2 == 0  # even cols → train, odd cols → val
 
+        elif train_split_type == "chessboard_random":
+            M = ((i + j) % 2 == 0).astype(np.int8)
+
+            rng = np.random.default_rng(int(frac * 1e9))  # reproducible
+            num_swaps = n * n * 5  # enough passes for thorough mixing
+            max_attempts = num_swaps * 20
+
+            swaps_done = 0
+            for _ in range(max_attempts):
+                if swaps_done >= num_swaps:
+                    break
+                # Sample 4 distinct indices to form a rectangle
+                idx = rng.choice(n, size=4, replace=False)
+                r0, r1, c0, c1 = int(idx[0]), int(idx[1]), int(idx[2]), int(idx[3])
+                # Check anti-diagonal pattern in the 2x2 block
+                if M[r0, c0] == 1 and M[r1, c1] == 1 and M[r0, c1] == 0 and M[r1, c0] == 0:
+                    # Swap the 2x2 block
+                    M[r0, c0] = 0;
+                    M[r0, c1] = 1
+                    M[r1, c0] = 1;
+                    M[r1, c1] = 0
+                    # Mirror the same swap across the diagonal (transpose indices)
+                    M[c0, r0] = 0;
+                    M[c1, r0] = 1
+                    M[c0, r1] = 1;
+                    M[c1, r1] = 0
+                    swaps_done += 1
+
+            train_mask = M.astype(bool)
+
         else:
             raise ValueError(f"Unknown train_split_type: {train_split_type}")
 
@@ -685,7 +715,7 @@ class TestStringMethods(unittest.TestCase):
         train_dataset, val_dataset = ArithmeticDataset.splits(
             train_pct=80,
             operator="+",
-            train_split_type="interlace_row",
+            train_split_type="chessboard_random",
         )
 
         print(f"\nGenerated {len(train_dataset)} train examples")
