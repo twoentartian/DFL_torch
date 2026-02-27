@@ -171,7 +171,7 @@ class ArithmeticDataset:
         operator: str,
         modulus = 97,
         operand_length: Optional[int] = None,
-        train_split_type: Literal["random", "chessboard", "updown", "leftright", "tl_to_br", "tr_to_bl", "interlace_row", "interlace_col"] = "random",
+        train_split_type: Literal["random", "chessboard", "updown", "leftright", "tl_to_br", "tr_to_bl", "interlace_row", "interlace_col", "chessboard_random"] = "random",
     ):
         """
         Creates training and validation datasets
