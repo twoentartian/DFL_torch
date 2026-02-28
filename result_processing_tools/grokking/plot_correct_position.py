@@ -24,6 +24,7 @@ Output: "correct_position_plot.pdf" saved next to each
 import argparse
 import sys
 import re
+import os
 from pathlib import Path
 
 import numpy as np
@@ -135,7 +136,12 @@ def find_modulus_folder(csv_folder: Path) -> Path | None:
 # ---------------------------------------------------------------------------
 
 def plot_correct_position(csv_path: Path, dataset_folder: Path,
-                          out_path: Path) -> bool:
+                          out_path: Path, override_existing=False) -> bool:
+    if any([os.path.exists(p) for p in [out_path]]):
+        if not override_existing:
+            print(f"  Already exist -> {out_path}")
+            return True
+
     # --- Load correctness data ---
     df = pd.read_csv(csv_path)
     required_cols = {"lhs", "rhs", "correct?"}
@@ -273,15 +279,17 @@ def plot_correct_position(csv_path: Path, dataset_folder: Path,
 # Resolve output path (graceful read-only fallback)
 # ---------------------------------------------------------------------------
 
-def resolve_out(folder: Path, filename: str) -> Path:
+def resolve_out(folder, filename, override_existing=False):
     p = folder / filename
+    if p.exists() and not override_existing:
+        return p  # already there, no writability check needed
     try:
         p.touch()
         p.unlink()
         return p
     except OSError:
         fallback = Path.cwd() / filename
-        print(f"  (read-only folder -- saving to {fallback})")
+        print(f"  (folder is read-only -- saving {filename} to {fallback})")
         return fallback
 
 
@@ -289,17 +297,8 @@ def resolve_out(folder: Path, filename: str) -> Path:
 # CLI
 # ---------------------------------------------------------------------------
 
-def main():
-    parser = argparse.ArgumentParser(
-        description=(
-            "Plot per-position correctness grids from final_correct_position.csv. "
-            "Recursively searches the given root folder."
-        )
-    )
-    parser.add_argument("folder", help="Root folder to search")
-    args = parser.parse_args()
-
-    root = Path(args.folder)
+def main(root_folder, override_existing=False):
+    root = Path(root_folder)
     if not root.is_dir():
         sys.exit(f"ERROR: not a directory: {root}")
 
@@ -322,10 +321,10 @@ def main():
             continue
 
         print(f"  Dataset folder: {mod_folder.name}")
-        out_path = resolve_out(folder, "correct_position_plot.pdf")
+        out_path = resolve_out(folder, "correct_position_plot.pdf", override_existing=override_existing)
 
         try:
-            ok = plot_correct_position(csv_path, mod_folder, out_path)
+            ok = plot_correct_position(csv_path, mod_folder, out_path, override_existing=override_existing)
             n_ok += 1 if ok else 0
             n_fail += 0 if ok else 1
         except Exception as exc:
@@ -337,4 +336,12 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(
+        description=(
+            "Plot per-position correctness grids from final_correct_position.csv. "
+            "Recursively searches the given root folder."
+        )
+    )
+    parser.add_argument("folder", help="Root folder to search")
+    args = parser.parse_args()
+    main(args.folder)

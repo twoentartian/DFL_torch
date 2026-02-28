@@ -128,8 +128,10 @@ def load_data(txt_path, operators, operand_index):
     return results
 
 
-def resolve_out(folder, filename):
+def resolve_out(folder, filename, override_existing=False):
     p = folder / filename
+    if p.exists() and not override_existing:
+        return p  # already there, no writability check needed
     try:
         p.touch()
         p.unlink()
@@ -367,7 +369,7 @@ def plot_output_numbers(all_data, operand_index, n, out_path,
 # Core: process a single folder
 # ---------------------------------------------------------------------------
 
-def process_folder(folder: Path) -> bool:
+def process_folder(folder: Path, override_existing=False) -> bool:
     """
     Generate the three figures for one dataset folder.
     Returns True on success, False if parsing yields no data.
@@ -381,7 +383,8 @@ def process_folder(folder: Path) -> bool:
     output_path_output_numbers = resolve_out(folder, "output_numbers.pdf")
 
     if os.path.exists(output_path_split_plot) and os.path.exists(output_path_output_heatmap) and os.path.exists(output_path_output_numbers):
-        return True
+        if not override_existing:
+            return True
 
     tokens        = load_tokens(tokenizer_path)
     operators     = extract_operators(tokens)
@@ -429,12 +432,8 @@ def process_folder(folder: Path) -> bool:
 # CLI
 # ---------------------------------------------------------------------------
 
-def main():
-    parser = argparse.ArgumentParser(description=("Plot train/val split and output-value grids. Pass a folder containing train.txt / val.txt / tokenizer.txt, or use --recursive to scan all matching subfolders."))
-    parser.add_argument("folder",help="Root folder to process (directly or recursively)",)
-    args = parser.parse_args()
-
-    root = Path(args.folder)
+def main(root_folder, override_existing=False):
+    root = Path(root_folder)
     if not root.is_dir():
         sys.exit(f"ERROR: not a directory: {root}")
 
@@ -450,7 +449,7 @@ def main():
     for i, folder in enumerate(folders, 1):
         print(f"[{i}/{len(folders)}] Processing: {folder}")
         try:
-            ok = process_folder(folder)
+            ok = process_folder(folder, override_existing=override_existing)
             if ok:
                 n_ok += 1
             else:
@@ -464,4 +463,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description=("Plot train/val split and output-value grids. Pass a folder containing train.txt / val.txt / tokenizer.txt, or use --recursive to scan all matching subfolders."))
+    parser.add_argument("folder",help="Root folder to process (directly or recursively)",)
+    args = parser.parse_args()
+    main(args.folder)

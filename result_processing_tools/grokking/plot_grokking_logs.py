@@ -23,6 +23,7 @@ Layout
 
 import argparse
 import sys
+import os
 from pathlib import Path
 from typing import Optional
 
@@ -44,11 +45,20 @@ def find_log_files(root: Path) -> list[Path]:
 # Plotting
 # ---------------------------------------------------------------------------
 
-def plot_log(csv_path: Path, max_epoch: Optional[int]) -> bool:
+def plot_log(csv_path: Path, max_epoch: Optional[int], override_existing=False) -> bool:
     """
     Read one *.log.csv and save a twin-axis figure next to it as *.log.pdf.
     Returns True on success.
     """
+    out_pdf_path = csv_path.with_suffix("").with_suffix(".log.pdf")
+    out_png_path = csv_path.with_suffix("").with_suffix(".log.png")
+    out_pdf_log_path = csv_path.with_suffix("").with_suffix(".log.log_loss.pdf")
+    out_png_log_path = csv_path.with_suffix("").with_suffix(".log.log_loss.png")
+    if any([os.path.exists(p) for p in [out_pdf_path, out_png_path, out_pdf_log_path, out_png_log_path]]):
+        if not override_existing:
+            print(f"  Already exist -> {out_pdf_path}")
+            return True
+
     try:
         df = pd.read_csv(csv_path)
     except Exception as exc:
@@ -121,15 +131,11 @@ def plot_log(csv_path: Path, max_epoch: Optional[int]) -> bool:
 
     fig.tight_layout()
 
-    out_pdf_path = csv_path.with_suffix("").with_suffix(".log.pdf")
-    out_png_path = csv_path.with_suffix("").with_suffix(".log.png")
     fig.savefig(out_pdf_path, bbox_inches="tight")
     fig.savefig(out_png_path, dpi=300, bbox_inches="tight")
     ax_loss.set_yscale("log")
-    out_pdf_path = csv_path.with_suffix("").with_suffix(".log.log_loss.pdf")
-    out_png_path = csv_path.with_suffix("").with_suffix(".log.log_loss.png")
-    fig.savefig(out_pdf_path, bbox_inches="tight")
-    fig.savefig(out_png_path, dpi=300, bbox_inches="tight")
+    fig.savefig(out_pdf_log_path, bbox_inches="tight")
+    fig.savefig(out_png_log_path, dpi=300, bbox_inches="tight")
     plt.close(fig)
 
     print(f"  Saved -> {out_pdf_path}")
@@ -140,18 +146,8 @@ def plot_log(csv_path: Path, max_epoch: Optional[int]) -> bool:
 # CLI
 # ---------------------------------------------------------------------------
 
-def main():
-    parser = argparse.ArgumentParser(
-        description=(
-            "Plot training/validation loss and accuracy from *.log.csv files. "
-            "Recursively searches the given root folder."
-        )
-    )
-    parser.add_argument("folder", help="Root folder to search for *.log.csv files")
-    parser.add_argument("-e", "--epoch", help="maximum epoch")
-    args = parser.parse_args()
-
-    root = Path(args.folder)
+def main(root_folder, max_epoch=None, override_existing=False):
+    root = Path(root_folder)
     if not root.is_dir():
         sys.exit(f"ERROR: not a directory: {root}")
 
@@ -162,10 +158,9 @@ def main():
     print(f"Found {len(log_files)} *.log.csv file(s) under {root}\n")
 
     n_ok = n_fail = 0
-    max_epoch = args.epoch
     for i, csv_path in enumerate(log_files, 1):
         print(f"[{i}/{len(log_files)}] {csv_path}")
-        ok = plot_log(csv_path, max_epoch)
+        ok = plot_log(csv_path, max_epoch, override_existing=override_existing)
         if ok:
             n_ok += 1
         else:
@@ -176,4 +171,13 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(
+        description=(
+            "Plot training/validation loss and accuracy from *.log.csv files. "
+            "Recursively searches the given root folder."
+        )
+    )
+    parser.add_argument("folder", help="Root folder to search for *.log.csv files")
+    parser.add_argument("-e", "--epoch", help="maximum epoch")
+    args = parser.parse_args()
+    main(args.folder, max_epoch=args.epoch)
