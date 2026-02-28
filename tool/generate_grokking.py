@@ -134,8 +134,6 @@ if __name__ == "__main__":
         arg_number_of_models = 2
 
     batch_size = current_ml_setup.training_batch_size if arg_bs is None else arg_bs
-    train_dl = ArithmeticIterator(train_ds, device, batchsize_hint=-1)
-    val_dl = ArithmeticIterator(val_ds, device, batchsize_hint=-1)
     tokenizer = train_ds.tokenizer
     criterion = current_ml_setup.criterion
 
@@ -163,14 +161,20 @@ if __name__ == "__main__":
                 current_ml_setup.re_initialize_model(model)
                 init_model_for_inverse_train_val = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
                 save_name = "train"
+                train_dl = ArithmeticIterator(train_ds, device, batchsize_hint=-1)
+                val_dl = ArithmeticIterator(val_ds, device, batchsize_hint=-1)
             elif index == 1:
                 logger.info(f"inverse train val mode: currently train on val partition")
                 model.load_state_dict(init_model_for_inverse_train_val)
                 save_name = "val"
+                train_dl = ArithmeticIterator(val_ds, device, batchsize_hint=-1)
+                val_dl = ArithmeticIterator(train_ds, device, batchsize_hint=-1)
             else:
                 raise NotImplementedError("index >= 2 is not defined")
             model.to(device)
         else:
+            train_dl = ArithmeticIterator(train_ds, device, batchsize_hint=-1)
+            val_dl = ArithmeticIterator(val_ds, device, batchsize_hint=-1)
             # transfer learning?
             if arg_transfer_learn_model_path is None:
                 # not transfer learning, we should reinitialize model weights
