@@ -163,11 +163,15 @@ if __name__ == "__main__":
                 current_ml_setup.re_initialize_model(model)
                 init_model_for_inverse_train_val = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
                 save_name = "train"
+                output_folder_path_current = os.path.join(output_folder_path, "train")
+                os.mkdir(output_folder_path_current)
             elif index == 1:
                 logger.info(f"inverse train val mode: currently train on val partition")
                 model.load_state_dict(init_model_for_inverse_train_val)
                 save_name = "val"
                 train_dl, val_dl = val_dl, train_dl # swap training / val dataset
+                output_folder_path_current = os.path.join(output_folder_path, "val")
+                os.mkdir(output_folder_path_current)
             else:
                 raise NotImplementedError("index >= 2 is not defined")
             model.to(device)
@@ -185,6 +189,7 @@ if __name__ == "__main__":
                 logger.info(f"load model weights for transfer learning, original model type: {existing_model_name}, dataset type: {existing_dataset_name}")
                 model.load_state_dict(existing_model_state)
             model.to(device)
+            output_folder_path_current = os.path.join(output_folder_path, "val")
 
         # get optimizer stuff
         wd = 0 if arg_wd is None else arg_wd
@@ -205,13 +210,13 @@ if __name__ == "__main__":
         arg_save_interval = args.save_interval
         if arg_save_format != 'none':
             record_model_service = record_model_stat.ModelStatRecorder(1, current_ml_setup.model_name, current_ml_setup.dataset_name)
-            model_state_path = f"{output_folder_path}/{save_name}"
+            model_state_path = f"{output_folder_path_current}/{save_name}"
             os.makedirs(model_state_path)
             record_model_service.initialize_without_runtime_parameters([0], model_state_path, save_format=arg_save_format, lmdb_db_name=f"{save_name}")
         else:
             record_model_service = None
 
-        epoch_loss_lr_log_file = open(os.path.join(output_folder_path, f"{save_name}.log.csv"), "w")
+        epoch_loss_lr_log_file = open(os.path.join(output_folder_path_current, f"{save_name}.log.csv"), "w")
         epoch_loss_lr_log_file.write("epoch,training_loss,training_accuracy,validation_loss,validation_accuracy,lrs" + "\n")
         epoch_loss_lr_log_file.flush()
 
@@ -263,8 +268,8 @@ if __name__ == "__main__":
             final_correct_position["correct?"].extend(output.correct_location.tolist())
         final_correct_position = pd.DataFrame(final_correct_position)
         final_correct_position = final_correct_position.sort_values(by=["lhs", "rhs"])
-        final_correct_position.to_csv(os.path.join(output_folder_path, "final_correct_position.csv"), index=False)
+        final_correct_position.to_csv(os.path.join(output_folder_path_current, "final_correct_position.csv"), index=False)
 
         ## save final model state
-        util.save_model_state(os.path.join(output_folder_path, f"{save_name}.model.pt"),
+        util.save_model_state(os.path.join(output_folder_path_current, f"{save_name}.model.pt"),
                               model.state_dict(), current_ml_setup.model_name, current_ml_setup.dataset_name)
