@@ -24,7 +24,6 @@ def loading_dataset_from(output_folder_path, path=None):
     dataset_val = ArithmeticDataset.load_from_file(f"{path}/val.txt", modulus, name=path, train=False, tokenizer_path=f"{path}/tokenizer.txt")
     return dataset_train, dataset_val
 
-
 def generate_dataset(output_folder_path, train_pct, expression, modulus, train_split_type, operand_length):
     train_dataset, val_dataset = ArithmeticDataset.splits(
         train_pct=train_pct,
@@ -90,6 +89,7 @@ if __name__ == "__main__":
     arg_transfer_learn_model_path = args.transfer_learn
     arg_number_of_models = args.number_of_models
     arg_disable_reinit = args.disable_reinit
+    arg_inverse_train_val = args.inverse_train_val
 
     m_nlayer = args.m_nlayer
     m_n_heads = args.m_n_heads
@@ -129,8 +129,9 @@ if __name__ == "__main__":
         train_ds, val_ds = generate_dataset(output_folder_path, args.train_pct, args.dataset_exp, args.modulus, args.split_type, args.operand_length)
 
     # swap dataset?
-    if args.inverse_train_val:
-        train_ds, val_ds = val_ds, train_ds
+    if arg_inverse_train_val:
+        logger.info(f"inverse training and validation set, setting arg_number_of_models to 2")
+        arg_number_of_models = 2
 
     batch_size = current_ml_setup.training_batch_size if arg_bs is None else arg_bs
     train_dl = ArithmeticIterator(train_ds, device, batchsize_hint=-1)
@@ -138,10 +139,11 @@ if __name__ == "__main__":
     tokenizer = train_ds.tokenizer
     criterion = current_ml_setup.criterion
 
-
     # prepare for training
     digit_number_of_models = len(str(arg_number_of_models))
+    init_model_for_inverse_train_val = None
     for index in range(arg_number_of_models):
+        save_name = str(index).zfill(digit_number_of_models)
         model: transformer_for_grokking.Transformer = copy.deepcopy(current_ml_setup.model)
 
         if any(x is not None for x in [m_nlayer, m_n_heads, m_d_model, m_context_len, m_pos_encoding]):
@@ -155,19 +157,33 @@ if __name__ == "__main__":
             model = transformer_for_grokking.Transformer(n_layers=m_nlayer, n_heads=m_n_heads, d_model=m_d_model,
                                                          max_context_len=m_context_len, trainable_position_encoding=trainable_position_encoding)
 
-        # transfer learning?
-        if arg_transfer_learn_model_path is None:
-            # not transfer learning, we should reinitialize model weights
-            if arg_disable_reinit:
-                logger.info(f"re-initialize model is disabled")
-            else:
-                logger.info(f"re-initialize model")
+        if arg_inverse_train_val:
+            if index == 0:
+                logger.info(f"inverse train val mode: currently train on train partition")
                 current_ml_setup.re_initialize_model(model)
+                init_model_for_inverse_train_val = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
+                save_name = "train"
+            elif index == 1:
+                logger.info(f"inverse train val mode: currently train on val partition")
+                model.load_state_dict(init_model_for_inverse_train_val)
+                save_name = "val"
+            else:
+                raise NotImplementedError("index >= 2 is not defined")
+            model.to(device)
         else:
-            existing_model_state, existing_model_name, existing_dataset_name = util.load_model_state_file(arg_transfer_learn_model_path)
-            logger.info(f"load model weights for transfer learning, original model type: {existing_model_name}, dataset type: {existing_dataset_name}")
-            model.load_state_dict(existing_model_state)
-        model.to(device)
+            # transfer learning?
+            if arg_transfer_learn_model_path is None:
+                # not transfer learning, we should reinitialize model weights
+                if arg_disable_reinit:
+                    logger.info(f"re-initialize model is disabled")
+                else:
+                    logger.info(f"re-initialize model")
+                    current_ml_setup.re_initialize_model(model)
+            else:
+                existing_model_state, existing_model_name, existing_dataset_name = util.load_model_state_file(arg_transfer_learn_model_path)
+                logger.info(f"load model weights for transfer learning, original model type: {existing_model_name}, dataset type: {existing_dataset_name}")
+                model.load_state_dict(existing_model_state)
+            model.to(device)
 
         # get optimizer stuff
         wd = 0 if arg_wd is None else arg_wd
@@ -188,13 +204,13 @@ if __name__ == "__main__":
         arg_save_interval = args.save_interval
         if arg_save_format != 'none':
             record_model_service = record_model_stat.ModelStatRecorder(1, current_ml_setup.model_name, current_ml_setup.dataset_name)
-            model_state_path = f"{output_folder_path}/{index}"
+            model_state_path = f"{output_folder_path}/{save_name}"
             os.makedirs(model_state_path)
-            record_model_service.initialize_without_runtime_parameters([0], model_state_path, save_format=arg_save_format, lmdb_db_name=f"{str(index).zfill(digit_number_of_models)}")
+            record_model_service.initialize_without_runtime_parameters([0], model_state_path, save_format=arg_save_format, lmdb_db_name=f"{save_name}")
         else:
             record_model_service = None
 
-        epoch_loss_lr_log_file = open(os.path.join(output_folder_path, f"{str(index).zfill(digit_number_of_models)}.log.csv"), "w")
+        epoch_loss_lr_log_file = open(os.path.join(output_folder_path, f"{save_name}.log.csv"), "w")
         epoch_loss_lr_log_file.write("epoch,training_loss,training_accuracy,validation_loss,validation_accuracy,lrs" + "\n")
         epoch_loss_lr_log_file.flush()
 
@@ -249,5 +265,5 @@ if __name__ == "__main__":
         final_correct_position.to_csv(os.path.join(output_folder_path, "final_correct_position.csv"), index=False)
 
         ## save final model state
-        util.save_model_state(os.path.join(output_folder_path, f"{str(index).zfill(digit_number_of_models)}.model.pt"),
+        util.save_model_state(os.path.join(output_folder_path, f"{save_name}.model.pt"),
                               model.state_dict(), current_ml_setup.model_name, current_ml_setup.dataset_name)
