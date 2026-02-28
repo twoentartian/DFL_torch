@@ -143,23 +143,6 @@ def plot_fourier_components(results, offset, modulus, save_path):
 
 
 # ------------------------------------------------------------------ #
-# Helper: flexible weight lookup
-# ------------------------------------------------------------------ #
-def _get_weight(state_dict, candidate_keys):
-    """Try a list of candidate key names and return the first match as a numpy array."""
-    for key in candidate_keys:
-        if key in state_dict:
-            w = state_dict[key]
-            return w.detach().cpu().numpy() if isinstance(w, torch.Tensor) else np.array(w)
-    # Fallback: print available keys to help the user
-    available = list(state_dict.keys())
-    raise KeyError(
-        f"None of {candidate_keys} found in state_dict.\n"
-        f"Available keys: {available}"
-    )
-
-
-# ------------------------------------------------------------------ #
 # Example usage
 # ------------------------------------------------------------------ #
 # state_dict = torch.load('checkpoint.pt', map_location='cpu')
