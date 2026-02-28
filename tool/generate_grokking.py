@@ -162,13 +162,11 @@ if __name__ == "__main__":
                 logger.info(f"inverse train val mode: currently train on train partition")
                 current_ml_setup.re_initialize_model(model)
                 init_model_for_inverse_train_val = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
-                save_name = "train"
                 output_folder_path_current = os.path.join(output_folder_path, "train")
                 os.mkdir(output_folder_path_current)
             elif index == 1:
                 logger.info(f"inverse train val mode: currently train on val partition")
                 model.load_state_dict(init_model_for_inverse_train_val)
-                save_name = "val"
                 train_dl, val_dl = val_dl, train_dl # swap training / val dataset
                 output_folder_path_current = os.path.join(output_folder_path, "val")
                 os.mkdir(output_folder_path_current)
