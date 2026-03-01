@@ -15,7 +15,7 @@ from py_src.ml_setup_base.dataset_modular import ArithmeticDataset, ArithmeticIt
 
 logger = logging.getLogger("generate_grokking")
 
-def loading_dataset_from(output_folder_path, path=None):
+def loading_dataset_from(path):
     pattern = r'modulus(\d+)'
     match = re.search(pattern, Path(path).name)
     assert match is not None, f"dataset folder name should start with modulus{{modulus}}...."
