@@ -10,7 +10,7 @@ from py_src.ml_setup_base.dataset import DatasetType
 from py_src.ml_setup_base.model import ModelType
 from py_src.ml_setup_base import dataset_modular, transformer_for_grokking
 
-def step(batch_index, batch, model: transformer_for_grokking.Transformer, optimizer: torch.optim.Optimizer, lr_scheduler, tokenizer, train=False):
+def step(batch_index, batch, model: transformer_for_grokking.Transformer, optimizer: Optional[torch.optim.Optimizer], lr_scheduler, tokenizer, train=False):
     if train:
         optimizer.zero_grad(set_to_none=True)
 
@@ -48,8 +48,8 @@ def step(batch_index, batch, model: transformer_for_grokking.Transformer, optimi
 def train_step(batch_index, batch, model: transformer_for_grokking.Transformer, optimizer: torch.optim.Optimizer, lr_scheduler, arg_ml_setup: MlSetup) -> TrainStepOutput:
     return step(batch_index, batch, model, optimizer, lr_scheduler, arg_ml_setup.training_data.tokenizer, train=True)
 
-def evaluation_step(batch_index, batch, model: transformer_for_grokking.Transformer, optimizer: torch.optim.Optimizer, lr_scheduler, arg_ml_setup: MlSetup) -> TrainStepOutput:
-    return step(batch_index, batch, model, optimizer, lr_scheduler, arg_ml_setup.training_data.tokenizer, train=False)
+def evaluation_step(batch_index, batch, model: transformer_for_grokking.Transformer, arg_ml_setup: MlSetup) -> TrainStepOutput:
+    return step(batch_index, batch, model, None, None, arg_ml_setup.training_data.tokenizer, train=False)
 
 def arithmetic_addition_grokking(device, train_percentage: float=50, operand_length: Optional[int]=None):
     output_ml_setup = MlSetup()

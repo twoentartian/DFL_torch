@@ -22,7 +22,7 @@ from find_high_accuracy_path_v2.functions import rebuild_norm_layer_function
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from py_src.simulation_runtime_parameters import SimulationPhase
-from py_src import ml_setup, model_average, model_variance_correct, special_torch_layers, cuda, util, configuration_file
+from py_src import ml_setup, model_average, model_variance_correct, special_torch_layers, cuda, util, configuration_file, functions
 from py_src.service import record_weights_difference, record_test_accuracy_loss, record_variance, record_model_stat, record_training_loss_accuracy, record_consecutive_linear_interpolation, record_cosine_similarity
 
 logger = logging.getLogger("find_high_accuracy_path_v2")
@@ -331,8 +331,9 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
                                                                                                   current_ml_setup.dataset_name,
                                                                                                   store_top_accuracy_model_count=runtime_parameter.store_top_accuracy_model_count,
                                                                                                   use_fixed_testing_dataset=True,
-                                                                                                  test_whole_dataset=runtime_parameter.test_dataset_use_whole)
-    record_test_accuracy_loss_service.initialize_without_runtime_parameters(arg_output_folder_path, [0], target_model, criterion, current_ml_setup.testing_data,
+                                                                                                  test_whole_dataset=runtime_parameter.test_dataset_use_whole,
+                                                                                                  test_val_split=general_parameter.split_test_val)
+    record_test_accuracy_loss_service.initialize_without_runtime_parameters(arg_output_folder_path, [0], target_model, criterion, current_ml_setup.testing_data, current_ml_setup,
                                                                             existing_model_for_testing=target_model, gpu=gpu, num_workers=general_parameter.dataloader_worker)
     child_logger.info("setting service done: record_test_accuracy_loss_service")
 
@@ -378,6 +379,8 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
     """begin finding the path"""
     if runtime_parameter.use_amp:
         scaler = torch.cuda.amp.GradScaler()
+    else:
+        scaler = None
     ignore_move_layers = None
     cuda.CudaEnv.model_state_dict_to(end_model_stat_dict, device)
     timer = time.time()
@@ -673,65 +676,14 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
         training_loss_val = 0
         training_accuracy_val = 0.0
         if not runtime_parameter.debug_check_config_mode:
-            target_model.train()
-            target_model.to(device)
-            cuda.CudaEnv.optimizer_to(optimizer, device)
+            train_correct, train_loss, train_count, training_iter_counter = functions.train(target_model, dataloader, optimizer, None, criterion, 0,
+                            current_ml_setup, device, runtime_parameter.use_amp, scaler,
+                            min_rounds=parameter_train.train_for_min_rounds,
+                            max_rounds=parameter_train.train_for_max_rounds,
+                            loss_threshold=parameter_train.train_until_loss)
+            training_accuracy_val = train_correct / train_count
+            child_logger.info(f"current tick: {runtime_parameter.current_tick}, training {training_iter_counter} rounds(final), loss = {train_loss:.3f}")
 
-            training_iter_counter = 0
-            moving_average = util.MovingAverage(parameter_train.train_for_min_rounds)
-            while training_iter_counter < parameter_train.train_for_max_rounds:
-                exit_training = False
-                training_correct_val = 0
-                training_total_val = 0
-                for data, label in dataloader:
-                    training_iter_counter += 1
-                    data, label = data.to(device, non_blocking=True), label.to(device, non_blocking=True)
-                    hard_label = label
-                    if current_ml_setup.mixup_fn is not None:
-                        data, label = current_ml_setup.mixup_fn(data, label)
-                    optimizer.zero_grad(set_to_none=True)
-                    if runtime_parameter.use_amp:
-                        with torch.cuda.amp.autocast():
-                            outputs = target_model(data)
-                            training_loss = criterion(outputs, label)
-                            scaler.scale(training_loss).backward()
-                            if current_ml_setup.clip_grad_norm is not None:
-                                # we should unscale the gradients of optimizer's assigned params if do gradient clipping
-                                scaler.unscale_(optimizer)
-                                nn.utils.clip_grad_norm_(target_model.parameters(), current_ml_setup.clip_grad_norm)
-                            scaler.step(optimizer)
-                            scaler.update()
-                    else:
-                        outputs = target_model(data)
-                        training_loss = criterion(outputs, label)
-                        training_loss.backward()
-                        if current_ml_setup.clip_grad_norm is not None:
-                            nn.utils.clip_grad_norm_(target_model.parameters(), current_ml_setup.clip_grad_norm)
-                        optimizer.step()
-                    _, predicted = torch.max(outputs, 1)
-                    if current_ml_setup.collate_fn is not None:
-                        hard_label = hard_label.argmax(dim=1)
-                    training_loss_val = training_loss.item()
-                    moving_average.add(training_loss_val)
-                    training_correct_val += (predicted == hard_label).sum().item()
-                    training_total_val += hard_label.size(0)
-
-                    if runtime_parameter.verbose:
-                        if training_iter_counter % 10 == 0:
-                            child_logger.info(f"current tick: {runtime_parameter.current_tick}, training {training_iter_counter} rounds, loss = {moving_average.get_average():.3f}")
-                    if runtime_parameter.current_tick == 0 and training_loss_val > parameter_train.train_until_loss:
-                        child_logger.warning(f"the loss for the first batch is larger than train_until_loss, ({training_loss_val}>{parameter_train.train_until_loss}). Check dataset selection !!!")
-                    if training_iter_counter >= parameter_train.train_for_max_rounds:
-                        exit_training = True
-                        break
-                    if moving_average.get_average() <= parameter_train.train_until_loss and training_iter_counter >= parameter_train.train_for_min_rounds:
-                        exit_training = True
-                        break
-                training_accuracy_val = training_correct_val / training_total_val
-                if exit_training:
-                    child_logger.info(f"current tick: {runtime_parameter.current_tick}, training {training_iter_counter} rounds(final), loss = {moving_average.get_average():.3f}")
-                    # training_loss_val = moving_average.get_average()
-                    break
 
         """rebuilding normalization"""
         if not runtime_parameter.debug_check_config_mode:

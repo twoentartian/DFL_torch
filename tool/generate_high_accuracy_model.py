@@ -15,7 +15,7 @@ from PIL import Image
 import lightning as L
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from py_src import ml_setup, complete_ml_setup, util, cuda
+from py_src import ml_setup, complete_ml_setup, util, functions
 from py_src.service import record_model_stat
 from py_src.ml_setup import ModelType
 
@@ -36,6 +36,7 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
                    arg_worker_count, arg_total_cpu_count, arg_save_format, arg_save_interval, arg_amp, arg_preset, arg_epoch_override,
                    transfer_learn_model_path, disable_reinit, enable_validation, inverse_train_val):
     thread_per_process = arg_total_cpu_count // arg_worker_count
+    thread_per_process = 8 if thread_per_process > 8 else thread_per_process
     torch.set_num_threads(thread_per_process)
 
     child_logger = logging.getLogger(f"find_high_accuracy_path.{index}")
@@ -139,81 +140,10 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
     if hasattr(model, 'set_batches_per_epoch'):
         model.set_batches_per_epoch(len(dataloader))
 
-    if arg_amp:
-        scaler = torch.amp.GradScaler('cuda')
+
+    scaler = torch.amp.GradScaler('cuda') if arg_amp else None
     for epoch in range(epochs):
-        model.train()
-        train_correct = None
-        train_loss = 0
-        train_count = 0
-
-        """ Training procedure """
-        # user defined step function
-        if arg_ml_setup.override_train_step_function is not None:
-            for batch_idx, batch in enumerate(dataloader):
-                batch = cuda.to_device(batch, device)
-                output = arg_ml_setup.override_train_step_function(batch_idx, batch, model, optimizer, lr_scheduler, arg_ml_setup)
-                loss = output.loss_value
-                train_loss += loss * output.sample_count
-                train_count += output.sample_count
-                train_correct = 0 if train_correct is None else train_correct
-                train_correct += output.correct_count
-        # L.LightningModule
-        elif isinstance(model, L.LightningModule):
-            """ Lighting model """
-            for batch_idx, batch in enumerate(dataloader):
-                batch = cuda.to_device(batch, device)
-                optimizer.zero_grad(set_to_none=True)
-
-                loss = model.training_step(batch, batch_idx)
-                loss.backward()
-
-                model.optimizer_step(epoch, batch_idx, optimizer, optimizer_closure=None)
-
-                if lr_scheduler is not None:
-                    lr_scheduler.step()
-                for func in arg_ml_setup.func_handler_post_training:
-                    func(model=model)
-                train_loss += loss.item() * batch.size(0)
-                train_count += batch.size(0)
-        else:
-            """ Normal PyTorch model """
-            for data, label in dataloader:
-                data, label = data.to(device, non_blocking=True), label.to(device, non_blocking=True)
-                optimizer.zero_grad(set_to_none=True)
-                if arg_amp:
-                    with torch.amp.autocast('cuda'):
-                        outputs = model(data)
-                        if criterion == ml_setup.CriterionType.Diffusion:
-                            loss = outputs
-                        elif isinstance(criterion, torch.nn.modules.loss.CrossEntropyLoss):
-                            loss = criterion(outputs, label)
-                        else:
-                            raise NotImplementedError
-                        scaler.scale(loss).backward()
-                        scaler.step(optimizer)
-                        scaler.update()
-                else:
-                    outputs = model(data)
-                    if criterion == ml_setup.CriterionType.Diffusion:
-                        loss = outputs
-                    elif isinstance(criterion, torch.nn.modules.loss.CrossEntropyLoss):
-                        loss = criterion(outputs, label)
-                    else:
-                        raise NotImplementedError
-                    loss.backward()
-                    optimizer.step()
-                if lr_scheduler is not None:
-                    lr_scheduler.step()
-                for func in arg_ml_setup.func_handler_post_training:
-                    func(model=model)
-
-                if isinstance(criterion, torch.nn.modules.loss.CrossEntropyLoss):
-                    _, predicted = torch.max(outputs, 1)
-                    train_correct = 0 if train_correct is None else train_correct
-                    train_correct += (predicted == label).sum().item()
-                train_loss += loss.item() * label.size(0)
-                train_count += label.size(0)
+        train_correct, train_loss, train_count, training_iter_counter = functions.train(model, dataloader, optimizer, lr_scheduler, criterion, epoch, current_ml_setup, device, arg_amp, scaler)
 
         """ print progress / validation """
         lrs = []

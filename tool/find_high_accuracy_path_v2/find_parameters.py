@@ -7,6 +7,7 @@ class ParameterGeneral(Parameter):
     dataloader_worker = None
     dataloader_prefetch_factor = None
     test_dataset_use_whole = None   # False by default
+    split_test_val = None
 
 class ParameterMove(Parameter):
     step_size = None

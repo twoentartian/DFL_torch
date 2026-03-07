@@ -118,7 +118,7 @@ class NanoCLIP(L.LightningModule):
 
         # self.log("loss", loss, prog_bar=True, logger=True)
         # self.log("batch_acc", batch_accuracy, prog_bar=True, logger=True)
-        return loss
+        return loss, batch_accuracy
 
     def on_validation_epoch_start(self):
         self.validation_descriptors = {"img": [], "txt": []}
@@ -155,6 +155,17 @@ class NanoCLIP(L.LightningModule):
 
         # clear the validation descriptors for the next epoch
         self.validation_descriptors.clear()
+
+    def get_validation_result(self):
+        img_descriptors = np.concatenate(self.validation_descriptors["img"], axis=0)  # (N, out_dim)
+        txt_descriptors = np.concatenate(self.validation_descriptors["txt"], axis=0)  # (N, out_dim)
+
+        B = img_descriptors.shape[0]
+        labels = np.arange(B)
+        recall_1, recall_5, recall_10 = self._calculate_recall(img_descriptors, txt_descriptors, labels, k_values=[1, 5, 10])
+
+        self.validation_descriptors.clear()
+        return recall_1
 
     @staticmethod
     def _calculate_recall(img_descriptors, txt_descriptors, labels, k_values=[1, 5, 10]):

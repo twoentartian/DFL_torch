@@ -4,6 +4,7 @@ import torch
 import numpy as np
 from collections import OrderedDict
 from torch.utils.data import DataLoader, Subset
+from torch.utils.data.dataloader import default_collate
 
 from py_src.cuda import CudaDevice
 from py_src.ml_setup_base.base import MlSetup
@@ -11,9 +12,10 @@ from py_src.service_base import Service
 from py_src.simulation_runtime_parameters import RuntimeParameters, SimulationPhase
 from py_src.node import Node
 import py_src.util as util
+from py_src.functions import val
 
 class ServiceTestAccuracyLossRecorder(Service):
-    def __init__(self, interval, test_batch_size, model_name, dataset_name, phase_to_record=(SimulationPhase.END_OF_TICK,), use_fixed_testing_dataset=True, store_top_accuracy_model_count = 0,
+    def __init__(self, interval, test_batch_size, model_name, dataset_name, phase_to_record=(SimulationPhase.END_OF_TICK,), use_fixed_testing_dataset=True, store_top_accuracy_model_count=0,
                  accuracy_file_name="accuracy.csv", loss_file_name="loss.csv", output_var_file_name="output_var.csv", test_whole_dataset=False,
                  test_val_split=0.5, test_accuracy_file_name="accuracy_test.csv", test_loss_file_name="loss_test.csv", val_accuracy_file_name="accuracy_val.csv", val_loss_file_name="loss_val.csv"):
         """
@@ -38,6 +40,7 @@ class ServiceTestAccuracyLossRecorder(Service):
 
         self.test_model = None
         self.criterion = None
+        self.collate_fn = None
         self.use_fixed_testing_dataset = use_fixed_testing_dataset
         self.test_whole_dataset = test_whole_dataset
         self.test_batch_size = test_batch_size
@@ -45,6 +48,7 @@ class ServiceTestAccuracyLossRecorder(Service):
         self.val_dataset = None
         self.allocated_gpu = None
         self.logger = None
+        self.ml_setup = None
 
         if test_whole_dataset:
             self.test_val_split = test_val_split
@@ -82,10 +86,11 @@ class ServiceTestAccuracyLossRecorder(Service):
                     gpu = target_node.allocated_gpu
                     pre_allocated_model = gpu.model
 
-        self.initialize_without_runtime_parameters(output_path, node_names, ml_setup.model, ml_setup.criterion, ml_setup.testing_data, gpu=gpu, existing_model_for_testing=pre_allocated_model)
+        self.initialize_without_runtime_parameters(output_path, node_names, ml_setup.model, ml_setup.criterion, ml_setup.testing_data, ml_setup, gpu=gpu, existing_model_for_testing=pre_allocated_model)
 
-    def initialize_without_runtime_parameters(self, output_path, node_names, model, criterion, test_dataset, logger=None, gpu: CudaDevice=None, existing_model_for_testing=None, num_workers=None):
+    def initialize_without_runtime_parameters(self, output_path, node_names, model, criterion, test_dataset, arg_ml_setup, logger=None, gpu: CudaDevice=None, existing_model_for_testing=None, num_workers=None):
         self.logger = logger
+        self.ml_setup = arg_ml_setup
         self.accuracy_file = open(os.path.join(output_path, f"{self.accuracy_file_name}"), "w+")
         self.loss_file = open(os.path.join(output_path, f"{self.loss_file_name}"), "w+")
         self.output_var_file = open(os.path.join(output_path, f"{self.output_var_file_name}"), "w+")
@@ -107,6 +112,7 @@ class ServiceTestAccuracyLossRecorder(Service):
             self.val_accuracy_file.write(header + "\n")
             self.val_loss_file.write(header + "\n")
         self.criterion = criterion
+        self.collate_fn = default_collate if arg_ml_setup.collate_fn is None else arg_ml_setup.collate_fn
 
         # set testing dataset
         if self.test_whole_dataset:
@@ -119,16 +125,16 @@ class ServiceTestAccuracyLossRecorder(Service):
                 test_ds = Subset(test_dataset, self.test_idx)
                 val_ds = Subset(test_dataset, self.val_idx)
                 if num_workers in [None, 0]:
-                    self.test_dataset = DataLoader(test_ds, batch_size=self.test_batch_size, shuffle=True, pin_memory=True)
-                    self.val_dataset = DataLoader(val_ds, batch_size=self.test_batch_size, shuffle=True, pin_memory=True)
+                    self.test_dataset = DataLoader(test_ds, batch_size=self.test_batch_size, collate_fn=self.collate_fn, shuffle=True, pin_memory=True)
+                    self.val_dataset = DataLoader(val_ds, batch_size=self.test_batch_size, collate_fn=self.collate_fn, shuffle=True, pin_memory=True)
                 else:
-                    self.test_dataset = DataLoader(test_ds, batch_size=self.test_batch_size, shuffle=True, pin_memory=True, num_workers=num_workers, persistent_workers=True, prefetch_factor=4)
-                    self.val_dataset = DataLoader(val_ds, batch_size=self.test_batch_size, shuffle=True, pin_memory=True, num_workers=num_workers, persistent_workers=True, prefetch_factor=4)
+                    self.test_dataset = DataLoader(test_ds, batch_size=self.test_batch_size, collate_fn=self.collate_fn, shuffle=True, pin_memory=True, num_workers=num_workers, persistent_workers=True, prefetch_factor=4)
+                    self.val_dataset = DataLoader(val_ds, batch_size=self.test_batch_size, collate_fn=self.collate_fn, shuffle=True, pin_memory=True, num_workers=num_workers, persistent_workers=True, prefetch_factor=4)
             else:
                 if num_workers in [None, 0]:
-                    self.test_dataset = DataLoader(test_dataset, batch_size=self.test_batch_size, shuffle=True, pin_memory=True)
+                    self.test_dataset = DataLoader(test_dataset, batch_size=self.test_batch_size, collate_fn=self.collate_fn, shuffle=True, pin_memory=True)
                 else:
-                    self.test_dataset = DataLoader(test_dataset, batch_size=self.test_batch_size, shuffle=True, pin_memory=True, num_workers=num_workers, persistent_workers=True, prefetch_factor=4)
+                    self.test_dataset = DataLoader(test_dataset, batch_size=self.test_batch_size, collate_fn=self.collate_fn, shuffle=True, pin_memory=True, num_workers=num_workers, persistent_workers=True, prefetch_factor=4)
         else:
             if self.use_fixed_testing_dataset:
                 """we should iterate whole dataset"""
@@ -146,16 +152,16 @@ class ServiceTestAccuracyLossRecorder(Service):
                 balanced_subset = Subset(test_dataset, balanced_indices)
                 batch_size = 100 if self.test_batch_size > 100 else self.test_batch_size
                 if num_workers is None:
-                    balanced_loader = DataLoader(balanced_subset, batch_size=batch_size, shuffle=True)
+                    balanced_loader = DataLoader(balanced_subset, batch_size=batch_size, shuffle=True, collate_fn=self.collate_fn)
                 else:
-                    balanced_loader = DataLoader(balanced_subset, batch_size=batch_size, shuffle=True, num_workers=num_workers, persistent_workers=True)
+                    balanced_loader = DataLoader(balanced_subset, batch_size=batch_size, shuffle=True, collate_fn=self.collate_fn, num_workers=num_workers, persistent_workers=True)
                 self.test_dataset = balanced_loader
             else:
                 """we should only iterate the first batch of test data"""
                 if num_workers is None:
-                    self.test_dataset = DataLoader(test_dataset, batch_size=self.test_batch_size, shuffle=True)
+                    self.test_dataset = DataLoader(test_dataset, batch_size=self.test_batch_size, shuffle=True, collate_fn=self.collate_fn)
                 else:
-                    self.test_dataset = DataLoader(test_dataset, batch_size=self.test_batch_size, shuffle=True, num_workers=num_workers, persistent_workers=True)
+                    self.test_dataset = DataLoader(test_dataset, batch_size=self.test_batch_size, shuffle=True, collate_fn=self.collate_fn, num_workers=num_workers, persistent_workers=True)
 
         # set model
         if existing_model_for_testing is None:
@@ -202,66 +208,36 @@ class ServiceTestAccuracyLossRecorder(Service):
         row_val_loss = []
         for node_name in self.node_order:
             loss_test, accuracy_test, loss_val, accuracy_val = None, None, None, None,
+
+
             if self.test_whole_dataset:
                 model_stat = node_names_and_model_stats[node_name]
                 self.test_model.load_state_dict(model_stat)
                 if self.allocated_gpu is not None:
                     self.test_model.to(self.allocated_gpu.device)
                 self.test_model.eval()
-                test_loss, test_correct, test_var, test_count = 0, 0, 0.0, 0
-                val_loss, val_correct, val_var, val_count = 0, 0, 0.0, 0
-                for d, l in self.test_dataset:
-                    test_data = d
-                    test_labels = l
-                    if self.allocated_gpu is not None:
-                        test_data, test_labels = test_data.to(self.allocated_gpu.device), test_labels.to(self.allocated_gpu.device)
-                    outputs = self.test_model(test_data)
-                    test_loss += self.criterion(outputs, test_labels).item() * test_labels.size(0)
-                    _, predicted = torch.max(outputs, 1)
-                    test_correct += (predicted == test_labels).sum().item()
-                    test_count += test_labels.size(0)
-                    test_var += outputs.var(dim=0, unbiased=False).mean().item()
 
-                if self.test_val_split is not None:
-                    for d, l in self.val_dataset:
-                        val_data = d
-                        val_labels = l
-                        if self.allocated_gpu is not None:
-                            val_data, val_labels = val_data.to(self.allocated_gpu.device), val_labels.to(self.allocated_gpu.device)
-                        outputs = self.test_model(val_data)
-                        val_loss += self.criterion(outputs, val_labels).item() * val_labels.size(0)
-                        _, predicted = torch.max(outputs, 1)
-                        val_correct += (predicted == val_labels).sum().item()
-                        val_count += val_labels.size(0)
-                        val_var += outputs.var(dim=0, unbiased=False).mean().item()
-                loss = (test_loss+val_loss) / (test_count+val_count)
-                accuracy = (test_correct+val_correct) / (test_count+val_count)
-                var = (test_var+val_var) / (test_count+val_count)
-                # for test/val split
+                val_loss, val_count, val_correct, val_var = 0.0, 0, 0, 0.0
+                test_loss, test_count, test_correct, test_var = val(self.test_model, self.test_dataset, self.criterion, self.ml_setup, self.allocated_gpu.device, False, None)
+
                 loss_test = test_loss / test_count
                 accuracy_test = test_correct / test_count
-                loss_val = val_loss / val_count
-                accuracy_val = val_correct / val_count
+
+                if self.test_val_split is not None:
+                    val_loss, val_count, val_correct, val_var = val(self.test_model, self.val_dataset, self.criterion, self.ml_setup, self.allocated_gpu.device, False, None)
+                    loss_val = val_loss / val_count
+                    accuracy_val = val_correct / val_count
+                loss = (test_loss + val_loss) / (test_count + val_count)
+                accuracy = (test_correct + val_correct) / (test_count + val_count)
+                var = (test_var + val_var) / (test_count + val_count)
             else:
                 if self.use_fixed_testing_dataset:
-                    total_loss, correct, var_acc, total = 0, 0, 0.0, 0
                     model_stat = node_names_and_model_stats[node_name]
                     self.test_model.load_state_dict(model_stat)
-                    for test_data, test_labels in self.test_dataset:
-                        if self.allocated_gpu is not None:
-                            test_data, test_labels = test_data.to(self.allocated_gpu.device), test_labels.to(self.allocated_gpu.device)
-                        if self.allocated_gpu is not None:
-                            self.test_model.to(self.allocated_gpu.device)
-                        self.test_model.eval()
-                        outputs = self.test_model(test_data)
-                        total_loss += self.criterion(outputs, test_labels).item()
-                        _, predicted = torch.max(outputs, 1)
-                        correct += (predicted == test_labels).sum().item()
-                        total += test_labels.size(0)
-                        var_acc += outputs.var(dim=0, unbiased=False).mean().item()
-                    loss = total_loss / total
-                    accuracy = correct / total
-                    var = var_acc / total
+                    test_loss, test_count, test_correct, test_var = val(self.test_model, self.test_dataset, self.criterion, self.ml_setup, self.allocated_gpu.device, False, None)
+                    loss = test_loss / test_count
+                    accuracy = test_correct / test_count
+                    var = test_var / test_count
                 else:
                     test_data = None
                     test_labels = None
