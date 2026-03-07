@@ -1,3 +1,4 @@
+import math
 from typing import Optional
 import torch
 import lightning as L
@@ -190,6 +191,7 @@ def val(model: torch.nn.Module, dataloader: torch.utils.data.DataLoader,
         total_loss += loss * total_count
         total_correct = 0 if total_correct is None else total_correct
         total_correct += correct_count
+        total_variance = math.nan
     else:
         """ Normal PyTorch model """
         for d, l in dataloader:

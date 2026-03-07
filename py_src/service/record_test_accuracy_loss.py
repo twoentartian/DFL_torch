@@ -208,8 +208,6 @@ class ServiceTestAccuracyLossRecorder(Service):
         row_val_loss = []
         for node_name in self.node_order:
             loss_test, accuracy_test, loss_val, accuracy_val = None, None, None, None,
-
-
             if self.test_whole_dataset:
                 model_stat = node_names_and_model_stats[node_name]
                 self.test_model.load_state_dict(model_stat)
