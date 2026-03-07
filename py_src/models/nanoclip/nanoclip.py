@@ -121,7 +121,7 @@ class NanoCLIP(L.LightningModule):
         return loss, batch_accuracy
 
     def on_validation_epoch_start(self):
-        self.validation_descriptors = {"img": [], "txt": []}
+        self.validation_descriptors = {"img": [], "txt": [], "nb_captions": []}
 
     def validation_step(self, batch, batch_idx):
         """
@@ -134,6 +134,9 @@ class NanoCLIP(L.LightningModule):
             B, nb_masks, mask_len = masks.shape
             captions = captions.view(B * nb_captions, cap_len)
             masks = masks.view(B * nb_masks, mask_len)
+        else:
+            B = captions.shape[0]
+            nb_captions = 1
 
         img_descriptors, txt_descriptors = self(images, captions, masks)
         img_descriptors = img_descriptors.detach().cpu().numpy()
@@ -141,17 +144,24 @@ class NanoCLIP(L.LightningModule):
 
         self.validation_descriptors["img"].append(img_descriptors)
         self.validation_descriptors["txt"].append(txt_descriptors)
+        self.validation_descriptors["nb_captions"].append(nb_captions)
 
     def on_validation_epoch_end(self):
         """
         Calculate the recall at 1, 5, and 10 for the validation set.
         """
         img_descriptors = np.concatenate(self.validation_descriptors["img"], axis=0)  # (N, out_dim)
-        txt_descriptors = np.concatenate(self.validation_descriptors["txt"], axis=0)  # (N, out_dim)
+        txt_descriptors = np.concatenate(self.validation_descriptors["txt"], axis=0)  # (N*nb_captions, out_dim)
 
-        # create dummy labels
-        B = img_descriptors.shape[0]
-        labels = np.arange(B)
+        # create labels: each image index repeated nb_captions times to match txt_descriptors rows
+        labels = np.concatenate([
+            np.repeat(np.arange(img_batch.shape[0]) + offset, nb_caps)
+            for img_batch, nb_caps, offset in zip(
+                self.validation_descriptors["img"],
+                self.validation_descriptors["nb_captions"],
+                np.cumsum([0] + [b.shape[0] for b in self.validation_descriptors["img"]][:-1])
+            )
+        ])
 
         # use faiss to calculate recall, images are gallery and texts are queries
         recall_1, recall_5, recall_10 = self._calculate_recall(img_descriptors, txt_descriptors, labels, k_values=[1, 5, 10])
@@ -164,10 +174,18 @@ class NanoCLIP(L.LightningModule):
 
     def get_validation_result(self):
         img_descriptors = np.concatenate(self.validation_descriptors["img"], axis=0)  # (N, out_dim)
-        txt_descriptors = np.concatenate(self.validation_descriptors["txt"], axis=0)  # (N, out_dim)
+        txt_descriptors = np.concatenate(self.validation_descriptors["txt"], axis=0)  # (N*nb_captions, out_dim)
 
-        B = img_descriptors.shape[0]
-        labels = np.arange(B)
+        # create labels: each image index repeated nb_captions times to match txt_descriptors rows
+        labels = np.concatenate([
+            np.repeat(np.arange(img_batch.shape[0]) + offset, nb_caps)
+            for img_batch, nb_caps, offset in zip(
+                self.validation_descriptors["img"],
+                self.validation_descriptors["nb_captions"],
+                np.cumsum([0] + [b.shape[0] for b in self.validation_descriptors["img"]][:-1])
+            )
+        ])
+
         recall_1, recall_5, recall_10 = self._calculate_recall(img_descriptors, txt_descriptors, labels, k_values=[1, 5, 10])
 
         self.validation_descriptors.clear()
