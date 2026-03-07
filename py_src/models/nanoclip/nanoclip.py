@@ -6,6 +6,7 @@
 # Licensed under the MIT License. See LICENSE file in the project root.
 # ----------------------------------------------------------------------------
 
+import math
 import torch
 import torch.nn.functional as F
 import faiss
@@ -187,9 +188,10 @@ class NanoCLIP(L.LightningModule):
         ])
 
         recall_1, recall_5, recall_10 = self._calculate_recall(img_descriptors, txt_descriptors, labels, k_values=[1, 5, 10])
-
+        loss = recall_1
+        correct_count = math.nan
         self.validation_descriptors.clear()
-        return recall_1
+        return loss, correct_count
 
     @staticmethod
     def _calculate_recall(img_descriptors, txt_descriptors, labels, k_values=[1, 5, 10]):

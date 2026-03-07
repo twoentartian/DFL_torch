@@ -186,8 +186,9 @@ def val(model: torch.nn.Module, dataloader: torch.utils.data.DataLoader,
             batch = cuda.to_device(batch, device)
             model.validation_step(batch, batch_idx)
             total_count += batch_size
-        loss = model.get_validation_result()
+        loss, correct_count = model.get_validation_result()
         total_loss += loss * total_count
+        total_correct += correct_count
     else:
         """ Normal PyTorch model """
         for d, l in dataloader:
