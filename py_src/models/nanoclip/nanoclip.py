@@ -129,6 +129,12 @@ class NanoCLIP(L.LightningModule):
         """
         images, captions, masks = batch
 
+        if len(captions.shape) == 3:  # flatten captions to (batch_size*nb_caps, cap_len) cuz we have multiple captions per image
+            B, nb_captions, cap_len = captions.shape
+            B, nb_masks, mask_len = masks.shape
+            captions = captions.view(B * nb_captions, cap_len)
+            masks = masks.view(B * nb_masks, mask_len)
+
         img_descriptors, txt_descriptors = self(images, captions, masks)
         img_descriptors = img_descriptors.detach().cpu().numpy()
         txt_descriptors = txt_descriptors.detach().cpu().numpy()
