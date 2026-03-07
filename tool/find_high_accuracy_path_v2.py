@@ -682,6 +682,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
                             max_rounds=parameter_train.train_for_max_rounds,
                             loss_threshold=parameter_train.train_until_loss)
             training_accuracy_val = train_correct / train_count
+            training_loss_val = train_loss
             child_logger.info(f"current tick: {runtime_parameter.current_tick}, training {training_iter_counter} rounds(final), loss = {train_loss:.3f}")
 
 
