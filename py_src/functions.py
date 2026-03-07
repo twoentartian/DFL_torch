@@ -166,6 +166,9 @@ def val(model: torch.nn.Module, dataloader: torch.utils.data.DataLoader,
           criterion,
           arg_ml_setup: ml_setup.MlSetup, device: torch.device,
           arg_amp: bool, scaler: Optional[torch.cuda.amp.GradScaler]):
+    model.eval()
+    model.to(device)
+
     total_loss, total_count, total_correct, total_variance = 0.0, 0, None, None
 
     if arg_ml_setup.override_evaluation_step_function is not None:
@@ -185,13 +188,11 @@ def val(model: torch.nn.Module, dataloader: torch.utils.data.DataLoader,
         for batch_idx, batch in enumerate(dataloader):
             batch_size = batch_to_batch_size(batch)
             batch = cuda.to_device(batch, device)
-            model.validation_step(batch, batch_idx)
+            loss, batch_accuracy = model.validation_step(batch, batch_idx)
             total_count += batch_size
-        loss, correct_count = model.get_validation_result()
-        total_loss += loss * total_count
-        total_correct = 0 if total_correct is None else total_correct
-        total_correct += correct_count
-        total_variance = math.nan
+            total_loss += loss.item() * batch_size
+            total_correct = 0 if total_correct is None else total_correct
+            total_correct += batch_accuracy.item() * batch_size
     else:
         """ Normal PyTorch model """
         for d, l in dataloader:
