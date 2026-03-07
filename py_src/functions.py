@@ -190,6 +190,7 @@ def val(model: torch.nn.Module, dataloader: torch.utils.data.DataLoader,
             batch = cuda.to_device(batch, device)
             model.validation_step(batch, batch_idx)
             total_count += batch_size
+        model.on_validation_epoch_end()
         loss, correct_count = model.get_validation_result()
         total_loss += loss * total_count
         total_correct = 0 if total_correct is None else total_correct
