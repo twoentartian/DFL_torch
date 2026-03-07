@@ -188,6 +188,7 @@ def val(model: torch.nn.Module, dataloader: torch.utils.data.DataLoader,
             total_count += batch_size
         loss, correct_count = model.get_validation_result()
         total_loss += loss * total_count
+        total_correct = 0 if total_correct is None else total_correct
         total_correct += correct_count
     else:
         """ Normal PyTorch model """
