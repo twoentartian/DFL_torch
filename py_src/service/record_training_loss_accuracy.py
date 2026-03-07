@@ -49,7 +49,7 @@ class ServiceTrainingLossAccuracyRecorder(Service):
         loss_row = []
         for node_name in self.node_order:
             node_loss = node_name_and_loss[node_name]
-            loss_row.append('%.4f' % node_loss)
+            loss_row.append('%.4e' % node_loss)
         row = ",".join([str(tick), *loss_row])
         self.loss_file.write(row + "\n")
         self.loss_file.flush()
@@ -57,7 +57,7 @@ class ServiceTrainingLossAccuracyRecorder(Service):
         accuracy_row = []
         for node_name in self.node_order:
             node_accuracy = node_name_and_accuracy[node_name]
-            accuracy_row.append('%.4f' % node_accuracy)
+            accuracy_row.append('%.4e' % node_accuracy)
         row = ",".join([str(tick), *accuracy_row])
         self.accuracy_file.write(row + "\n")
         self.accuracy_file.flush()
