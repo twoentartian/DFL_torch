@@ -188,7 +188,7 @@ if __name__ == "__main__":
                 logger.info(f"load model weights for transfer learning, original model type: {existing_model_name}, dataset type: {existing_dataset_name}")
                 model.load_state_dict(existing_model_state)
             model.to(device)
-            output_folder_path_current = os.path.join(output_folder_path, "val")
+            output_folder_path_current = output_folder_path
 
         # get optimizer stuff
         wd = 0 if arg_wd is None else arg_wd
