@@ -12,6 +12,7 @@ from py_src.service import record_model_stat
 from py_src.ml_setup_base import transformer_for_grokking
 from py_src.ml_setup_base.grokking import step
 from py_src.ml_setup_base.dataset_modular import ArithmeticDataset, ArithmeticIterator
+import py_src.service.record_weights_difference as record_weights_difference
 
 logger = logging.getLogger("generate_grokking")
 
@@ -213,6 +214,9 @@ if __name__ == "__main__":
             record_model_service.initialize_without_runtime_parameters([0], model_state_path, save_format=arg_save_format, lmdb_db_name=f"{save_name}")
         else:
             record_model_service = None
+        distance_to_origin_service = record_weights_difference.ServiceDistanceToOriginRecorder(1, [0])
+        distance_to_origin_service.initialize_without_runtime_parameters({0: model.state_dict()}, output_folder_path_current, logger=logger)
+        logger.info("setting service done: distance_to_origin_service")
 
         epoch_loss_lr_log_file = open(os.path.join(output_folder_path_current, f"{save_name}.log.csv"), "w")
         epoch_loss_lr_log_file.write("epoch,training_loss,training_accuracy,validation_loss,validation_accuracy,lrs" + "\n")
@@ -248,10 +252,11 @@ if __name__ == "__main__":
             epoch_loss_lr_log_file.write(f"{epoch},{train_loss / train_count:.4e},{train_correct / train_count:.4e},{val_loss / val_count:.3e},{val_correct / val_count:.4e},{lrs}" + "\n")
 
             # services
+            model_stat = model.state_dict()
             if record_model_service is not None:
-                model_stat = model.state_dict()
                 if epoch % arg_save_interval == 0:
                     record_model_service.trigger_without_runtime_parameters(epoch, [0], [model_stat])
+            distance_to_origin_service.trigger_without_runtime_parameters(epoch, {0: model_stat})
 
         # final record
         ## record final correct position
