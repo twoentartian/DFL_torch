@@ -291,8 +291,7 @@ class ArithmeticDataset:
             elems = map(Permutation, itertools.permutations(operands))
             tuples = itertools.product(elems, repeat=2)
         elif "_mod_" in operator:
-            modulo = int(operator.split("_mod_")[-1])
-            elems = [Mod(i, modulo) for i in range(modulo)]
+            elems = [Mod(i, modulus) for i in range(modulus)]
             tuples = itertools.product(elems, repeat=2)
         else:
             operands = operands or nums
@@ -327,9 +326,11 @@ class ArithmeticDataset:
                 else:
                     c = (a - b) % modulus
             elif "_mod_" in operator:
-                expression = operator.split("_mod_")[0]
-                function = eval(f"lambda x, y: ({expression})")
-                c = function(a, b)
+                items = operator.split("_mod_")
+                expression = items[0]
+                modulo = int(items[-1])
+                function = eval(f"lambda x, y: ({expression}) % {modulo}")
+                c = function(int(a), int(b))
             else:
                 c = eval(f"({a} {operator} {b}) % {modulus}")
             eq = " ".join(map(render, [a, operator, b, "=", c]))
