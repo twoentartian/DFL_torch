@@ -120,6 +120,9 @@ if __name__ == "__main__":
     else:
         output_folder_path = os.path.join(os.curdir, output_folder_name)
     os.mkdir(output_folder_path)
+    cmd = [sys.executable, sys.argv[1]] + sys.argv[2:]
+    with open(os.path.join(output_folder_path, "command.txt"), "w", encoding="utf-8") as f:
+        f.write(" ".join(cmd))
 
     # dataset
     if args.dataset_path is not None:
