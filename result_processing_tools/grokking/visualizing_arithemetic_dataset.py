@@ -420,12 +420,13 @@ def process_folder(folder: Path, override_existing=False) -> bool:
             title=f"Output Value Heatmap  (grid {n}x{n})",
         )
 
-    if not os.path.exists(output_path_output_numbers):
-        plot_output_numbers(
-            all_data, operand_index, n=n,
-            out_path=output_path_output_numbers,
-            title=f"Output Values  (grid {n}x{n})",
-        )
+    if n < 200:
+        if not os.path.exists(output_path_output_numbers):
+            plot_output_numbers(
+                all_data, operand_index, n=n,
+                out_path=output_path_output_numbers,
+                title=f"Output Values  (grid {n}x{n})",
+            )
     return True
 
 # ---------------------------------------------------------------------------
