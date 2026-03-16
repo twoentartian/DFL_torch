@@ -168,7 +168,7 @@ def _worker(
     val_dl   = ArithmeticIterator(val_ds,   device, batchsize_hint=batch_size)
 
     params = GrokkingParameters()
-    params.set_env(cell_dir, logger=worker_logger)
+    params.set_env(cell_dir, True, logger=worker_logger)
     params.set_ml_env(model, current_ml_setup.model_name,
                       current_ml_setup.dataset_name, train_ds.tokenizer)
     params.set_ml_hyperparameter(
