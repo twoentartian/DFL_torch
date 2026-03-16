@@ -328,7 +328,7 @@ if __name__ == "__main__":
             model.to(device)
             output_folder_path_current = output_folder_path
 
-        os.mkdir(output_folder_path_current)
+        os.makedirs(output_folder_path_current, exist_ok=True)
 
         # get optimizer stuff
         wd = 0 if arg_wd is None else arg_wd
