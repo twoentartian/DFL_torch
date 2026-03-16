@@ -1,6 +1,7 @@
 import math
 from typing import Optional
 import torch
+import contextlib
 import torch.nn as nn
 import torch.nn.functional as F
 from py_src.ml_setup_base.base import MlSetup, TrainStepOutput
@@ -10,31 +11,54 @@ from py_src.ml_setup_base.dataset import DatasetType
 from py_src.ml_setup_base.model import ModelType
 from py_src.ml_setup_base import dataset_modular, transformer_for_grokking
 
-def step(batch_index, batch, model: transformer_for_grokking.Transformer, optimizer: Optional[torch.optim.Optimizer], lr_scheduler, tokenizer, train=False):
+def step(batch_index, batch, model: transformer_for_grokking.Transformer, optimizer: Optional[torch.optim.Optimizer],
+         lr_scheduler, tokenizer, train=False, scaler=None):
     if train:
         optimizer.zero_grad(set_to_none=True)
 
     x = batch["text"]
     y = batch["target"]
-    y_hat, attentions, values = model.forward(x=x)
-    y_hat = y_hat.transpose(-2, -1)
 
-    eq_token_index = tokenizer.stoi["="]
-    eq_position_t = torch.nonzero(y[0, :] == eq_token_index, as_tuple=False)
-    eq_position = int(eq_position_t.squeeze())
-    y_rhs = y[..., eq_position + 1:]
-    y_hat_rhs = y_hat[..., eq_position + 1:]
-    x_lhs = x[..., : eq_position + 1]
-    loss = F.cross_entropy(y_hat_rhs, y_rhs, reduction="mean")
+    # ── AMP: wrap forward pass in autocast if a scaler is provided ───────────
+    # autocast is a no-op when the inputs are already on CPU, so this is safe
+    # regardless of device.  We only use it during training; val runs in full
+    # precision to get accurate loss/accuracy numbers.
+    amp_ctx = (
+        torch.autocast(device_type=x.device.type, dtype=torch.bfloat16
+                       if torch.cuda.is_available() and torch.cuda.is_bf16_supported()
+                       else torch.float16)
+        if (scaler is not None or (train and x.device.type == "cuda"))
+        else torch.no_grad() if not train else contextlib.nullcontext()
+    )
+    # ─────────────────────────────────────────────────────────────────────────
 
-    # find max prediction from output
+    with amp_ctx:
+        y_hat, attentions, values = model.forward(x=x)
+        y_hat = y_hat.transpose(-2, -1)
+
+        eq_token_index = tokenizer.stoi["="]
+        eq_position_t = torch.nonzero(y[0, :] == eq_token_index, as_tuple=False)
+        eq_position = int(eq_position_t.squeeze())
+        y_rhs = y[..., eq_position + 1:]
+        y_hat_rhs = y_hat[..., eq_position + 1:]
+        x_lhs = x[..., : eq_position + 1]
+        loss = F.cross_entropy(y_hat_rhs, y_rhs, reduction="mean")
+
+    # find max prediction from output (kept in fp32 for correctness)
     y_hat_max = torch.max(y_hat_rhs, dim=-2).indices  # batchsize x num_rhs_tokens
     row_accuracy = torch.min((y_hat_max == y_rhs), dim=-1).values  # shape: batchsize
     correct_count = row_accuracy.int().sum()
 
     if train:
-        loss.backward()
-        optimizer.step()
+        if scaler is not None:
+            # ── AMP backward + optimizer step via GradScaler ─────────────────
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
+            # ─────────────────────────────────────────────────────────────────
+        else:
+            loss.backward()
+            optimizer.step()
         if lr_scheduler is not None:
             lr_scheduler.step()
 
