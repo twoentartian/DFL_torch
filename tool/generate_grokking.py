@@ -172,7 +172,7 @@ def train_grokking(parameters: GrokkingParameters):
                 f"({time_per_epoch:.2f}s/epoch) | "
                 f"remaining: {epochs_remaining} epochs, ETA: {eta_str}"
             )
-            print(speed_msg)
+            logger.info(speed_msg)
             if parameters.logger is not None:
                 parameters.logger.info(speed_msg)
             speed_window_start_time = time.time()
