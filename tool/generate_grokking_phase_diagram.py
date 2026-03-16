@@ -125,7 +125,7 @@ def train_cell(args, lr: float, wd: float,
     params.set_ml_hyperparameter(
         learning_rate=lr,
         weight_decay=wd,
-        min_lr=args.min_lr,
+        min_lr=lr,  # use constant learning rate
         warmup_epoch=10,
         total_epoch=args.epoch,
     )
@@ -170,7 +170,6 @@ if __name__ == "__main__":
 
     # ---- training ----
     parser.add_argument("-epoch", "--epoch",    type=int,   default=100000)
-    parser.add_argument("-minlr", "--min_lr",   type=float, default=1e-4)
     parser.add_argument("-bs",    "--batchsize", type=int,   default=None)
     parser.add_argument("-m", "--model_type",   type=str,
                         default="transformer_for_grokking")
