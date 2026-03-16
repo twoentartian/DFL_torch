@@ -40,6 +40,143 @@ def generate_dataset(output_folder_path, train_pct, expression, modulus, train_s
     train_dataset.tokenizer.save_tokens(os.path.join(output_folder_path, name, "tokenizer.txt"))
     return train_dataset, val_dataset
 
+
+class GrokkingParameters(object):
+    def __init__(self):
+        self.model = None
+        self.tokenizer = None
+        self.model_name = None
+        self.dataset_name = None
+
+        self.logger = None
+        self.output_folder_path = None
+
+        self.weight_decay = None    # default: 0
+        self.learning_rate = None   # default: 1e-3
+        self.warmup_epoch = None    # default: 10
+        self.total_epoch = None     # default: 150000
+        self.min_lr = None          # default: 1e-4
+
+        self.train_dataloader = None
+        self.val_dataloader = None
+
+        self.save_format = None
+        self.save_interval = None
+        self.save_name = None
+
+    def set_ml_env(self, model, model_name, dataset_name, tokenizer):
+        self.model = model
+        self.model_name = model_name
+        self.dataset_name = dataset_name
+        self.tokenizer = tokenizer
+
+    def set_dataloader(self, train_dataloader, val_dataloader):
+        self.train_dataloader = train_dataloader
+        self.val_dataloader = val_dataloader
+
+    def set_ml_hyperparameter(self, learning_rate=1e-3, weight_decay=0, min_lr=1e-4, warmup_epoch=10, total_epoch=150000):
+        self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
+        self.min_lr = min_lr
+        self.warmup_epoch = warmup_epoch
+        self.total_epoch = total_epoch
+
+    def set_env(self, output_path, logger=None):
+        self.output_folder_path = output_path
+        self.logger = logger
+
+    def set_model_save(self, save_name, save_format="none", save_interval=500):
+        self.save_name = save_name
+        self.save_format = save_format
+        self.save_interval = save_interval
+
+
+def train_grokking(parameters: GrokkingParameters):
+    optimizer = torch.optim.AdamW(parameters.model.parameters(), weight_decay=parameters.weight_decay, lr=parameters.learning_rate, betas=(0.9, 0.98), eps=1e-8)
+    total_epoch = parameters.total_epoch
+    warmup_epoch = parameters.warmup_epoch
+    cosine_epoch = total_epoch - warmup_epoch
+    warmup = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=1e-8, end_factor=1.0, total_iters=warmup_epoch)
+    cosine = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cosine_epoch, eta_min=parameters.min_lr)
+    scheduler = torch.optim.lr_scheduler.SequentialLR(optimizer, schedulers=[warmup, cosine], milestones=[warmup_epoch])
+    lr_scheduler = scheduler
+
+    # service
+    if parameters.save_format != 'none':
+        record_model_service = record_model_stat.ModelStatRecorder(1, parameters.model_name, parameters.dataset_name)
+        model_state_path = f"{parameters.output_folder_path}/{parameters.save_name}"
+        os.makedirs(model_state_path)
+        record_model_service.initialize_without_runtime_parameters([0], model_state_path, save_format=parameters.save_format, lmdb_db_name=f"{parameters.save_name}")
+    else:
+        record_model_service = None
+    distance_to_origin_service = record_weights_difference.ServiceDistanceToOriginRecorder(1, [0])
+    distance_to_origin_service.initialize_without_runtime_parameters({0: parameters.model.state_dict()}, parameters.output_folder_path, logger=parameters.logger)
+    if parameters.logger is not None:
+        parameters.logger.info("setting service done: distance_to_origin_service")
+
+    epoch_loss_lr_log_file = open(os.path.join(parameters.output_folder_path, f"{parameters.save_name}.log.csv"), "w")
+    epoch_loss_lr_log_file.write("epoch,training_loss,training_accuracy,validation_loss,validation_accuracy,lrs" + "\n")
+    epoch_loss_lr_log_file.flush()
+
+    for epoch in range(total_epoch):
+        train_correct = None
+        train_loss = 0
+        train_count = 0
+        if epoch == 0 and record_model_service is not None:
+            model_stat = parameters.model.state_dict()
+            record_model_service.trigger_without_runtime_parameters(-1, [0], [model_stat])
+        for batch_idx, batch in enumerate(parameters.train_dataloader):
+            output = step(batch_idx, batch, parameters.model, optimizer, lr_scheduler, parameters.tokenizer, train=True)
+            loss = output.loss_value
+            train_loss += loss * output.sample_count
+            train_count += output.sample_count
+            train_correct = 0 if train_correct is None else train_correct
+            train_correct += output.correct_count
+
+        val_loss, val_correct, val_count = 0.0, 0.0, 0
+        for batch_idx, batch in enumerate(parameters.val_dataloader):
+            output = step(batch_idx, batch, parameters.model, optimizer, lr_scheduler, parameters.tokenizer, train=False)
+            val_loss += output.loss_value * output.sample_count
+            val_correct += output.correct_count
+            val_count += output.sample_count
+
+        # print progress
+        lrs = []
+        for param_group in optimizer.param_groups:
+            lrs.append(param_group['lr'])
+        if parameters.logger is not None:
+            parameters.logger.info(f"epoch[{epoch}] loss,accuracy= (train) {train_loss / train_count:.4},{train_correct / train_count:.4} (val) {val_loss / val_count:.4},{val_correct / val_count:.4} lrs={lrs}")
+        epoch_loss_lr_log_file.write(f"{epoch},{train_loss / train_count:.4e},{train_correct / train_count:.4e},{val_loss / val_count:.3e},{val_correct / val_count:.4e},{lrs}" + "\n")
+
+        # services
+        model_stat = parameters.model.state_dict()
+        if record_model_service is not None:
+            if epoch % parameters.save_interval == 0:
+                record_model_service.trigger_without_runtime_parameters(epoch, [0], [model_stat])
+        distance_to_origin_service.trigger_without_runtime_parameters(epoch, {0: model_stat})
+
+    # final record
+    ## record final correct position
+    final_correct_position = {"lhs": [], "rhs": [], "correct?": []}
+    for batch_idx, batch in enumerate(chain(parameters.train_dataloader, parameters.val_dataloader)):
+        output = step(batch_idx, batch, parameters.model, optimizer, lr_scheduler, parameters.tokenizer, train=False)
+        x = batch["text"]
+        num_0 = [int(parameters.tokenizer.itos[val.item()]) for val in x[:, 1]]
+        num_1 = [int(parameters.tokenizer.itos[val.item()]) for val in x[:, 3]]
+        final_correct_position["lhs"].extend(num_0)
+        final_correct_position["rhs"].extend(num_1)
+        final_correct_position["correct?"].extend(output.correct_location.tolist())
+    final_correct_position = pd.DataFrame(final_correct_position)
+    final_correct_position = final_correct_position.sort_values(by=["lhs", "rhs"])
+    final_correct_position.to_csv(os.path.join(parameters.output_folder_path, "final_correct_position.csv"), index=False)
+
+    ## save final model state
+    util.save_model_state(os.path.join(parameters.output_folder_path, f"{parameters.save_name}.model.pt"),
+                          parameters.model.state_dict(), parameters.model_name, parameters.dataset_name)
+
+
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Generate some high accuracy models')
     parser.add_argument("-n", "--number_of_models", type=int, default=1)
@@ -65,7 +202,7 @@ if __name__ == "__main__":
     parser.add_argument("--save_format", type=str, default='none', choices=['none', 'file', 'lmdb'], help='which format to save the training states')
     parser.add_argument("--save_interval", type=int, default=1, help='save model state per n epoch')
 
-    parser.add_argument("-s","--random_seed", type=int, help='specify the random seed')
+    parser.add_argument("-s","--random_seed", type=int, default=None, help='specify the random seed')
     parser.add_argument("-i", "--start_index", type=int, default=0, help='specify the start index for model names')
 
     parser.add_argument("-t", "--transfer_learn", type=str, default=None, help='specify a model weight file to perform transfer learning from.')
@@ -167,13 +304,11 @@ if __name__ == "__main__":
                 current_ml_setup.re_initialize_model(model)
                 init_model_for_inverse_train_val = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
                 output_folder_path_current = os.path.join(output_folder_path, "train")
-                os.mkdir(output_folder_path_current)
             elif index == 1:
                 logger.info(f"inverse train val mode: currently train on val partition")
                 model.load_state_dict(init_model_for_inverse_train_val)
                 train_dl, val_dl = val_dl, train_dl # swap training / val dataset
                 output_folder_path_current = os.path.join(output_folder_path, "val")
-                os.mkdir(output_folder_path_current)
             else:
                 raise NotImplementedError("index >= 2 is not defined")
             model.to(device)
@@ -193,89 +328,21 @@ if __name__ == "__main__":
             model.to(device)
             output_folder_path_current = output_folder_path
 
+        os.mkdir(output_folder_path_current)
+
         # get optimizer stuff
         wd = 0 if arg_wd is None else arg_wd
         lr = 1e-3 if arg_lr is None else arg_lr
         min_lr = 1e-4 if arg_min_lr is None else arg_min_lr
         total_epoch = 150000 if arg_epoch is None else arg_epoch
-
-        optimizer = torch.optim.AdamW(model.parameters(), weight_decay=wd, lr=lr, betas=(0.9, 0.98), eps=1e-8)
         warmup_epoch = 10
-        cosine_epoch = total_epoch - warmup_epoch
-        warmup = torch.optim.lr_scheduler.LinearLR(optimizer, start_factor=1e-8, end_factor=1.0, total_iters=warmup_epoch)
-        cosine = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cosine_epoch, eta_min=min_lr)
-        scheduler = torch.optim.lr_scheduler.SequentialLR(optimizer, schedulers=[warmup, cosine], milestones=[warmup_epoch])
-        lr_scheduler = scheduler
 
-        # service
-        arg_save_format = args.save_format
-        arg_save_interval = args.save_interval
-        if arg_save_format != 'none':
-            record_model_service = record_model_stat.ModelStatRecorder(1, current_ml_setup.model_name, current_ml_setup.dataset_name)
-            model_state_path = f"{output_folder_path_current}/{save_name}"
-            os.makedirs(model_state_path)
-            record_model_service.initialize_without_runtime_parameters([0], model_state_path, save_format=arg_save_format, lmdb_db_name=f"{save_name}")
-        else:
-            record_model_service = None
-        distance_to_origin_service = record_weights_difference.ServiceDistanceToOriginRecorder(1, [0])
-        distance_to_origin_service.initialize_without_runtime_parameters({0: model.state_dict()}, output_folder_path_current, logger=logger)
-        logger.info("setting service done: distance_to_origin_service")
+        grokking_parameters = GrokkingParameters()
+        grokking_parameters.set_env(output_folder_path, logger=logger)
+        grokking_parameters.set_ml_env(model, current_ml_setup.model_name, current_ml_setup.dataset_name, tokenizer)
+        grokking_parameters.set_ml_hyperparameter(learning_rate=lr, weight_decay=wd, min_lr=min_lr, warmup_epoch=warmup_epoch, total_epoch=total_epoch)
+        grokking_parameters.set_dataloader(train_dl, val_dl)
+        grokking_parameters.set_model_save(save_name, save_format=args.save_format, save_interval=args.save_interval)
 
-        epoch_loss_lr_log_file = open(os.path.join(output_folder_path_current, f"{save_name}.log.csv"), "w")
-        epoch_loss_lr_log_file.write("epoch,training_loss,training_accuracy,validation_loss,validation_accuracy,lrs" + "\n")
-        epoch_loss_lr_log_file.flush()
+        train_grokking(grokking_parameters)
 
-        for epoch in range(total_epoch):
-            train_correct = None
-            train_loss = 0
-            train_count = 0
-            if epoch == 0 and record_model_service is not None:
-                model_stat = model.state_dict()
-                record_model_service.trigger_without_runtime_parameters(-1, [0], [model_stat])
-            for batch_idx, batch in enumerate(train_dl):
-                output = step(batch_idx, batch, model, optimizer, lr_scheduler, tokenizer,train=True)
-                loss = output.loss_value
-                train_loss += loss * output.sample_count
-                train_count += output.sample_count
-                train_correct = 0 if train_correct is None else train_correct
-                train_correct += output.correct_count
-
-            val_loss, val_correct, val_count = 0.0, 0.0, 0
-            for batch_idx, batch in enumerate(val_dl):
-                output = step(batch_idx, batch, model, optimizer, lr_scheduler, tokenizer,train=False)
-                val_loss += output.loss_value * output.sample_count
-                val_correct += output.correct_count
-                val_count += output.sample_count
-
-            # print progress
-            lrs = []
-            for param_group in optimizer.param_groups:
-                lrs.append(param_group['lr'])
-            logger.info(f"epoch[{epoch}] loss,accuracy= (train) {train_loss / train_count:.4},{train_correct / train_count:.4} (val) {val_loss / val_count:.4},{val_correct / val_count:.4} lrs={lrs}")
-            epoch_loss_lr_log_file.write(f"{epoch},{train_loss / train_count:.4e},{train_correct / train_count:.4e},{val_loss / val_count:.3e},{val_correct / val_count:.4e},{lrs}" + "\n")
-
-            # services
-            model_stat = model.state_dict()
-            if record_model_service is not None:
-                if epoch % arg_save_interval == 0:
-                    record_model_service.trigger_without_runtime_parameters(epoch, [0], [model_stat])
-            distance_to_origin_service.trigger_without_runtime_parameters(epoch, {0: model_stat})
-
-        # final record
-        ## record final correct position
-        final_correct_position = {"lhs": [], "rhs": [], "correct?": []}
-        for batch_idx, batch in enumerate(chain(train_dl, val_dl)):
-            output = step(batch_idx, batch, model, optimizer, lr_scheduler, tokenizer, train=False)
-            x = batch["text"]
-            num_0 = [int(tokenizer.itos[val.item()]) for val in x[:, 1]]
-            num_1 = [int(tokenizer.itos[val.item()]) for val in x[:, 3]]
-            final_correct_position["lhs"].extend(num_0)
-            final_correct_position["rhs"].extend(num_1)
-            final_correct_position["correct?"].extend(output.correct_location.tolist())
-        final_correct_position = pd.DataFrame(final_correct_position)
-        final_correct_position = final_correct_position.sort_values(by=["lhs", "rhs"])
-        final_correct_position.to_csv(os.path.join(output_folder_path_current, "final_correct_position.csv"), index=False)
-
-        ## save final model state
-        util.save_model_state(os.path.join(output_folder_path_current, f"{save_name}.model.pt"),
-                              model.state_dict(), current_ml_setup.model_name, current_ml_setup.dataset_name)
