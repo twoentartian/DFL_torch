@@ -54,8 +54,8 @@ logger = logging.getLogger("generate_grokking_phase_diagram")
 # ---------------------------------------------------------------------------
 # Grid definition — 20 log-spaced values each
 # ---------------------------------------------------------------------------
-DEFAULT_LEARNING_RATES = list(np.logspace(-4, -1, 20))        # 1e-4 … 1e-1
-DEFAULT_WEIGHT_DECAYS  = [0.0] + list(np.logspace(-4, 1, 19)) # 0 + 1e-4 … 10  → 20 total
+DEFAULT_LEARNING_RATES = list(np.logspace(-5, -2, 20))        # 1e-4 … 1e-1
+DEFAULT_WEIGHT_DECAYS  = list(np.linspace(0, 20, 20)) # 0 + 1e-4 … 10  → 20 total
 
 
 # ---------------------------------------------------------------------------
@@ -169,7 +169,7 @@ if __name__ == "__main__":
     parser.add_argument("-ol", "--operand_length", type=int, default=None)
 
     # ---- training ----
-    parser.add_argument("-epoch", "--epoch",    type=int,   default=1e5)
+    parser.add_argument("-epoch", "--epoch",    type=int,   default=100000)
     parser.add_argument("-minlr", "--min_lr",   type=float, default=1e-4)
     parser.add_argument("-bs",    "--batchsize", type=int,   default=None)
     parser.add_argument("-m", "--model_type",   type=str,
