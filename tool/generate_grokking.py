@@ -93,6 +93,20 @@ class GrokkingParameters(object):
         self.save_format = save_format
         self.save_interval = save_interval
 
+def _cache_dataloader_on_device(dataloader, device):
+    """Pre-load all batches onto the target device once, return as a list.
+
+    For grokking the datasets are tiny (modular-arithmetic tables), so the
+    entire train/val set easily fits in GPU VRAM.  Doing this once avoids
+    repeated CPU→GPU transfers every epoch, which is a dominant bottleneck
+    when the model itself is fast.
+    """
+    cached = []
+    for batch in dataloader:
+        cached_batch = {k: (v.to(device, non_blocking=True) if isinstance(v, torch.Tensor) else v)
+                        for k, v in batch.items()}
+        cached.append(cached_batch)
+    return cached
 
 def train_grokking(parameters: GrokkingParameters):
     optimizer = torch.optim.AdamW(parameters.model.parameters(), weight_decay=parameters.weight_decay, lr=parameters.learning_rate, betas=(0.9, 0.98), eps=1e-8)
@@ -103,6 +117,44 @@ def train_grokking(parameters: GrokkingParameters):
     cosine = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=cosine_epoch, eta_min=parameters.min_lr)
     scheduler = torch.optim.lr_scheduler.SequentialLR(optimizer, schedulers=[warmup, cosine], milestones=[warmup_epoch])
     lr_scheduler = scheduler
+
+    # ── Optimisation 1: cache full dataset on GPU ────────────────────────────
+    device = next(parameters.model.parameters()).device
+    if parameters.logger is not None:
+        parameters.logger.info(f"[Opt] caching train/val batches on {device}")
+    cached_train = _cache_dataloader_on_device(parameters.train_dataloader, device)
+    cached_val   = _cache_dataloader_on_device(parameters.val_dataloader,   device)
+    if parameters.logger is not None:
+        parameters.logger.info(f"[Opt] cached {len(cached_train)} train batches, {len(cached_val)} val batches")
+
+    # ── Optimisation 2: torch.compile (PyTorch 2.0+, no-op on older builds) ─
+    compile_available = hasattr(torch, "compile")
+    if compile_available:
+        try:
+            parameters.model = torch.compile(parameters.model)
+            if parameters.logger is not None:
+                parameters.logger.info("[Opt] torch.compile enabled")
+        except Exception as e:
+            compile_available = False
+            if parameters.logger is not None:
+                parameters.logger.info(f"[Opt] torch.compile skipped: {e}")
+
+    # ── Optimisation 3: Automatic Mixed Precision (AMP) ──────────────────────
+    # Uses bf16 on Ampere+ GPUs (more numerically stable), fp16 elsewhere.
+    # Falls back to a no-op context on CPU so training still runs correctly.
+    use_amp = device.type == "cuda"
+    if use_amp:
+        amp_dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
+        scaler = torch.cuda.amp.GradScaler(enabled=(amp_dtype == torch.float16))
+        autocast_ctx = lambda: torch.autocast(device_type="cuda", dtype=amp_dtype)
+        if parameters.logger is not None:
+            parameters.logger.info(f"[Opt] AMP enabled (dtype={amp_dtype})")
+    else:
+        scaler = None
+        autocast_ctx = torch.no_grad  # placeholder; replaced per-use below
+        if parameters.logger is not None:
+            parameters.logger.info("[Opt] AMP skipped (CPU device)")
+
 
     # service
     if parameters.save_format != 'none':
@@ -131,20 +183,33 @@ def train_grokking(parameters: GrokkingParameters):
         if epoch == 0 and record_model_service is not None:
             model_stat = parameters.model.state_dict()
             record_model_service.trigger_without_runtime_parameters(-1, [0], [model_stat])
-        for batch_idx, batch in enumerate(parameters.train_dataloader):
-            output = step(batch_idx, batch, parameters.model, optimizer, lr_scheduler, parameters.tokenizer, train=True)
+        # ── train loop (AMP-wrapped) ─────────────────────────────────────────
+        for batch_idx, batch in enumerate(cached_train):
+            if use_amp:
+                with torch.autocast(device_type="cuda", dtype=amp_dtype):
+                    output = step(batch_idx, batch, parameters.model, optimizer, lr_scheduler, parameters.tokenizer, train=True, scaler=scaler)
+            else:
+                output = step(batch_idx, batch, parameters.model, optimizer, lr_scheduler, parameters.tokenizer, train=True)
             loss = output.loss_value
             train_loss += loss * output.sample_count
             train_count += output.sample_count
             train_correct = 0 if train_correct is None else train_correct
             train_correct += output.correct_count
+        # ─────────────────────────────────────────────────────────────────────
 
+        # ── val loop ─────────────────────────────────────────────────────────
         total_val_loss, val_correct, val_count = 0.0, 0.0, 0
-        for batch_idx, batch in enumerate(parameters.val_dataloader):
-            output = step(batch_idx, batch, parameters.model, optimizer, lr_scheduler, parameters.tokenizer, train=False)
-            total_val_loss += output.loss_value * output.sample_count
-            val_correct += output.correct_count
-            val_count += output.sample_count
+        with torch.no_grad():
+            for batch_idx, batch in enumerate(cached_val):
+                if use_amp:
+                    with torch.autocast(device_type="cuda", dtype=amp_dtype):
+                        output = step(batch_idx, batch, parameters.model, optimizer, lr_scheduler, parameters.tokenizer, train=False)
+                else:
+                    output = step(batch_idx, batch, parameters.model, optimizer, lr_scheduler, parameters.tokenizer, train=False)
+                total_val_loss += output.loss_value * output.sample_count
+                val_correct += output.correct_count
+                val_count += output.sample_count
+        # ─────────────────────────────────────────────────────────────────────
 
         # print progress
         train_accuracy = train_correct / train_count
@@ -158,8 +223,10 @@ def train_grokking(parameters: GrokkingParameters):
         if parameters.logger is not None:
             parameters.logger.info(f"epoch[{epoch}] loss,accuracy= (train) {train_loss:.4},{train_accuracy:.4} (val) {val_loss:.4},{val_accuracy:.4} lrs={lrs}")
         epoch_loss_lr_log_file.write(f"{epoch},{train_loss:.4e},{train_accuracy:.4e},{val_loss:.3e},{val_accuracy:.4e},{lrs}" + "\n")
+        if epoch % 100 == 0:
+            epoch_loss_lr_log_file.flush()
 
-        # --- speed report every SPEED_REPORT_INTERVAL epochs ---
+        # ─── speed report every SPEED_REPORT_INTERVAL epochs ──────────────────
         epochs_since_report = epoch - speed_window_start_epoch + 1
         if epochs_since_report >= SPEED_REPORT_INTERVAL:
             elapsed = time.time() - speed_window_start_time
@@ -177,6 +244,7 @@ def train_grokking(parameters: GrokkingParameters):
                 parameters.logger.info(speed_msg)
             speed_window_start_time = time.time()
             speed_window_start_epoch = epoch + 1
+        # ─────────────────────────────────────────────────────────────────────
 
         # early stop?
         if parameters.early_stop:
@@ -191,6 +259,7 @@ def train_grokking(parameters: GrokkingParameters):
         distance_to_origin_service.trigger_without_runtime_parameters(epoch, {0: model_stat})
 
     # final record
+    epoch_loss_lr_log_file.flush()
     ## record final correct position
     final_correct_position = {"lhs": [], "rhs": [], "correct?": []}
     for batch_idx, batch in enumerate(chain(parameters.train_dataloader, parameters.val_dataloader)):
