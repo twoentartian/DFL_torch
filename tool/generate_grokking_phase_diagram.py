@@ -10,11 +10,17 @@ Each cell is classified into one of four phases:
 
 Usage example
 -------------
-# Run the full sweep with 2 cells in parallel:
+# Run the full sweep:
 python generate_grokking_phase_diagram.py \
     -dexp "x+y" --modulus 97 -tp 50 \
     -epoch 100000 \
-    -w 2 \
+    -o phase_diagram_output
+
+# Customise the grid (10x10, narrower ranges):
+python generate_grokking_phase_diagram.py \
+    -dexp "x+y" --modulus 97 \
+    --lr_max 1e-2 --n_lr 10 \
+    --wd_max 10 --n_wd 10 \
     -o phase_diagram_output
 
 # Plot results using the separate plotting script:
@@ -27,11 +33,8 @@ import copy
 import argparse
 import logging
 import json
-import multiprocessing
-from pathlib import Path
 from datetime import datetime
 from itertools import product
-from concurrent.futures import ProcessPoolExecutor, as_completed
 
 import numpy as np
 import torch
@@ -44,7 +47,6 @@ from py_src import util, ml_setup
 from py_src.ml_setup_base import transformer_for_grokking
 from py_src.ml_setup_base.dataset_modular import ArithmeticDataset, ArithmeticIterator
 
-# Re-use the helpers from the original script
 from generate_grokking import (
     GrokkingParameters,
     train_grokking,
@@ -57,12 +59,13 @@ logger = logging.getLogger("generate_grokking_phase_diagram")
 # ---------------------------------------------------------------------------
 # Grid defaults
 # ---------------------------------------------------------------------------
-DEFAULT_LR_MIN    = 1e-5
-DEFAULT_LR_MAX    = 1e-2
-DEFAULT_WD_MIN    = 0.0
-DEFAULT_WD_MAX    = 20.0
-DEFAULT_N_LR      = 20
-DEFAULT_N_WD      = 20
+DEFAULT_LR_MIN = 1e-5
+DEFAULT_LR_MAX = 1e-2
+DEFAULT_N_LR   = 20
+
+DEFAULT_WD_MIN = 0.0
+DEFAULT_WD_MAX = 20.0
+DEFAULT_N_WD   = 20
 
 
 def make_lr_grid(lr_min: float, lr_max: float, n: int) -> list:
@@ -97,93 +100,59 @@ def save_cell_metadata(cell_dir: str, lr: float, wd: float, extra: dict = None):
 
 
 # ---------------------------------------------------------------------------
-# Worker function — must be a top-level function for pickle (spawn)
+# Training one cell
 # ---------------------------------------------------------------------------
 
-def _worker(
-    lr: float,
-    wd: float,
-    output_folder_path: str,
-    # dataset args (re-generate inside worker to avoid cross-process sharing)
-    dataset_path: str,
-    train_pct: float,
-    dataset_exp: str,
-    modulus: int,
-    split_type: str,
-    operand_length,
-    # training args
-    epoch: int,
-    batchsize,
-    model_type: str,
-    # model override args
-    m_nlayer, m_n_heads, m_d_model, m_context_len,
-    # misc
-    random_seed,
-):
-    """
-    Train a single (lr, wd) cell.  Runs in its own spawned process so that
-    CUDA contexts are fully isolated between parallel jobs.
-    """
-    worker_logger = logging.getLogger(f"worker_lr{lr:.2e}_wd{wd:.2e}")
-    util.set_logging(worker_logger, f"lr{lr:.2e}_wd{wd:.2e}")
-
-    if random_seed is not None:
-        util.set_seed(random_seed, worker_logger)
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    current_ml_setup = ml_setup.get_ml_setup_from_config(
-        model_type, dataset_type="arithmetic_exp_unknown", device=device)
-
-    cell_dir = cell_output_dir(output_folder_path, lr, wd)
+def train_cell(args, lr: float, wd: float,
+               train_ds: ArithmeticDataset,
+               val_ds:   ArithmeticDataset,
+               device:   torch.device,
+               current_ml_setup):
+    """Train a single (lr, wd) cell and save results under its own sub-folder."""
+    cell_dir = cell_output_dir(args.output_folder_path, lr, wd)
     os.makedirs(cell_dir, exist_ok=True)
 
-    if dataset_path is not None:
-        train_ds, val_ds = loading_dataset_from(dataset_path)
-    else:
-        train_ds, val_ds = generate_dataset(
-            cell_dir, train_pct, dataset_exp, modulus, split_type, operand_length)
-
     save_cell_metadata(cell_dir, lr, wd, extra={
-        "modulus":    modulus,
-        "train_pct":  train_pct,
-        "epoch":      epoch,
-        "model_type": model_type,
+        "modulus":    args.modulus,
+        "train_pct":  args.train_pct,
+        "epoch":      args.epoch,
+        "model_type": args.model_type,
     })
 
+    # Fresh model for every cell
     model = copy.deepcopy(current_ml_setup.model)
-    if any(x is not None for x in [m_nlayer, m_n_heads, m_d_model, m_context_len]):
-        m_nlayer      = m_nlayer      or 2
-        m_n_heads     = m_n_heads     or 4
-        m_d_model     = m_d_model     or 128
-        m_context_len = m_context_len or 50
+    if any(x is not None for x in [args.m_nlayer, args.m_n_heads,
+                                    args.m_d_model, args.m_context_len]):
+        m_nlayer      = args.m_nlayer      or 2
+        m_n_heads     = args.m_n_heads     or 4
+        m_d_model     = args.m_d_model     or 128
+        m_context_len = args.m_context_len or 50
         model = transformer_for_grokking.Transformer(
             n_layers=m_nlayer, n_heads=m_n_heads,
             d_model=m_d_model, max_context_len=m_context_len)
     current_ml_setup.re_initialize_model(model)
     model.to(device)
 
-    batch_size = current_ml_setup.training_batch_size if batchsize is None else batchsize
+    batch_size = current_ml_setup.training_batch_size if args.batchsize is None else args.batchsize
     train_dl = ArithmeticIterator(train_ds, device, batchsize_hint=batch_size)
     val_dl   = ArithmeticIterator(val_ds,   device, batchsize_hint=batch_size)
 
     params = GrokkingParameters()
-    params.set_env(cell_dir, True, logger=worker_logger)
+    params.set_env(cell_dir, True, logger=logger)
     params.set_ml_env(model, current_ml_setup.model_name,
                       current_ml_setup.dataset_name, train_ds.tokenizer)
     params.set_ml_hyperparameter(
         learning_rate=lr,
         weight_decay=wd,
-        min_lr=lr,          # constant LR (cosine bottoms out at lr itself)
+        min_lr=lr,          # constant learning rate
         warmup_epoch=10,
-        total_epoch=epoch,
+        total_epoch=args.epoch,
     )
     params.set_dataloader(train_dl, val_dl)
     params.set_model_save("00", save_format="none")
 
-    worker_logger.info(f"training cell lr={lr:.4e}  wd={wd:.4e}")
+    logger.info(f"  → training cell lr={lr:.4e}  wd={wd:.4e}")
     train_grokking(params)
-    return lr, wd
 
 
 # ---------------------------------------------------------------------------
@@ -191,40 +160,26 @@ def _worker(
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    # 'spawn' is required for CUDA safety; also works correctly on CPU-only.
-    multiprocessing.set_start_method("spawn", force=True)
-
     parser = argparse.ArgumentParser(
         description="Sweep LR × WD to reproduce the grokking phase diagram (Figure 6)")
 
     # ---- output ----
     parser.add_argument("-o", "--output_folder_name", default=None)
 
-    # ---- parallelism ----
-    parser.add_argument("-w", "--workers", type=int, default=2,
-                        help="Number of cells to train in parallel (default: 2). "
-                             "With CUDA, keep this ≤ number of available GPUs "
-                             "unless you intend multiple jobs per GPU.")
-
-    # ---- grid: learning rate ----
+    # ---- grid: learning rate (log-spaced) ----
     parser.add_argument("--lr_min", type=float, default=DEFAULT_LR_MIN,
-                        help=f"Minimum learning rate, log-spaced grid "
-                             f"(default: {DEFAULT_LR_MIN})")
+                        help=f"Minimum learning rate (default: {DEFAULT_LR_MIN})")
     parser.add_argument("--lr_max", type=float, default=DEFAULT_LR_MAX,
-                        help=f"Maximum learning rate, log-spaced grid "
-                             f"(default: {DEFAULT_LR_MAX})")
-    parser.add_argument("--n_lr", type=int, default=DEFAULT_N_LR,
-                        help=f"Number of learning rate grid points (default: {DEFAULT_N_LR})")
+                        help=f"Maximum learning rate (default: {DEFAULT_LR_MAX})")
+    parser.add_argument("--n_lr",   type=int,   default=DEFAULT_N_LR,
+                        help=f"Number of log-spaced LR points (default: {DEFAULT_N_LR})")
 
-    # ---- grid: weight decay ----
-    parser.add_argument("--wd_min", type=float, default=DEFAULT_WD_MIN,
-                        help=f"Minimum weight decay, linear-spaced grid "
-                             f"(default: {DEFAULT_WD_MIN})")
+    # ---- grid: weight decay (linear-spaced) ----
     parser.add_argument("--wd_max", type=float, default=DEFAULT_WD_MAX,
-                        help=f"Maximum weight decay, linear-spaced grid "
+                        help=f"Maximum weight decay; always starts from {DEFAULT_WD_MIN} "
                              f"(default: {DEFAULT_WD_MAX})")
-    parser.add_argument("--n_wd", type=int, default=DEFAULT_N_WD,
-                        help=f"Number of weight decay grid points (default: {DEFAULT_N_WD})")
+    parser.add_argument("--n_wd",   type=int,   default=DEFAULT_N_WD,
+                        help=f"Number of linear-spaced WD points (default: {DEFAULT_N_WD})")
 
     # ---- dataset ----
     parser.add_argument("-dpath", "--dataset_path", type=str, default=None)
@@ -263,9 +218,9 @@ if __name__ == "__main__":
 
     # ---- build grids ----
     learning_rates = make_lr_grid(args.lr_min, args.lr_max, args.n_lr)
-    weight_decays  = make_wd_grid(args.wd_min, args.wd_max, args.n_wd)
-    logger.info(f"LR  grid ({args.n_lr} pts, log-spaced):    {args.lr_min:.2e} … {args.lr_max:.2e}")
-    logger.info(f"WD  grid ({args.n_wd} pts, linear-spaced): {args.wd_min:.2g} … {args.wd_max:.2g}")
+    weight_decays  = make_wd_grid(DEFAULT_WD_MIN, args.wd_max, args.n_wd)
+    logger.info(f"LR grid ({args.n_lr} pts, log-spaced):    {args.lr_min:.2e} … {args.lr_max:.2e}")
+    logger.info(f"WD grid ({args.n_wd} pts, linear-spaced): {DEFAULT_WD_MIN} … {args.wd_max}")
 
     # ---- output folder ----
     if args.output_folder_name is None:
@@ -287,12 +242,18 @@ if __name__ == "__main__":
         json.dump(grid_spec, f, indent=2)
 
     total_cells = len(learning_rates) * len(weight_decays)
-    logger.info(f"Grid: {args.n_lr} LRs × {args.n_wd} WDs = {total_cells} cells,  workers={args.workers}")
+    logger.info(f"Grid: {args.n_lr} LRs × {args.n_wd} WDs = {total_cells} cells")
 
-    # ---- pre-generate the shared dataset in the main process ----
-    dataset_path = args.dataset_path
-    if dataset_path is None and args.dataset_exp is not None:
-        train_ds, _ = generate_dataset(
+    # ---- device & model setup ----
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    current_ml_setup = ml_setup.get_ml_setup_from_config(
+        args.model_type, dataset_type="arithmetic_exp_unknown", device=device)
+
+    # ---- dataset (shared across all cells) ----
+    if args.dataset_path is not None:
+        train_ds, val_ds = loading_dataset_from(args.dataset_path)
+    else:
+        train_ds, val_ds = generate_dataset(
             args.output_folder_path,
             args.train_pct,
             args.dataset_exp,
@@ -300,67 +261,14 @@ if __name__ == "__main__":
             args.split_type,
             args.operand_length,
         )
-        dataset_path = os.path.join(args.output_folder_path, train_ds.name)
-        logger.info(f"Dataset pre-generated at {dataset_path}")
 
-    # ---- build pending cell list (skip already-done cells) ----
-    pending = [
-        (lr, wd)
-        for lr, wd in product(learning_rates, weight_decays)
-        if not os.path.exists(cell_log_csv(args.output_folder_path, lr, wd))
-    ]
-    skipped = total_cells - len(pending)
-    if skipped:
-        logger.info(f"Skipping {skipped} already-completed cells")
-    logger.info(f"Submitting {len(pending)} cells to pool (workers={args.workers})")
+    done = 0
+    for lr, wd in product(learning_rates, weight_decays):
+        done += 1
+        logger.info(f"[{done}/{total_cells}] lr={lr:.4e}  wd={wd:.4e}")
+        if os.path.exists(cell_log_csv(args.output_folder_path, lr, wd)):
+            logger.info("  → already done, skipping")
+            continue
+        train_cell(args, lr, wd, train_ds, val_ds, device, current_ml_setup)
 
-    # ---- shared kwargs for every worker ----
-    worker_kwargs = dict(
-        output_folder_path=args.output_folder_path,
-        dataset_path=dataset_path,
-        train_pct=args.train_pct,
-        dataset_exp=args.dataset_exp,
-        modulus=args.modulus,
-        split_type=args.split_type,
-        operand_length=args.operand_length,
-        epoch=args.epoch,
-        batchsize=args.batchsize,
-        model_type=args.model_type,
-        m_nlayer=args.m_nlayer,
-        m_n_heads=args.m_n_heads,
-        m_d_model=args.m_d_model,
-        m_context_len=args.m_context_len,
-        random_seed=args.random_seed,
-    )
-
-    # ---- dispatch ----
-    completed = 0
-    failed    = 0
-    with ProcessPoolExecutor(max_workers=args.workers) as pool:
-        futures = {
-            pool.submit(_worker, lr, wd, **worker_kwargs): (lr, wd)
-            for lr, wd in pending
-        }
-        for future in as_completed(futures):
-            lr, wd = futures[future]
-            try:
-                future.result()
-                completed += 1
-                logger.info(
-                    f"[{completed + skipped}/{total_cells}] done "
-                    f"lr={lr:.4e} wd={wd:.4e}")
-            except Exception as exc:
-                failed += 1
-                logger.error(
-                    f"Cell lr={lr:.4e} wd={wd:.4e} raised an exception: {exc}",
-                    exc_info=True)
-
-    logger.info(
-        f"Sweep complete. "
-        f"Completed={completed}  Skipped={skipped}  Failed={failed}  "
-        f"Total={total_cells}")
-    if failed:
-        logger.warning(
-            f"{failed} cells failed. Re-run the script to retry them "
-            f"(completed cells are skipped automatically).")
-    logger.info("Run plot_grokking_phase_diagram.py to visualise.")
+    logger.info("All cells complete. Run plot_grokking_phase_diagram.py to visualise.")
