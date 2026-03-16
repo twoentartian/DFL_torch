@@ -125,9 +125,9 @@ def train_cell(args, lr: float, wd: float,
     params.set_ml_hyperparameter(
         learning_rate=lr,
         weight_decay=wd,
-        min_lr=args.min_lr if args.min_lr is not None else 1e-4,
+        min_lr=args.min_lr,
         warmup_epoch=10,
-        total_epoch=args.epoch if args.epoch is not None else 1e5,
+        total_epoch=args.epoch,
     )
     params.set_dataloader(train_dl, val_dl)
     params.set_model_save("00", save_format="none")   # no intermediate snapshots
