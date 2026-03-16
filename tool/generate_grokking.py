@@ -75,12 +75,12 @@ class GrokkingParameters(object):
         self.train_dataloader = train_dataloader
         self.val_dataloader = val_dataloader
 
-    def set_ml_hyperparameter(self, learning_rate=1e-3, weight_decay=0, min_lr=1e-4, warmup_epoch=10, total_epoch=150000):
-        self.learning_rate = learning_rate
-        self.weight_decay = weight_decay
-        self.min_lr = min_lr
-        self.warmup_epoch = warmup_epoch
-        self.total_epoch = total_epoch
+    def set_ml_hyperparameter(self, learning_rate=1e-3, weight_decay=0, min_lr=1e-4, warmup_epoch=10, total_epoch:int=150000):
+        self.learning_rate = float(learning_rate)
+        self.weight_decay = float(weight_decay)
+        self.min_lr = float(min_lr)
+        self.warmup_epoch = int(warmup_epoch)
+        self.total_epoch = int(total_epoch)
 
     def set_env(self, output_path: str, early_stop: bool, logger=None):
         self.output_folder_path = output_path

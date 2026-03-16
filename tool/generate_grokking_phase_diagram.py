@@ -170,7 +170,7 @@ if __name__ == "__main__":
 
     # ---- training ----
     parser.add_argument("-epoch", "--epoch",    type=int,   default=1e5)
-    parser.add_argument("-minlr", "--min_lr",   type=float, default=None)
+    parser.add_argument("-minlr", "--min_lr",   type=float, default=1e-4)
     parser.add_argument("-bs",    "--batchsize", type=int,   default=None)
     parser.add_argument("-m", "--model_type",   type=str,
                         default="transformer_for_grokking")
