@@ -50,6 +50,7 @@ class GrokkingParameters(object):
 
         self.logger = None
         self.output_folder_path = None
+        self.early_stop = None
 
         self.weight_decay = None    # default: 0
         self.learning_rate = None   # default: 1e-3
@@ -81,9 +82,10 @@ class GrokkingParameters(object):
         self.warmup_epoch = warmup_epoch
         self.total_epoch = total_epoch
 
-    def set_env(self, output_path, logger=None):
+    def set_env(self, output_path: str, early_stop: bool, logger=None):
         self.output_folder_path = output_path
         self.logger = logger
+        self.early_stop = early_stop
 
     def set_model_save(self, save_name, save_format="none", save_interval=500):
         self.save_name = save_name
@@ -133,20 +135,30 @@ def train_grokking(parameters: GrokkingParameters):
             train_correct = 0 if train_correct is None else train_correct
             train_correct += output.correct_count
 
-        val_loss, val_correct, val_count = 0.0, 0.0, 0
+        total_val_loss, val_correct, val_count = 0.0, 0.0, 0
         for batch_idx, batch in enumerate(parameters.val_dataloader):
             output = step(batch_idx, batch, parameters.model, optimizer, lr_scheduler, parameters.tokenizer, train=False)
-            val_loss += output.loss_value * output.sample_count
+            total_val_loss += output.loss_value * output.sample_count
             val_correct += output.correct_count
             val_count += output.sample_count
 
         # print progress
+        train_accuracy = train_correct / train_count
+        train_loss = train_loss / train_count
+        val_accuracy = val_correct / val_count
+        val_loss = total_val_loss / val_count
+
         lrs = []
         for param_group in optimizer.param_groups:
             lrs.append(param_group['lr'])
         if parameters.logger is not None:
-            parameters.logger.info(f"epoch[{epoch}] loss,accuracy= (train) {train_loss / train_count:.4},{train_correct / train_count:.4} (val) {val_loss / val_count:.4},{val_correct / val_count:.4} lrs={lrs}")
-        epoch_loss_lr_log_file.write(f"{epoch},{train_loss / train_count:.4e},{train_correct / train_count:.4e},{val_loss / val_count:.3e},{val_correct / val_count:.4e},{lrs}" + "\n")
+            parameters.logger.info(f"epoch[{epoch}] loss,accuracy= (train) {train_loss:.4},{train_accuracy:.4} (val) {val_loss:.4},{val_accuracy:.4} lrs={lrs}")
+        epoch_loss_lr_log_file.write(f"{epoch},{train_loss:.4e},{train_accuracy:.4e},{val_loss:.3e},{val_accuracy:.4e},{lrs}" + "\n")
+
+        # early stop?
+        if parameters.early_stop:
+            if train_accuracy > 0.95 and val_accuracy > 0.95:
+                break
 
         # services
         model_stat = parameters.model.state_dict()
@@ -338,7 +350,7 @@ if __name__ == "__main__":
         warmup_epoch = 10
 
         grokking_parameters = GrokkingParameters()
-        grokking_parameters.set_env(output_folder_path, logger=logger)
+        grokking_parameters.set_env(output_folder_path, False, logger=logger)
         grokking_parameters.set_ml_env(model, current_ml_setup.model_name, current_ml_setup.dataset_name, tokenizer)
         grokking_parameters.set_ml_hyperparameter(learning_rate=lr, weight_decay=wd, min_lr=min_lr, warmup_epoch=warmup_epoch, total_epoch=total_epoch)
         grokking_parameters.set_dataloader(train_dl, val_dl)
