@@ -1,4 +1,4 @@
-import os, sys, argparse, logging, re, copy
+import os, sys, argparse, logging, re, copy, time
 from datetime import datetime
 from pathlib import Path
 import torch
@@ -15,6 +15,7 @@ from py_src.ml_setup_base.dataset_modular import ArithmeticDataset, ArithmeticIt
 import py_src.service.record_weights_difference as record_weights_difference
 
 logger = logging.getLogger("generate_grokking")
+SPEED_REPORT_INTERVAL = 100
 
 def loading_dataset_from(path):
     pattern = r'modulus(\d+)'
@@ -120,6 +121,9 @@ def train_grokking(parameters: GrokkingParameters):
     epoch_loss_lr_log_file.write("epoch,training_loss,training_accuracy,validation_loss,validation_accuracy,lrs" + "\n")
     epoch_loss_lr_log_file.flush()
 
+    speed_window_start_time = time.time()
+    speed_window_start_epoch = 0
+
     for epoch in range(total_epoch):
         train_correct = None
         train_loss = 0
@@ -154,6 +158,25 @@ def train_grokking(parameters: GrokkingParameters):
         if parameters.logger is not None:
             parameters.logger.info(f"epoch[{epoch}] loss,accuracy= (train) {train_loss:.4},{train_accuracy:.4} (val) {val_loss:.4},{val_accuracy:.4} lrs={lrs}")
         epoch_loss_lr_log_file.write(f"{epoch},{train_loss:.4e},{train_accuracy:.4e},{val_loss:.3e},{val_accuracy:.4e},{lrs}" + "\n")
+
+        # --- speed report every SPEED_REPORT_INTERVAL epochs ---
+        epochs_since_report = epoch - speed_window_start_epoch + 1
+        if epochs_since_report >= SPEED_REPORT_INTERVAL:
+            elapsed = time.time() - speed_window_start_time
+            epochs_remaining = total_epoch - epoch - 1
+            time_per_epoch = elapsed / epochs_since_report
+            eta_seconds = time_per_epoch * epochs_remaining
+            eta_str = time.strftime("%H:%M:%S", time.gmtime(eta_seconds))
+            speed_msg = (
+                f"[Speed] last {epochs_since_report} epochs: {elapsed:.1f}s "
+                f"({time_per_epoch:.2f}s/epoch) | "
+                f"remaining: {epochs_remaining} epochs, ETA: {eta_str}"
+            )
+            print(speed_msg)
+            if parameters.logger is not None:
+                parameters.logger.info(speed_msg)
+            speed_window_start_time = time.time()
+            speed_window_start_epoch = epoch + 1
 
         # early stop?
         if parameters.early_stop:
