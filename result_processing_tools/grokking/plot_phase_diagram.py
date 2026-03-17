@@ -322,8 +322,9 @@ def plot_phase_diagram(output_folder: str,
     plt.tight_layout()
 
     if save_path is None:
-        save_path = os.path.join(output_folder, "phase_diagram.png")
-    fig.savefig(save_path, dpi=150, bbox_inches="tight")
+        save_path = os.path.join(output_folder, "phase_diagram")
+    fig.savefig(f"{save_path}.png", dpi=150, bbox_inches="tight")
+    fig.savefig(f"{save_path}.pdf", bbox_inches="tight")
     plt.close(fig)
     logger.info(f"Phase diagram saved to {save_path}")
     return save_path
@@ -337,7 +338,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Plot the grokking phase diagram from sweep results.")
 
-    parser.add_argument("-o", "--output_folder_name", required=True,
+    parser.add_argument("output_folder_name",
                         help="Output folder produced by generate_grokking_phase_diagram.py")
     parser.add_argument("--save_path", default=None,
                         help="Custom path for the output PNG "
