@@ -99,7 +99,7 @@ class GrokkingParameters(object):
         self.save_format = save_format
         self.save_interval = save_interval
 
-    def set_ineffective_train_stop(self, enabled: bool = True, window: int = 200, min_epoch: int = 200, loss_threshold: float = 1.5):
+    def set_ineffective_train_stop(self, enabled: bool = True, window: int = 1000, min_epoch: int = 1000, loss_threshold: float = 1.5):
         self.ineffective_train_stop = enabled
         self.ineffective_train_stop_window = window
         self.ineffective_train_stop_min_epoch = min_epoch
