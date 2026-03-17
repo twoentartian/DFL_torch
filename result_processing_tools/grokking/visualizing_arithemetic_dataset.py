@@ -663,42 +663,133 @@ def plot_splits(train_data, val_data, n, out_path, title="Train / Val Split"):
     plt.close(fig)
 
 # ---------------------------------------------------------------------------
-# Figure 2 -- Output value heatmap
+# Figure 2 -- Output value heatmap  +  output distribution bar chart
 # ---------------------------------------------------------------------------
 
-def plot_output_heatmap(all_data, operand_index, n, out_path,
+def plot_output_heatmap(train_data, val_data, operand_index, n, out_path,
                         title="Output Value Heatmap"):
     """
-    Each cell coloured by its output value (viridis scale).
-    Grey = no equation for that (a, b) pair.
+    Page 1 (left panel)  : n×n heatmap coloured by output value (viridis).
+                           Grey cells have no equation for that (a, b) pair.
+    Page 2 (right panel) : Bar chart of the output-value frequency distribution
+                           for the full dataset (train+val), train only, and
+                           val only, covering every integer from 0 to modulus-1.
+                           The modulus is inferred as the number of distinct
+                           operand tokens (i.e. len(operand_index)).
+
+    Both panels are saved as pages in the single PDF `out_path`.
     """
+    all_data = train_data + val_data
     val_grid, _, numeric = build_output_grid(all_data, operand_index, n)
 
-    fig, ax = plt.subplots(figsize=(9, 8))
+    # ------------------------------------------------------------------ #
+    #  Panel 1 – heatmap (unchanged from original)                        #
+    # ------------------------------------------------------------------ #
+    fig1, ax1 = plt.subplots(figsize=(9, 8))
 
     cmap_img = plt.get_cmap("viridis").copy()
-    cmap_img.set_bad(color=(0.85, 0.85, 0.85))   # grey for missing cells
+    cmap_img.set_bad(color=(0.85, 0.85, 0.85))
 
     masked = np.ma.masked_invalid(val_grid)
-    im = ax.imshow(masked, origin="upper", aspect="equal",
-                   extent=[-0.5, n - 0.5, n - 0.5, -0.5],
-                   cmap=cmap_img, interpolation="nearest")
+    im = ax1.imshow(masked, origin="upper", aspect="equal",
+                    extent=[-0.5, n - 0.5, n - 0.5, -0.5],
+                    cmap=cmap_img, interpolation="nearest")
 
-    cbar = fig.colorbar(im, ax=ax, fraction=0.046, pad=0.04)
-    cbar.set_label("Output value" if numeric else "Output token index", fontsize=11)
+    cbar = fig1.colorbar(im, ax=ax1, fraction=0.046, pad=0.04)
+    cbar.set_label("Output value" if numeric else "Output token index",
+                   fontsize=11)
 
-    ax.set_xlabel("b  (column operand)", fontsize=11)
-    ax.set_ylabel("a  (row operand)", fontsize=11)
-    ax.set_title(title, fontsize=13, fontweight="bold")
+    ax1.set_xlabel("b  (column operand)", fontsize=11)
+    ax1.set_ylabel("a  (row operand)", fontsize=11)
+    ax1.set_title(title, fontsize=13, fontweight="bold")
     step = max(1, n // 10)
     ticks = list(range(0, n, step))
-    ax.set_xticks(ticks)
-    ax.set_yticks(ticks)
+    ax1.set_xticks(ticks)
+    ax1.set_yticks(ticks)
 
-    plt.tight_layout()
-    plt.savefig(out_path, dpi=150, bbox_inches="tight")
+    fig1.tight_layout()
+
+    # ------------------------------------------------------------------ #
+    #  Panel 2 – output-value distribution bar chart                      #
+    # ------------------------------------------------------------------ #
+    # Infer the modulus = number of distinct operand tokens.
+    # For plain integer operands 0 … p-1, this equals p.
+    modulus = len(operand_index)
+    x_vals  = list(range(modulus))
+
+    def count_outputs(data, modulus):
+        """Count occurrences of each integer output 0 … modulus-1."""
+        counts = Counter()
+        for _, _, c_str in data:
+            try:
+                v = int(c_str)
+                if 0 <= v < modulus:
+                    counts[v] += 1
+            except ValueError:
+                pass
+        return np.array([counts.get(v, 0) for v in range(modulus)], dtype=int)
+
+    counts_train = count_outputs(train_data, modulus)
+    counts_val   = count_outputs(val_data,   modulus)
+    counts_all   = counts_train + counts_val
+
+    # Uniform-distribution reference line value
+    total_all   = counts_all.sum()
+    uniform_all = total_all / modulus if modulus > 0 else 0
+
+    # ---- colour: viridis so output-value colour matches the heatmap ----
+    viridis = plt.get_cmap("viridis")
+    bar_colors = [viridis(v / max(modulus - 1, 1)) for v in x_vals]
+
+    fig2, axes2 = plt.subplots(3, 1, figsize=(max(10, modulus * 0.12), 12),
+                                sharex=True)
+
+    datasets = [
+        (counts_all,   f"All  (train + val, n={total_all:,})",  bar_colors),
+        (counts_train, f"Train  (n={counts_train.sum():,})",    bar_colors),
+        (counts_val,   f"Val    (n={counts_val.sum():,})",      bar_colors),
+    ]
+
+    for ax, (counts, subtitle, colors) in zip(axes2, datasets):
+        ax.bar(x_vals, counts, color=colors, width=0.85, zorder=3)
+
+        # Uniform reference line for this partition
+        total_part = counts.sum()
+        if total_part > 0 and modulus > 0:
+            uniform_part = total_part / modulus
+            ax.axhline(uniform_part, color="red", linestyle="--",
+                       linewidth=1.2, label=f"Uniform ({uniform_part:.1f})")
+            ax.legend(fontsize=9, loc="upper right")
+
+        ax.set_ylabel("Count", fontsize=10)
+        ax.set_title(subtitle, fontsize=11, fontweight="bold")
+        ax.yaxis.grid(True, linestyle=":", alpha=0.5, zorder=0)
+        ax.set_axisbelow(True)
+
+    axes2[-1].set_xlabel("Output value  (0 … modulus−1)", fontsize=11)
+
+    # Set x-ticks: show every value if modulus ≤ 50, else every 10th
+    tick_step = 1 if modulus <= 50 else (5 if modulus <= 100 else 10)
+    axes2[-1].set_xticks(list(range(0, modulus, tick_step)))
+
+    fig2.suptitle(
+        f"Output-Value Frequency Distribution  (modulus = {modulus})",
+        fontsize=13, fontweight="bold", y=1.01,
+    )
+    fig2.tight_layout()
+
+    # ------------------------------------------------------------------ #
+    #  Write both figures as pages into the single PDF                    #
+    # ------------------------------------------------------------------ #
+    from matplotlib.backends.backend_pdf import PdfPages
+
+    with PdfPages(out_path) as pdf:
+        pdf.savefig(fig1, dpi=150, bbox_inches="tight")
+        pdf.savefig(fig2, dpi=150, bbox_inches="tight")
+
+    plt.close(fig1)
+    plt.close(fig2)
     print(f"Saved -> {out_path}")
-    plt.close(fig)
 
 
 # ---------------------------------------------------------------------------
@@ -845,9 +936,9 @@ def process_folder(folder: Path, override_existing=False) -> bool:
             title=f"Train / Val Split  (grid {n}x{n})",
         )
 
-    if not os.path.exists(output_path_output_heatmap):
+    if not os.path.exists(output_path_output_heatmap) or override_existing:
         plot_output_heatmap(
-            all_data, operand_index, n=n,
+            train_data, val_data, operand_index, n=n,
             out_path=output_path_output_heatmap,
             title=f"Output Value Heatmap  (grid {n}x{n})",
         )
