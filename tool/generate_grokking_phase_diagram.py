@@ -61,11 +61,11 @@ logger = logging.getLogger("generate_grokking_phase_diagram")
 # ---------------------------------------------------------------------------
 DEFAULT_LR_MIN = 1e-5
 DEFAULT_LR_MAX = 1e-2
-DEFAULT_N_LR   = 20
+DEFAULT_N_LR   = 11
 
 DEFAULT_WD_MIN = 0.0
-DEFAULT_WD_MAX = 20.0
-DEFAULT_N_WD   = 20
+DEFAULT_WD_MAX = 10.0
+DEFAULT_N_WD   = 11
 
 
 def make_lr_grid(lr_min: float, lr_max: float, n: int) -> list:
