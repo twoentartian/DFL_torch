@@ -65,6 +65,7 @@ class GrokkingParameters(object):
         self.ineffective_train_stop_window = None           # int:  look-back window (epochs)
         self.ineffective_train_stop_min_epoch = None        # int:  burn-in before checking
         self.ineffective_train_stop_loss_threshold = None   # float: loss floor
+        self.ineffective_train_stop_cv_threshold = None
 
         self.train_dataloader = None
         self.val_dataloader = None
@@ -100,11 +101,13 @@ class GrokkingParameters(object):
         self.save_format = save_format
         self.save_interval = save_interval
 
-    def set_ineffective_train_stop(self, enabled: bool = True, window: int = 1000, min_epoch: int = 1000, loss_threshold: float = 1.5):
+    def set_ineffective_train_stop(self, enabled: bool = True, window: int = 1000, min_epoch: int = 1000,
+                                   loss_threshold: float = 1.5, cv_threshold: float = 0.02):
         self.ineffective_train_stop = enabled
         self.ineffective_train_stop_window = window
         self.ineffective_train_stop_min_epoch = min_epoch
         self.ineffective_train_stop_loss_threshold = loss_threshold
+        self.ineffective_train_stop_cv_threshold = cv_threshold
 
 def _cache_dataloader_on_device(dataloader, device):
     """Pre-load all batches onto the target device once, return as a list.
@@ -121,42 +124,40 @@ def _cache_dataloader_on_device(dataloader, device):
         cached.append(cached_batch)
     return cached
 
-def _check_ineffective_train_stop(train_loss_history: list,
+def _check_ineffective_train_stop(train_loss_history: deque,
                                    window: int,
                                    min_epoch: int,
                                    loss_threshold: float,
-                                   current_epoch: int) -> bool:
+                                   current_epoch: int,
+                                   cv_threshold: float) -> bool:
     """
-    Return True if training should be stopped due to lack of convergence.
+    Return True if training loss has stabilized at a high value.
 
     Conditions (all must hold):
-      1. current_epoch >= min_epoch          — burn-in period has passed
-      2. len(history) >= window              — enough data to fit a trend
-      3. mean(loss[-window:]) > loss_threshold — loss is still high
-      4. linear slope of loss[-window:] >= 0 — loss is flat or increasing
+      1. current_epoch >= min_epoch               — burn-in period has passed
+      2. len(history) >= window                   — enough data to evaluate
+      3. mean(loss) > loss_threshold              — loss is still high
+      4. std(loss) / mean(loss) < cv_threshold    — loss is no longer moving
+                                                    (coefficient of variation is small)
     """
     if current_epoch < min_epoch:
         return False
     if len(train_loss_history) < window:
         return False
 
-    recent = train_loss_history[-window:]
+    n = len(train_loss_history)
+    mean = sum(train_loss_history) / n
 
-    if sum(recent) / len(recent) <= loss_threshold:
+    # condition 3: loss is still high
+    if mean <= loss_threshold:
         return False
 
-    # Fit a degree-1 polynomial (linear trend) over the window.
-    # x is just 0, 1, ..., window-1 so the slope is in units of loss/epoch.
-    xs = list(range(window))
-    # numpy-free least-squares slope: slope = cov(x,y) / var(x)
-    n = window
-    mean_x = (n - 1) / 2.0
-    mean_y = sum(recent) / n
-    numerator   = sum((xs[i] - mean_x) * (recent[i] - mean_y) for i in range(n))
-    denominator = sum((xs[i] - mean_x) ** 2 for i in range(n))
-    slope = numerator / denominator if denominator != 0 else 0.0
+    # condition 4: loss is no longer moving (CV is small)
+    variance = sum((x - mean) ** 2 for x in train_loss_history) / n
+    std = variance ** 0.5
+    cv = std / mean  # coefficient of variation
 
-    return slope >= 0.0
+    return cv < cv_threshold
 
 def train_grokking(parameters: GrokkingParameters):
     optimizer = torch.optim.AdamW(parameters.model.parameters(), weight_decay=parameters.weight_decay, lr=parameters.learning_rate, betas=(0.9, 0.98), eps=1e-8)
@@ -225,7 +226,7 @@ def train_grokking(parameters: GrokkingParameters):
 
     speed_window_start_time = time.time()
     speed_window_start_epoch = 0
-    train_loss_history = deque(maxlen=parameters.ineffective_train_stop_window)
+    train_loss_history = deque(maxlen=parameters.ineffective_train_stop_window if parameters.ineffective_train_stop else 1)
 
     for epoch in range(total_epoch):
         train_correct = None
@@ -297,18 +298,18 @@ def train_grokking(parameters: GrokkingParameters):
         train_loss_history.append(float(train_loss))
         if parameters.ineffective_train_stop:
             if _check_ineffective_train_stop(
-                list(train_loss_history),
-                window=parameters.ineffective_train_stop_window,
-                min_epoch=parameters.ineffective_train_stop_min_epoch,
-                loss_threshold=parameters.ineffective_train_stop_loss_threshold,
-                current_epoch=epoch,
+                    train_loss_history,
+                    window=parameters.ineffective_train_stop_window,
+                    min_epoch=parameters.ineffective_train_stop_min_epoch,
+                    loss_threshold=parameters.ineffective_train_stop_loss_threshold,
+                    current_epoch=epoch, cv_threshold=parameters.ineffective_train_stop_cv_threshold
             ):
                 if parameters.logger is not None:
                     parameters.logger.info(
                         f"ineffective_train_stop triggered at epoch {epoch}: "
                         f"mean loss over last {parameters.ineffective_train_stop_window} epochs "
-                        f"= {sum(train_loss_history) / parameters.ineffective_train_stop_window:.4f} "
-                        f"(threshold={parameters.ineffective_train_stop_loss_threshold}, slope >= 0)")
+                        f"= {sum(train_loss_history) / len(train_loss_history):.4f} "
+                        f"(threshold={parameters.ineffective_train_stop_loss_threshold}, standard deviation <= {parameters.ineffective_train_stop_cv_threshold})")
                 break
 
         # services
