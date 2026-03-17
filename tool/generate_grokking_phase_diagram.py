@@ -150,6 +150,7 @@ def train_cell(args, lr: float, wd: float,
     )
     params.set_dataloader(train_dl, val_dl)
     params.set_model_save("00", save_format="none")
+    params.set_ineffective_train_stop()
 
     logger.info(f"  → training cell lr={lr:.4e}  wd={wd:.4e}")
     train_grokking(params)
