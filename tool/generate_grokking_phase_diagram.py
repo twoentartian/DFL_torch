@@ -153,7 +153,7 @@ def train_cell(args, lr: float, wd: float,
     params.set_model_save("00", save_format="none", record_weight_norm_interval=record_weight_norm_interval)
     if args.enable_ineffective_training_stop:
         params.set_ineffective_train_stop()
-
+        params.set_high_loss_train_stop()
     logger.info(f"  → training cell lr={lr:.4e}  wd={wd:.4e}")
     train_grokking(params)
 
