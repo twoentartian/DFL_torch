@@ -712,9 +712,21 @@ def plot_output_heatmap(train_data, val_data, operand_index, n, out_path,
     # ------------------------------------------------------------------ #
     #  Panel 2 – output-value distribution bar chart                      #
     # ------------------------------------------------------------------ #
-    # Infer the modulus = number of distinct operand tokens.
-    # For plain integer operands 0 … p-1, this equals p.
-    modulus = len(operand_index)
+    # Infer the modulus from the actual integer output values in the data.
+    # Collect all outputs that are plain integers, then modulus = max + 1.
+    # This avoids counting non-integer operand tokens (e.g. s5 permutations)
+    # that inflate len(operand_index) beyond the true modular range.
+    int_outputs = []
+    for _, _, c_str in all_data:
+        try:
+            int_outputs.append(int(c_str))
+        except ValueError:
+            pass
+    if int_outputs:
+        modulus = max(int_outputs) + 1
+    else:
+        # Fallback for non-integer outputs (e.g. s5): use vocabulary size
+        modulus = len(operand_index)
     x_vals  = list(range(modulus))
 
     def count_outputs(data, modulus):
