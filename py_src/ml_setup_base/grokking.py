@@ -41,7 +41,6 @@ def step(batch_index, batch, model: transformer_for_grokking.Transformer, optimi
         eq_position = int(eq_position_t.squeeze())
         y_rhs = y[..., eq_position + 1:]
         y_hat_rhs = y_hat[..., eq_position + 1:]
-        x_lhs = x[..., : eq_position + 1]
         loss = F.cross_entropy(y_hat_rhs, y_rhs, reduction="mean")
 
     # find max prediction from output (kept in fp32 for correctness)

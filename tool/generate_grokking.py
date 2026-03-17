@@ -1,6 +1,7 @@
 import os, sys, argparse, logging, re, copy, time
 from datetime import datetime
 from pathlib import Path
+from collections import deque
 import torch
 import pandas as pd
 from itertools import chain
@@ -224,7 +225,7 @@ def train_grokking(parameters: GrokkingParameters):
 
     speed_window_start_time = time.time()
     speed_window_start_epoch = 0
-    train_loss_history = []
+    train_loss_history = deque(maxlen=parameters.ineffective_train_stop_window)
 
     for epoch in range(total_epoch):
         train_correct = None
@@ -235,11 +236,7 @@ def train_grokking(parameters: GrokkingParameters):
             record_model_service.trigger_without_runtime_parameters(-1, [0], [model_stat])
         # ── train loop (AMP-wrapped) ─────────────────────────────────────────
         for batch_idx, batch in enumerate(cached_train):
-            if use_amp:
-                with torch.autocast(device_type="cuda", dtype=amp_dtype):
-                    output = step(batch_idx, batch, parameters.model, optimizer, lr_scheduler, parameters.tokenizer, train=True, scaler=scaler)
-            else:
-                output = step(batch_idx, batch, parameters.model, optimizer, lr_scheduler, parameters.tokenizer, train=True)
+            output = step(batch_idx, batch, parameters.model, optimizer, lr_scheduler, parameters.tokenizer, train=True, scaler=scaler)
             loss = output.loss_value
             train_loss += loss * output.sample_count
             train_count += output.sample_count
@@ -251,11 +248,7 @@ def train_grokking(parameters: GrokkingParameters):
         total_val_loss, val_correct, val_count = 0.0, 0.0, 0
         with torch.no_grad():
             for batch_idx, batch in enumerate(cached_val):
-                if use_amp:
-                    with torch.autocast(device_type="cuda", dtype=amp_dtype):
-                        output = step(batch_idx, batch, parameters.model, optimizer, lr_scheduler, parameters.tokenizer, train=False)
-                else:
-                    output = step(batch_idx, batch, parameters.model, optimizer, lr_scheduler, parameters.tokenizer, train=False)
+                output = step(batch_idx, batch, parameters.model, optimizer, lr_scheduler, parameters.tokenizer, train=False, scaler=scaler)
                 total_val_loss += output.loss_value * output.sample_count
                 val_correct += output.correct_count
                 val_count += output.sample_count
@@ -304,7 +297,7 @@ def train_grokking(parameters: GrokkingParameters):
         train_loss_history.append(float(train_loss))
         if parameters.ineffective_train_stop:
             if _check_ineffective_train_stop(
-                train_loss_history,
+                list(train_loss_history),
                 window=parameters.ineffective_train_stop_window,
                 min_epoch=parameters.ineffective_train_stop_min_epoch,
                 loss_threshold=parameters.ineffective_train_stop_loss_threshold,
@@ -314,7 +307,7 @@ def train_grokking(parameters: GrokkingParameters):
                     parameters.logger.info(
                         f"ineffective_train_stop triggered at epoch {epoch}: "
                         f"mean loss over last {parameters.ineffective_train_stop_window} epochs "
-                        f"= {sum(train_loss_history[-parameters.ineffective_train_stop_window:]) / parameters.ineffective_train_stop_window:.4f} "
+                        f"= {sum(train_loss_history) / parameters.ineffective_train_stop_window:.4f} "
                         f"(threshold={parameters.ineffective_train_stop_loss_threshold}, slope >= 0)")
                 break
 
@@ -329,7 +322,7 @@ def train_grokking(parameters: GrokkingParameters):
     epoch_loss_lr_log_file.flush()
     ## record final correct position
     final_correct_position = {"lhs": [], "rhs": [], "correct?": []}
-    for batch_idx, batch in enumerate(chain(parameters.train_dataloader, parameters.val_dataloader)):
+    for batch_idx, batch in enumerate(chain(cached_train, cached_val)):
         output = step(batch_idx, batch, parameters.model, optimizer, lr_scheduler, parameters.tokenizer, train=False)
         x = batch["text"]
         num_0 = [int(parameters.tokenizer.itos[val.item()]) for val in x[:, 1]]
