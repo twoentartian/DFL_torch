@@ -148,8 +148,9 @@ def train_cell(args, lr: float, wd: float,
         warmup_epoch=10,
         total_epoch=args.epoch,
     )
+    record_weight_norm_interval = max(1, args.epoch // 1000)
     params.set_dataloader(train_dl, val_dl)
-    params.set_model_save("00", save_format="none")
+    params.set_model_save("00", save_format="none", record_weight_norm_interval=record_weight_norm_interval)
     if args.enable_ineffective_training_stop:
         params.set_ineffective_train_stop()
 

@@ -62,10 +62,8 @@ class GrokkingParameters(object):
         self.min_lr = None          # default: 1e-4
 
         self.ineffective_train_stop = None                  # bool: enable/disable
-        self.ineffective_train_stop_window = None           # int:  look-back window (epochs)
-        self.ineffective_train_stop_min_epoch = None        # int:  burn-in before checking
-        self.ineffective_train_stop_loss_threshold = None   # float: loss floor
-        self.ineffective_train_stop_cv_threshold = None
+        self.ineffective_train_stop_window = None           # int: history window size
+        self.high_loss_train_stop = None
 
         self.train_dataloader = None
         self.val_dataloader = None
@@ -73,6 +71,7 @@ class GrokkingParameters(object):
         self.save_format = None
         self.save_interval = None
         self.save_name = None
+        self.record_weight_norm_interval = None
 
     def set_ml_env(self, model, model_name, dataset_name, tokenizer):
         self.model = model
@@ -96,18 +95,18 @@ class GrokkingParameters(object):
         self.logger = logger
         self.early_stop = early_stop
 
-    def set_model_save(self, save_name, save_format="none", save_interval=500):
+    def set_model_save(self, save_name, save_format="none", save_interval=500, record_weight_norm_interval=100):
         self.save_name = save_name
         self.save_format = save_format
         self.save_interval = save_interval
+        self.record_weight_norm_interval = record_weight_norm_interval
 
-    def set_ineffective_train_stop(self, enabled: bool = True, window: int = 1000, min_epoch: int = 1000,
-                                   loss_threshold: float = 1.5, cv_threshold: float = 0.02):
+    def set_ineffective_train_stop(self, enabled: bool = True, window: int = 1000):
         self.ineffective_train_stop = enabled
         self.ineffective_train_stop_window = window
-        self.ineffective_train_stop_min_epoch = min_epoch
-        self.ineffective_train_stop_loss_threshold = loss_threshold
-        self.ineffective_train_stop_cv_threshold = cv_threshold
+
+    def set_high_loss_train_stop(self, enabled: bool = True):
+        self.high_loss_train_stop = enabled
 
 def _cache_dataloader_on_device(dataloader, device):
     """Pre-load all batches onto the target device once, return as a list.
@@ -124,12 +123,11 @@ def _cache_dataloader_on_device(dataloader, device):
         cached.append(cached_batch)
     return cached
 
-def _check_ineffective_train_stop(train_loss_history: deque,
-                                   window: int,
-                                   min_epoch: int,
-                                   loss_threshold: float,
-                                   current_epoch: int,
-                                   cv_threshold: float) -> bool:
+def _check_ineffective_train_stop(train_loss_history: deque, current_epoch: int,
+                                   window: int = 1000,
+                                   min_epoch: int = 1000,
+                                   loss_threshold: float = 1.5,
+                                   cv_threshold: float = 0.02) -> bool:
     """
     Return True if training loss has stabilized at a high value.
 
@@ -148,7 +146,7 @@ def _check_ineffective_train_stop(train_loss_history: deque,
     n = len(train_loss_history)
     mean = sum(train_loss_history) / n
 
-    # condition 3: loss is still high
+    # condition 3: loss is still low
     if mean <= loss_threshold:
         return False
 
@@ -158,6 +156,30 @@ def _check_ineffective_train_stop(train_loss_history: deque,
     cv = std / mean  # coefficient of variation
 
     return cv < cv_threshold
+
+def _check_loss_above_initial(loss_above_initial_counter: int,
+                               initial_loss: float,
+                               current_loss: float,
+                               current_epoch: int,
+                               total_epoch: int,
+                               initial_loss_multiplier: float = 1.1,
+                               lookback_ratio: float = 0.1) -> tuple[bool, int]:
+    """
+    Increment counter if current loss is above initial_loss * multiplier,
+    reset it otherwise. Return (should_stop, updated_counter).
+
+    Stops training if the counter reaches lookback_ratio * total_epoch,
+    meaning loss has been above the threshold for that many consecutive epochs.
+    """
+    threshold = initial_loss * initial_loss_multiplier
+    if current_loss > threshold:
+        loss_above_initial_counter += 1
+    else:
+        loss_above_initial_counter = 0  # reset on any improvement
+
+    required = max(1, int(total_epoch * lookback_ratio))
+    should_stop = (current_epoch >= required) and (loss_above_initial_counter >= required)
+    return should_stop, loss_above_initial_counter
 
 def train_grokking(parameters: GrokkingParameters):
     optimizer = torch.optim.AdamW(parameters.model.parameters(), weight_decay=parameters.weight_decay, lr=parameters.learning_rate, betas=(0.9, 0.98), eps=1e-8)
@@ -227,6 +249,8 @@ def train_grokking(parameters: GrokkingParameters):
     speed_window_start_time = time.time()
     speed_window_start_epoch = 0
     train_loss_history = deque(maxlen=parameters.ineffective_train_stop_window if parameters.ineffective_train_stop else 1)
+    initial_train_loss = None
+    loss_above_initial_counter = 0
 
     for epoch in range(total_epoch):
         train_correct = None
@@ -297,27 +321,44 @@ def train_grokking(parameters: GrokkingParameters):
         # ineffective training stop: loss shows no convergence progress
         train_loss_history.append(float(train_loss))
         if parameters.ineffective_train_stop:
-            if _check_ineffective_train_stop(
-                    train_loss_history,
-                    window=parameters.ineffective_train_stop_window,
-                    min_epoch=parameters.ineffective_train_stop_min_epoch,
-                    loss_threshold=parameters.ineffective_train_stop_loss_threshold,
-                    current_epoch=epoch, cv_threshold=parameters.ineffective_train_stop_cv_threshold
-            ):
+            if _check_ineffective_train_stop(train_loss_history, epoch, window=parameters.ineffective_train_stop_window):
                 if parameters.logger is not None:
                     parameters.logger.info(
                         f"ineffective_train_stop triggered at epoch {epoch}: "
                         f"mean loss over last {parameters.ineffective_train_stop_window} epochs "
-                        f"= {sum(train_loss_history) / len(train_loss_history):.4f} "
-                        f"(threshold={parameters.ineffective_train_stop_loss_threshold}, standard deviation <= {parameters.ineffective_train_stop_cv_threshold})")
+                        f"= {sum(train_loss_history) / len(train_loss_history):.4f} ")
+                break
+
+        # loss above threshold for a long time stop: loss stays high for a too long time
+        if initial_train_loss is None:
+            initial_train_loss = float(train_loss)
+        if parameters.high_loss_train_stop:
+            lookback_ratio = 0.1
+            initial_loss_multiplier = 1.1
+            should_stop, loss_above_initial_counter = _check_loss_above_initial(loss_above_initial_counter, initial_train_loss,
+                                                                                float(train_loss), epoch, total_epoch,
+                                                                                initial_loss_multiplier=initial_loss_multiplier,
+                                                                                lookback_ratio=lookback_ratio)
+            if should_stop:
+                if parameters.logger is not None:
+                    required = max(1, int(total_epoch * lookback_ratio))
+                    parameters.logger.info(
+                        f"loss_above_initial_stop triggered at epoch {epoch}: "
+                        f"loss stayed above {initial_train_loss * initial_loss_multiplier:.4f} "
+                        f"(initial={initial_train_loss:.4f} × {str(initial_loss_multiplier)}) "
+                        f"for {required} consecutive epochs")
                 break
 
         # services
-        model_stat = parameters.model.state_dict()
+        model_stat = None
         if record_model_service is not None:
             if epoch % parameters.save_interval == 0:
+                model_stat = parameters.model.state_dict() if model_stat is None else model_stat
                 record_model_service.trigger_without_runtime_parameters(epoch, [0], [model_stat])
-        distance_to_origin_service.trigger_without_runtime_parameters(epoch, {0: model_stat})
+        if distance_to_origin_service is not None:
+            if epoch % parameters.record_weight_norm_interval == 0:
+                model_stat = parameters.model.state_dict() if model_stat is None else model_stat
+                distance_to_origin_service.trigger_without_runtime_parameters(epoch, {0: model_stat})
 
     # final record
     epoch_loss_lr_log_file.flush()
@@ -366,6 +407,7 @@ if __name__ == "__main__":
 
     parser.add_argument("--save_format", type=str, default='none', choices=['none', 'file', 'lmdb'], help='which format to save the training states')
     parser.add_argument("--save_interval", type=int, default=1, help='save model state per n epoch')
+    parser.add_argument("--record_weight_norm", type=int, default=None, help='record model weight norm every x epoch')
 
     parser.add_argument("-s","--random_seed", type=int, default=None, help='specify the random seed')
     parser.add_argument("-i", "--start_index", type=int, default=0, help='specify the start index for model names')
@@ -381,7 +423,6 @@ if __name__ == "__main__":
     parser.add_argument("--m_pos_encoding", default=None, type=str, choices=["default", "trainable"], help='specify the type of positional encoding')
 
     args = parser.parse_args()
-
 
     arg_lr = args.learning_rate
     arg_min_lr = args.min_lr
@@ -503,12 +544,17 @@ if __name__ == "__main__":
         warmup_epoch = 10
 
         grokking_parameters = GrokkingParameters()
-        grokking_parameters.set_env(output_folder_path, False, logger=logger)
+        grokking_parameters.set_env(output_folder_path_current, False, logger=logger)
         grokking_parameters.set_ml_env(model, current_ml_setup.model_name, current_ml_setup.dataset_name, tokenizer)
         grokking_parameters.set_ml_hyperparameter(learning_rate=lr, weight_decay=wd, min_lr=min_lr, warmup_epoch=warmup_epoch, total_epoch=total_epoch)
         grokking_parameters.set_dataloader(train_dl, val_dl)
-        grokking_parameters.set_model_save(save_name, save_format=args.save_format, save_interval=args.save_interval)
+        if args.record_weight_norm is None:
+            record_weight_norm_interval = max(1, total_epoch // 2000)
+        else:
+            record_weight_norm_interval = args.record_weight_norm
+        grokking_parameters.set_model_save(save_name, save_format=args.save_format, save_interval=args.save_interval, record_weight_norm_interval=record_weight_norm_interval)
         grokking_parameters.set_ineffective_train_stop()
+        grokking_parameters.set_high_loss_train_stop()
 
         train_grokking(grokking_parameters)
 
