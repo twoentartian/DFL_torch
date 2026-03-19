@@ -34,7 +34,7 @@ import argparse
 import logging
 import json
 from datetime import datetime
-from itertools import product
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -97,6 +97,38 @@ def save_cell_metadata(cell_dir: str, lr: float, wd: float, extra: dict = None):
         meta.update(extra)
     with open(os.path.join(cell_dir, "meta.json"), "w") as f:
         json.dump(meta, f, indent=2)
+
+
+# ---------------------------------------------------------------------------
+# Phase classification (used by the skip mechanism to read completed cells)
+# ---------------------------------------------------------------------------
+
+def read_phase_from_log(log_csv_path: str,
+                        high_acc: float = 0.95,
+                        grokking_val_threshold: float = 0.5) -> str:
+    """
+    Classify a completed cell's phase from its log CSV.
+    Returns one of: 'comprehension', 'grokking', 'memorization', 'confusion', 'unknown'.
+    """
+    try:
+        import pandas as pd
+        df = pd.read_csv(log_csv_path)
+    except Exception:
+        return "unknown"
+
+    train_acc = df["training_accuracy"].values
+    val_acc   = df["validation_accuracy"].values
+    final_train = float(train_acc[-1])
+    final_val   = float(val_acc[-1])
+
+    if final_train < high_acc and final_val < high_acc:
+        return "confusion"
+    if final_train >= high_acc and final_val < high_acc:
+        return "memorization"
+    if final_train >= high_acc and final_val >= high_acc:
+        crossed = int(np.argmax(train_acc >= high_acc))
+        return "comprehension" if float(val_acc[crossed]) >= grokking_val_threshold else "grokking"
+    return "comprehension"
 
 
 # ---------------------------------------------------------------------------
@@ -210,6 +242,10 @@ if __name__ == "__main__":
     # ---- misc ----
     parser.add_argument("-s", "--random_seed", type=int, default=None)
     parser.add_argument("--enable_ineffective_training_stop", action="store_true")
+    parser.add_argument("--enable_skip_larger_wd_after_confusion", action="store_true",
+                        help="Skip remaining WD cells in a row once two consecutive "
+                             "confusion results are observed. Saves time since larger "
+                             "WD is unlikely to recover from confusion.")
 
     args = parser.parse_args()
 
@@ -266,13 +302,48 @@ if __name__ == "__main__":
             args.operand_length,
         )
 
+    # ---- sweep ----
+    # Iterate row by row (one LR at a time, sweeping WD left to right) so the
+    # consecutive-confusion counter is meaningful within each row.
     done = 0
-    for lr, wd in product(learning_rates, weight_decays):
-        done += 1
-        logger.info(f"[{done}/{total_cells}] lr={lr:.4e}  wd={wd:.4e}")
-        if os.path.exists(cell_log_csv(args.output_folder_path, lr, wd)):
-            logger.info("  → already done, skipping")
-            continue
-        train_cell(args, lr, wd, train_ds, val_ds, device, current_ml_setup)
+    skipped_by_confusion = 0
 
-    logger.info("All cells complete. Run plot_grokking_phase_diagram.py to visualise.")
+    for lr in learning_rates:
+        consecutive_confusion = 0   # reset at the start of each LR row
+        skip_rest_of_row = False
+
+        for wd in weight_decays:
+            done += 1
+
+            if skip_rest_of_row:
+                logger.info(f"[{done}/{total_cells}] lr={lr:.4e}  wd={wd:.4e}  "
+                            f"→ skipped (two consecutive confusion cells already seen in this row)")
+                skipped_by_confusion += 1
+                continue
+
+            log_csv = cell_log_csv(args.output_folder_path, lr, wd)
+            already_done = os.path.exists(log_csv)
+
+            if already_done:
+                logger.info(f"[{done}/{total_cells}] lr={lr:.4e}  wd={wd:.4e}  → already done, skipping")
+            else:
+                logger.info(f"[{done}/{total_cells}] lr={lr:.4e}  wd={wd:.4e}")
+                train_cell(args, lr, wd, train_ds, val_ds, device, current_ml_setup)
+
+            # Read the phase of this cell (whether just trained or previously done)
+            # to update the consecutive confusion counter.
+            if args.enable_skip_larger_wd_after_confusion:
+                phase = read_phase_from_log(log_csv)
+                if phase == "confusion":
+                    consecutive_confusion += 1
+                    if consecutive_confusion >= 2:
+                        skip_rest_of_row = True
+                        logger.info(f"  → two consecutive confusion cells at lr={lr:.4e}, "
+                                    f"skipping remaining WD values in this row")
+                else:
+                    # Non-confusion result resets the counter: a brief confusion
+                    # followed by a non-confusion is not a stable confusion boundary.
+                    consecutive_confusion = 0
+
+    logger.info(f"Sweep complete. Cells skipped by confusion rule: {skipped_by_confusion}/{total_cells}")
+    logger.info("Run plot_grokking_phase_diagram.py to visualise.")
