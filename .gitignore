@@ -166,3 +166,20 @@ cython_debug/
 /tool/202*/
 /data
 /tool/find_high_accuracy_path_v2_config.py
+
+# generated files
+*.pdf
+*.png
+*.jpg
+*.csv
+tokenizer.txt
+val.txt
+train.txt
+*.json
+*.model.pt
+*.optimizer.pt
+*.pt.txt
+data.mdb
+lock.mdb
+log.txt
+*.md
