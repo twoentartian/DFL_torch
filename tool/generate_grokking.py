@@ -218,7 +218,7 @@ def train_grokking(parameters: GrokkingParameters):
     use_amp = device.type == "cuda"
     if use_amp:
         amp_dtype = torch.bfloat16 if torch.cuda.is_bf16_supported() else torch.float16
-        scaler = torch.cuda.amp.GradScaler(enabled=(amp_dtype == torch.float16))
+        scaler = torch.amp.GradScaler(device="cuda", enabled=(amp_dtype == torch.float16))
         autocast_ctx = lambda: torch.autocast(device_type="cuda", dtype=amp_dtype)
         if parameters.logger is not None:
             parameters.logger.info(f"[Opt] AMP enabled (dtype={amp_dtype})")
