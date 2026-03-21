@@ -240,7 +240,7 @@ if __name__ == "__main__":
     parser.add_argument("--m_context_len", default=None, type=int)
 
     # ---- misc ----
-    parser.add_argument("-s", "--random_seed", type=int, default=None)
+    parser.add_argument("-rs", "--random_seed", type=int, default=None)
     parser.add_argument("--enable_ineffective_training_stop", action="store_true")
     parser.add_argument("--enable_skip_larger_wd_after_confusion", action="store_true",
                         help="Skip remaining WD cells in a row once two consecutive "
