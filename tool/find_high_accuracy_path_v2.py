@@ -729,7 +729,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
                     record_model_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, [0], [target_model_stat_dict])
             record_test_accuracy_loss_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, {0: target_model_stat_dict})
             record_training_loss_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, {0: training_loss_val}, {0: training_accuracy_val})
-            record_consecutive_points_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, SimulationPhase.END_OF_TICK, target_model.state_dict())
+            record_consecutive_points_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, SimulationPhase.END_OF_TICK, target_model_stat_dict)
             record_cosine_similarity_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, {0: target_model_stat_dict} )
 
         # update tick
