@@ -40,6 +40,7 @@ class ServiceTrainingLossAccuracyRecorder(Service):
             node_name_and_accuracy = {}
             for node_name in self.node_order:
                 node_loss = parameters.node_container[node_name].most_recent_loss
+                node_loss = node_loss.items()
                 node_accuracy = parameters.node_container[node_name].most_recent_accuracy
                 node_name_and_loss[node_name] = node_loss
                 node_name_and_accuracy[node_name] = node_accuracy
