@@ -24,6 +24,7 @@ class ServiceConsecutiveLinearInterpolationRecorder(Service):
         self.loss_file = None
         self.accuracy_file_name = consecutive_linear_interpolation_accuracy_filename
         self.accuracy_file = None
+        self.ml_setup = None
 
         self.interval = interval
         self.batch_size = batch_size
@@ -52,11 +53,12 @@ class ServiceConsecutiveLinearInterpolationRecorder(Service):
                 gpu = target_node.allocated_gpu
                 pre_allocated_model = gpu.model
 
-        self.initialize_without_runtime_parameters(output_path, ml_setup.model, ml_setup.criterion, ml_setup.training_data, gpu=gpu, existing_model_for_testing=pre_allocated_model)
+        self.initialize_without_runtime_parameters(output_path, ml_setup.model, ml_setup.criterion, ml_setup, ml_setup.training_data, gpu=gpu, existing_model_for_testing=pre_allocated_model)
 
-    def initialize_without_runtime_parameters(self, output_path, model, criterion, train_dataset, logger=None, gpu: CudaDevice=None, existing_model_for_testing=None, num_workers=None):
+    def initialize_without_runtime_parameters(self, output_path, model, criterion, current_ml_setup, train_dataset, logger=None, gpu: CudaDevice=None, existing_model_for_testing=None, num_workers=None):
         self.criterion = criterion
         self.logger = logger
+        self.ml_setup = current_ml_setup
 
         # set model
         if existing_model_for_testing is None:
@@ -120,7 +122,7 @@ class ServiceConsecutiveLinearInterpolationRecorder(Service):
                 if self.allocated_gpu is not None:
                     self.test_model.to(self.allocated_gpu.device)
                 self.test_model.eval()
-                test_loss, test_count, test_correct, _ = val(self.test_model, self.test_dataset, self.criterion, self.ml_setup, self.allocated_gpu.device, False, None)
+                test_loss, test_count, test_correct, _ = val(self.test_model, self.dataloader, self.criterion, self.ml_setup, self.allocated_gpu.device, False, None)
                 loss_test = test_loss / test_count
                 accuracy_test = test_correct / test_count
                 

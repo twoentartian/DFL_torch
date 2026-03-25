@@ -344,7 +344,7 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
     record_consecutive_points_service = record_consecutive_linear_interpolation.ServiceConsecutiveLinearInterpolationRecorder(1, runtime_parameter.service_test_accuracy_loss_batch_size,
                                                                                                                               runtime_parameter.linear_interpolation_dataset_size,
                                                                                                                               runtime_parameter.linear_interpolation_points_size, 0)
-    record_consecutive_points_service.initialize_without_runtime_parameters(arg_output_folder_path, target_model, criterion, current_ml_setup.training_data,
+    record_consecutive_points_service.initialize_without_runtime_parameters(arg_output_folder_path, target_model, criterion, current_ml_setup, current_ml_setup.training_data,
                                                                             existing_model_for_testing=None, gpu=gpu, num_workers=general_parameter.dataloader_worker)
     child_logger.info("setting service done: record_consecutive_points_service")
 
