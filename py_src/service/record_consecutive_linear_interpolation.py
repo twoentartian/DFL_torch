@@ -25,6 +25,7 @@ class ServiceConsecutiveLinearInterpolationRecorder(Service):
         self.accuracy_file_name = consecutive_linear_interpolation_accuracy_filename
         self.accuracy_file = None
         self.ml_setup = None
+        self.collate_fn = None
 
         self.interval = interval
         self.batch_size = batch_size
@@ -59,6 +60,7 @@ class ServiceConsecutiveLinearInterpolationRecorder(Service):
         self.criterion = criterion
         self.logger = logger
         self.ml_setup = current_ml_setup
+        self.collate_fn = current_ml_setup.collate_fn_val
 
         # set model
         if existing_model_for_testing is None:
@@ -80,9 +82,9 @@ class ServiceConsecutiveLinearInterpolationRecorder(Service):
             subset = Subset(train_dataset, subset_indices)
             batch_size = 100 if self.batch_size > 100 else self.batch_size
             if num_workers is None:
-                loader = DataLoader(subset, batch_size=batch_size, shuffle=True, pin_memory=True)
+                loader = DataLoader(subset, batch_size=batch_size, shuffle=True, collate_fn=self.collate_fn, pin_memory=True)
             else:
-                loader = DataLoader(subset, batch_size=batch_size, shuffle=True, num_workers=num_workers, persistent_workers=True, pin_memory=True)
+                loader = DataLoader(subset, batch_size=batch_size, shuffle=True, collate_fn=self.collate_fn, num_workers=num_workers, persistent_workers=True, pin_memory=True)
             self.dataloader = loader
 
             self.accuracy_file = open(os.path.join(output_path, f"{self.accuracy_file_name}"), "w+")
