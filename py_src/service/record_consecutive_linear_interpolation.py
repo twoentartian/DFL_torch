@@ -5,6 +5,7 @@ import torch
 import numpy as np
 from torch.utils.data import DataLoader, Subset
 
+from py_src.functions import val
 from py_src.cuda import CudaDevice
 from py_src.ml_setup_base.base import MlSetup
 from py_src.service_base import Service
@@ -119,21 +120,12 @@ class ServiceConsecutiveLinearInterpolationRecorder(Service):
                 if self.allocated_gpu is not None:
                     self.test_model.to(self.allocated_gpu.device)
                 self.test_model.eval()
-                total_loss, correct, total = 0, 0, 0
-                for d, l in self.dataloader:
-                    test_data = d
-                    test_labels = l
-                    if self.allocated_gpu is not None:
-                        test_data, test_labels = d.to(self.allocated_gpu.device), l.to(self.allocated_gpu.device)
-                    outputs = self.test_model(test_data)
-                    total_loss += self.criterion(outputs, test_labels).item() * test_labels.size(0)
-                    _, predicted = torch.max(outputs, 1)
-                    correct += (predicted == test_labels).sum().item()
-                    total += test_labels.size(0)
-                loss = total_loss / total
-                accuracy = correct / total
-                loss_results.append('%.4E' % loss)
-                accuracy_results.append('%.4E' % accuracy)
+                test_loss, test_count, test_correct, _ = val(self.test_model, self.test_dataset, self.criterion, self.ml_setup, self.allocated_gpu.device, False, None)
+                loss_test = test_loss / test_count
+                accuracy_test = test_correct / test_count
+                
+                loss_results.append('%.4E' % loss_test)
+                accuracy_results.append('%.4E' % accuracy_test)
             row_accuracy_str = ",".join([str(tick), str(phase.name), *accuracy_results])
             row_loss_str = ",".join([str(tick), str(phase.name), *loss_results])
             self.accuracy_file.write(row_accuracy_str + "\n")
