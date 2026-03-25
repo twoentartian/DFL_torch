@@ -1,4 +1,4 @@
-import math
+import math, sys
 from typing import Optional
 import torch
 import lightning as L
@@ -23,7 +23,9 @@ def train(model: torch.nn.Module, dataloader: torch.utils.data.DataLoader,
           criterion,
           current_epoch: int,
           arg_ml_setup: ml_setup.MlSetup, device: torch.device,
-          arg_amp: bool, scaler: Optional[torch.cuda.amp.GradScaler], min_rounds=None, max_rounds=None, loss_threshold=None):
+          arg_amp: bool, scaler: Optional[torch.cuda.amp.GradScaler], 
+          min_rounds=None, max_rounds=None, loss_threshold=None, backpropagation=True):
+    # current_epoch, optimizer, lr_scheduler can be None when backpropagation is False
 
     model.train()
     model.to(device)
@@ -41,7 +43,7 @@ def train(model: torch.nn.Module, dataloader: torch.utils.data.DataLoader,
     else:
         moving_average = None
         train_for_one_epoch_mode = True
-        max_rounds = 1
+        max_rounds = int(sys.maxsize)
 
     training_iter_counter = 0
     exit_training = False
@@ -65,7 +67,7 @@ def train(model: torch.nn.Module, dataloader: torch.utils.data.DataLoader,
         if arg_ml_setup.override_train_step_function is not None:
             for batch_idx, batch in enumerate(dataloader):
                 pre_train_check()
-
+                assert backpropagation==True, "backpropagation has to be True for override_train_step_function"
                 batch = cuda.to_device(batch, device)
                 output = arg_ml_setup.override_train_step_function(batch_idx, batch, model, optimizer, lr_scheduler, arg_ml_setup)
                 loss = output.loss_value
@@ -87,17 +89,18 @@ def train(model: torch.nn.Module, dataloader: torch.utils.data.DataLoader,
                 pre_train_check()
 
                 batch = cuda.to_device(batch, device)
-                optimizer.zero_grad(set_to_none=True)
+                if backpropagation:
+                    optimizer.zero_grad(set_to_none=True)
 
                 loss, batch_accuracy = model.training_step(batch, batch_idx)
-                loss.backward()
+                if backpropagation:
+                    loss.backward()
+                    model.optimizer_step(current_epoch, batch_idx, optimizer, optimizer_closure=None)
 
-                model.optimizer_step(current_epoch, batch_idx, optimizer, optimizer_closure=None)
-
-                if lr_scheduler is not None:
-                    lr_scheduler.step()
-                for func in arg_ml_setup.func_handler_post_training:
-                    func(model=model)
+                    if lr_scheduler is not None:
+                        lr_scheduler.step()
+                    for func in arg_ml_setup.func_handler_post_training:
+                        func(model=model)
                 batch_size = batch_to_batch_size(batch)
                 train_loss += loss.item() * batch_size
                 train_count += batch_size
@@ -110,11 +113,11 @@ def train(model: torch.nn.Module, dataloader: torch.utils.data.DataLoader,
         else:
             """ Normal PyTorch model """
             for data, label in dataloader:
-                if train_for_min_max_iteration_mode:
-                    training_iter_counter += 1
+                pre_train_check()
 
                 data, label = data.to(device, non_blocking=True), label.to(device, non_blocking=True)
-                optimizer.zero_grad(set_to_none=True)
+                if backpropagation:
+                    optimizer.zero_grad(set_to_none=True)
                 if arg_amp:
                     with torch.amp.autocast('cuda'):
                         outputs = model(data)
@@ -124,9 +127,11 @@ def train(model: torch.nn.Module, dataloader: torch.utils.data.DataLoader,
                             loss = criterion(outputs, label)
                         else:
                             raise NotImplementedError
-                        scaler.scale(loss).backward()
-                        scaler.step(optimizer)
-                        scaler.update()
+                        
+                        if backpropagation:
+                            scaler.scale(loss).backward()
+                            scaler.step(optimizer)
+                            scaler.update()
                 else:
                     outputs = model(data)
                     if criterion == ml_setup.CriterionType.Diffusion:
@@ -135,12 +140,15 @@ def train(model: torch.nn.Module, dataloader: torch.utils.data.DataLoader,
                         loss = criterion(outputs, label)
                     else:
                         raise NotImplementedError
-                    loss.backward()
-                    optimizer.step()
-                if lr_scheduler is not None:
-                    lr_scheduler.step()
-                for func in arg_ml_setup.func_handler_post_training:
-                    func(model=model)
+
+                    if backpropagation:
+                        loss.backward()
+                        optimizer.step()
+                if backpropagation:
+                    if lr_scheduler is not None:
+                        lr_scheduler.step()
+                    for func in arg_ml_setup.func_handler_post_training:
+                        func(model=model)
 
                 if isinstance(criterion, torch.nn.modules.loss.CrossEntropyLoss):
                     _, predicted = torch.max(outputs, 1)

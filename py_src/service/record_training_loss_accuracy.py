@@ -40,7 +40,6 @@ class ServiceTrainingLossAccuracyRecorder(Service):
             node_name_and_accuracy = {}
             for node_name in self.node_order:
                 node_loss = parameters.node_container[node_name].most_recent_loss.detach()
-                node_loss = node_loss.items()
                 node_accuracy = parameters.node_container[node_name].most_recent_accuracy
                 node_name_and_loss[node_name] = node_loss
                 node_name_and_accuracy[node_name] = node_accuracy
@@ -49,7 +48,7 @@ class ServiceTrainingLossAccuracyRecorder(Service):
     def trigger_without_runtime_parameters(self, tick, node_name_and_loss, node_name_and_accuracy):
         loss_row = []
         for node_name in self.node_order:
-            node_loss = node_name_and_loss[node_name]
+            node_loss = node_name_and_loss[node_name].detach().cpu().item()
             loss_row.append('%.4e' % node_loss)
         row = ",".join([str(tick), *loss_row])
         self.loss_file.write(row + "\n")
