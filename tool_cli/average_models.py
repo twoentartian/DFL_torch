@@ -62,4 +62,4 @@ if __name__ == '__main__':
         else:
             raise NotImplementedError
 
-    util.save_model_state(args.output, output_model, model_name, dataset_name)
+    util.save_model_state(os.path.join(output_path, "avg.model.pt"), output_model, model_name, dataset_name)
