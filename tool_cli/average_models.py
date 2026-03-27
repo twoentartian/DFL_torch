@@ -20,14 +20,20 @@ if __name__ == '__main__':
     cpu_device = torch.device("cpu")
     models = []
     model_name = None
+    dataset_name = None
     output_path_when_not_specified = None
     for model_path in models_path:
-        model, current_model_name, _ = util.load_model_state_file(model_path)
+        model, current_model_name, current_dataset_name = util.load_model_state_file(model_path)
         if model_name is None:
             model_name = current_model_name
         else:
             if current_model_name is not None:
                 assert current_model_name == model_name, "Model name mismatch"
+        if dataset_name is None:
+            dataset_name = current_dataset_name
+        else:
+            if current_dataset_name is not None:
+                assert current_dataset_name == dataset_name, "Dataset name mismatch"
         model_folder = os.path.dirname(model_path)
         if output_path_when_not_specified is None:
             output_path_when_not_specified = model_folder
@@ -56,4 +62,4 @@ if __name__ == '__main__':
         else:
             raise NotImplementedError
 
-    util.save_model_state(args.output, output_model, model_name)
+    util.save_model_state(args.output, output_model, model_name, dataset_name)
