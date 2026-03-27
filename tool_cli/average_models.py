@@ -22,7 +22,7 @@ if __name__ == '__main__':
     model_name = None
     output_path_when_not_specified = None
     for model_path in models_path:
-        model, current_model_name = util.load_model_state_file(model_path)
+        model, current_model_name, _ = util.load_model_state_file(model_path)
         if model_name is None:
             model_name = current_model_name
         else:
