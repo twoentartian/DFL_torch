@@ -34,7 +34,7 @@ def manually_define_optimizer(arg_ml_setup: ml_setup.MlSetup, model):
 
 def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_setup.MlSetup, arg_use_cpu: bool, random_seed,
                    arg_worker_count, arg_total_cpu_count, arg_save_format, arg_save_interval, arg_amp, arg_preset, arg_epoch_override,
-                   transfer_learn_model_path, disable_reinit, enable_validation, inverse_train_val):
+                   transfer_learn_model_path, init_model_path, disable_reinit, enable_validation, inverse_train_val):
     thread_per_process = arg_total_cpu_count // arg_worker_count
     thread_per_process = 8 if thread_per_process > 8 else thread_per_process
     torch.set_num_threads(thread_per_process)
@@ -106,8 +106,14 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
         if disable_reinit:
             child_logger.info(f"re-initialize model is disabled")
         else:
-            child_logger.info(f"re-initialize model")
-            arg_ml_setup.re_initialize_model(model)
+            if init_model_path is not None:
+                existing_model_state, existing_model_name, existing_dataset_name = util.load_model_state_file(init_model_path)
+                child_logger.info(f"load model weights for initial weights, original model type: {existing_model_name}, dataset type: {existing_dataset_name}")
+                model.load_state_dict(existing_model_state)
+            else:
+                child_logger.info(f"re-initialize model")
+                arg_ml_setup.re_initialize_model(model)
+            model.to(device)
         if optimizer is None:
             child_logger.info(f"mode: ||||||||    TRAIN FROM INITIALIZATION    ||||||||")
             if isinstance(model, L.LightningModule):
@@ -229,7 +235,8 @@ if __name__ == "__main__":
     parser.add_argument("-i", "--start_index", type=int, default=0, help='specify the start index for model names')
     parser.add_argument("-P", "--preset", type=int, default=0, help='specify the preset training hyperparameters')
     parser.add_argument("-e", "--epoch", type=int, default=None, help='override the epoch')
-    parser.add_argument("-t", "--transfer_learn", type=str, default=None, help='specify a model weight file to perform transfer learning from.')
+    parser.add_argument("-tl", "--transfer_learn", type=str, default=None, help='specify a model weight file to perform transfer learning from.')
+    parser.add_argument("-init", "--initial_model", type=str, default=None, help='specify a model weight file to initialize model weights.')
     parser.add_argument("--disable_reinit", action='store_true', help='disable reinitialization')
     parser.add_argument("--enable_eval", action='store_true', help='enable measuring loss and accuracy on validation set')
     parser.add_argument("--inverse_train_val", action='store_true', help='inverse train and validation set')
@@ -251,6 +258,7 @@ if __name__ == "__main__":
     preset = args.preset
     epoch_override = args.epoch
     transfer_learn_model_path = args.transfer_learn
+    init_model_path = args.initial_model
 
     # logger
     util.set_logging(logger, "main")
@@ -288,7 +296,7 @@ if __name__ == "__main__":
         worker_count = number_of_models
     args = [(output_folder_path, i, number_of_models, current_ml_setup,
              use_cpu, random_seed, worker_count, total_cpu_cores, save_format, save_interval, amp,
-             preset, epoch_override, transfer_learn_model_path, args.disable_reinit, args.enable_eval, args.inverse_train_val) for i in range(start_index, start_index+number_of_models, 1)]
+             preset, epoch_override, transfer_learn_model_path, init_model_path, args.disable_reinit, args.enable_eval, args.inverse_train_val) for i in range(start_index, start_index+number_of_models, 1)]
     if worker_count == 1:
         for arg in args:
             training_model(*arg)
