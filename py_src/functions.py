@@ -207,8 +207,8 @@ def val(model: torch.nn.Module, dataloader: torch.utils.data.DataLoader,
     else:
         """ Normal PyTorch model """
         for d, l in dataloader:
-            d = cuda.to_device(device, d)
-            l = cuda.to_device(device, l)
+            d = cuda.to_device(d, device)
+            l = cuda.to_device(l, device)
             outputs = model(d)
             total_loss += criterion(outputs, l).item() * l.size(0)
             _, predicted = torch.max(outputs, 1)
