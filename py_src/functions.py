@@ -34,6 +34,8 @@ def train(model: torch.nn.Module, dataloader: torch.utils.data.DataLoader,
     train_loss = 0
     train_count = 0
 
+    loss_threshold = float('inf') if loss_threshold is None else loss_threshold
+
     """ Training procedure """
     train_for_one_epoch_mode = False
     train_for_min_max_iteration_mode = False

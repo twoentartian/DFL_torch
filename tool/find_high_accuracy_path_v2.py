@@ -87,26 +87,10 @@ def pre_train(current_ml_setup, model, optimizer, criterion, dataloader, device,
         logger.info(f"pre training, train_iteration:{train_iteration}, train_model_weights:{train_model_weights}, train_optimizer:{train_optimizer}")
     old_model_state = None if train_model_weights else copy.deepcopy(model.state_dict())
     old_optimizer_state = None if train_optimizer else copy.deepcopy(optimizer.state_dict())
-    model.train()
-    model.to(device)
-    cuda.CudaEnv.optimizer_to(optimizer, device)
-    training_index = 0
-    while training_index < train_iteration:
-        for data, label in dataloader:
-            data, label = data.to(device), label.to(device)
-            if current_ml_setup.mixup_fn is not None:
-                data, label = current_ml_setup.mixup_fn(data, label)
-            optimizer.zero_grad(set_to_none=True)
-            output = model(data)
-            loss = criterion(output, label)
-            loss.backward()
-            optimizer.step()
-            loss_val = loss.item()
-            training_index += 1
-            if training_index % 100 == 0:
-                logger.info(f"pre training iter {training_index}, loss: {loss_val}")
-            if training_index >= train_iteration:
-                break
+
+    functions.train(model, dataloader, optimizer, None, criterion, 0, current_ml_setup,
+                    device, False, None, train_iteration, train_iteration, None, True)
+
     if old_model_state is not None:
         model.load_state_dict(old_model_state)
         if logger is not None:
