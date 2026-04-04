@@ -30,7 +30,7 @@ from tool.autoNEB.autoneb_utils import (
 )
 
 
-DEFAULT_SCHEDULE = "0.001x1000x4,0.001x2000x2,0.0001x1000x4,0.00001x1000x4"
+DEFAULT_SCHEDULE = "0.01x1000x4,0.001x1000x4,0.001x2000x2,0.0001x1000x4"
 
 
 @dataclass
