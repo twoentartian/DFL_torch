@@ -136,7 +136,7 @@ if __name__ == "__main__":
         for dataset_name_from_file in dataset_names:
             util.assert_if_both_not_none(dataset_name, dataset_name_from_file)
 
-    shared_model = current_ml_setup.model
+    shared_model = current_ml_setup.model.to(device)
     model_tensors = build_model_tensor_map(shared_model)
     parameter_names = get_trainable_parameter_names(shared_model)
     if not parameter_names:
@@ -245,4 +245,5 @@ if __name__ == "__main__":
                 sample_index += 1
 
     logger.info(f"curve evaluation saved to {output_path}")
+
 

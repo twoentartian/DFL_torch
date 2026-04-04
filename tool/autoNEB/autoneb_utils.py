@@ -30,13 +30,15 @@ def clone_state_dict(
     state_dict: dict[str, Any],
     device: torch.device | str | None = None,
 ) -> dict[str, Any]:
+    target_device = None if device is None else torch.device(device)
     output: dict[str, Any] = {}
     for key, value in state_dict.items():
         if torch.is_tensor(value):
-            if device is None:
-                output[key] = value.detach().clone()
+            detached_value = value.detach()
+            if target_device is None or detached_value.device == target_device:
+                output[key] = detached_value.clone()
             else:
-                output[key] = value.detach().to(device=device, non_blocking=True).clone()
+                output[key] = detached_value.to(device=target_device).clone()
         else:
             output[key] = copy.deepcopy(value)
     return output
@@ -456,8 +458,14 @@ def evaluate_state_on_loader(
     enable_amp: bool,
     batch_limit: int | None = None,
 ) -> dict[str, float | int | None]:
+    try:
+        model_device = next(model.parameters()).device
+    except StopIteration:
+        model_device = device
+    if model_device != device:
+        model = model.to(device)
+        model_tensors = build_model_tensor_map(model)
     load_state_dict_inplace(model_tensors, state_dict)
-    model.to(device)
     model.eval()
 
     total_loss = 0.0
@@ -576,4 +584,6 @@ def load_point_paths(path_args: Sequence[str]) -> list[str]:
         return [os.path.join(folder_path, file_name) for file_name in pivot_candidates]
 
     return list(path_args)
+
+
 
