@@ -88,7 +88,7 @@ if __name__ == "__main__":
         "-k",
         "--batch_count",
         type=int,
-        default=1,
+        default=100,
         help="number of batches to sample when --whole_dataset is not set",
     )
     parser.add_argument("--whole_dataset", action="store_true", help="evaluate on the whole chosen split")
