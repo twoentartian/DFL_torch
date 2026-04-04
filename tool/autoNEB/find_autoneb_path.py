@@ -32,7 +32,7 @@ from tool.autoNEB.autoneb_utils import (
 )
 
 
-DEFAULT_SCHEDULE = "0.01x1000x4,0.001x1000x4,0.001x2000x2,0.0001x1000x4"
+DEFAULT_SCHEDULE = "0.001x1000x4,0.001x2000x2,0.0001x1000x4,0.00001x1000x4"
 
 
 @dataclass
@@ -348,7 +348,7 @@ if __name__ == "__main__":
     parser.add_argument("--adam_beta1", "--momentum", dest="adam_beta1", type=float, default=0.9, help="Adam beta1 used inside each NEB cycle")
     parser.add_argument("--adam_beta2", type=float, default=0.999, help="Adam beta2 used inside each NEB cycle")
     parser.add_argument("--adam_eps", type=float, default=1.0e-8, help="Adam epsilon used inside each NEB cycle")
-    parser.add_argument("-wd", "--weight_decay", type=float, default=1.0e-4, help="weight decay used inside each Adam pivot update")
+    parser.add_argument("-wd", "--weight_decay", type=float, default=0, help="weight decay used inside each Adam pivot update")
     parser.add_argument("--insert_threshold", type=float, default=0.2, help="normalized residual threshold for pivot insertion")
     parser.add_argument("--insert_eval_points", type=int, default=9, help="number of sampled interpolation points per segment")
     parser.add_argument("--max_insertions_per_cycle", type=int, default=None, help="optional cap on pivots inserted per cycle")
