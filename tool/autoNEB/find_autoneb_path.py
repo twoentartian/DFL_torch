@@ -1,4 +1,4 @@
-import argparse
+﻿import argparse
 import csv
 import logging
 import os
@@ -9,11 +9,13 @@ from dataclasses import dataclass
 import torch
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from py_src import util
+from py_src import cuda, util
 from tool.autoNEB.autoneb_utils import (
     InfiniteLoader,
     apply_projected_adam_update,
     build_loader,
+    build_model_tensor_map,
+    build_trainable_parameter_map,
     clone_state_dict,
     compute_loss_and_gradients,
     compute_loss_only,
@@ -77,16 +79,21 @@ def initialize_path(
     start_state: dict[str, torch.Tensor],
     end_state: dict[str, torch.Tensor],
     intermediate_points: int,
+    device: torch.device,
 ) -> list[dict[str, torch.Tensor]]:
-    path_states = [clone_state_dict(start_state), clone_state_dict(end_state)]
+    start_state_on_device = clone_state_dict(start_state, device=device)
+    end_state_on_device = clone_state_dict(end_state, device=device)
+    path_states = [start_state_on_device, end_state_on_device]
     if intermediate_points > 0:
-        path_states.insert(1, interpolate_state_dict(start_state, end_state, 0.5))
+        path_states.insert(1, interpolate_state_dict(start_state_on_device, end_state_on_device, 0.5))
     return path_states
 
 
 def run_neb_cycle(
     path_states: list[dict[str, torch.Tensor]],
     shared_model: torch.nn.Module,
+    model_tensors: dict[str, torch.Tensor],
+    trainable_parameters: dict[str, torch.nn.Parameter],
     batch_provider: InfiniteLoader,
     current_ml_setup,
     parameter_names: tuple[str, ...],
@@ -100,6 +107,7 @@ def run_neb_cycle(
     enable_amp: bool,
     logger,
     log_interval: int,
+    redistribute_interval: int,
 ) -> list[dict[str, torch.Tensor]]:
     if len(path_states) <= 2:
         return [clone_state_dict(state) for state in path_states]
@@ -108,8 +116,9 @@ def run_neb_cycle(
     updated_path = [clone_state_dict(state) for state in path_states]
 
     for step_index in range(steps):
-        updated_path = redistribute_path(updated_path, parameter_names)
-        batch = batch_provider.next()
+        if redistribute_interval == 1 or step_index % redistribute_interval == 0:
+            updated_path = redistribute_path(updated_path, parameter_names)
+        batch_on_device = cuda.to_device(batch_provider.next(), device)
 
         losses: list[float] = []
         gradients_by_index: dict[int, dict[str, torch.Tensor]] = {}
@@ -117,8 +126,10 @@ def run_neb_cycle(
             if 0 < pivot_index < len(updated_path) - 1:
                 loss_value, gradients = compute_loss_and_gradients(
                     shared_model,
+                    model_tensors,
+                    trainable_parameters,
                     state,
-                    batch,
+                    batch_on_device,
                     current_ml_setup,
                     device,
                     enable_amp,
@@ -127,8 +138,9 @@ def run_neb_cycle(
             else:
                 loss_value = compute_loss_only(
                     shared_model,
+                    model_tensors,
                     state,
-                    batch,
+                    batch_on_device,
                     current_ml_setup,
                     device,
                     enable_amp,
@@ -181,6 +193,7 @@ def run_neb_cycle(
 def evaluate_insertions(
     path_states: list[dict[str, torch.Tensor]],
     shared_model: torch.nn.Module,
+    model_tensors: dict[str, torch.Tensor],
     batch,
     current_ml_setup,
     device: torch.device,
@@ -191,7 +204,7 @@ def evaluate_insertions(
     max_insertions_per_cycle: int | None,
 ) -> tuple[list[float], list[InsertionCandidate], list[InsertionCandidate]]:
     pivot_losses = [
-        compute_loss_only(shared_model, state, batch, current_ml_setup, device, enable_amp)
+        compute_loss_only(shared_model, model_tensors, state, batch, current_ml_setup, device, enable_amp)
         for state in path_states
     ]
     loss_range = max(pivot_losses) - min(pivot_losses)
@@ -209,6 +222,7 @@ def evaluate_insertions(
             )
             true_loss = compute_loss_only(
                 shared_model,
+                model_tensors,
                 sampled_state,
                 batch,
                 current_ml_setup,
@@ -281,7 +295,7 @@ def save_final_path(
         pivot_file_name = f"pivot_{pivot_index:03d}.model.pt"
         util.save_model_state(
             os.path.join(output_folder_path, pivot_file_name),
-            state,
+            clone_state_dict(state, device="cpu"),
             model_name,
             dataset_name,
         )
@@ -338,6 +352,7 @@ if __name__ == "__main__":
     parser.add_argument("--insert_threshold", type=float, default=0.2, help="normalized residual threshold for pivot insertion")
     parser.add_argument("--insert_eval_points", type=int, default=9, help="number of sampled interpolation points per segment")
     parser.add_argument("--max_insertions_per_cycle", type=int, default=None, help="optional cap on pivots inserted per cycle")
+    parser.add_argument("--redistribute_interval", type=int, default=1, help="redistribute the path every N optimization steps")
     parser.add_argument("--cpu", action="store_true", help="force CPU execution")
     parser.add_argument("--amp", action="store_true", help="enable mixed precision on CUDA")
     parser.add_argument("--seed", type=int, default=42, help="random seed")
@@ -350,6 +365,8 @@ if __name__ == "__main__":
         raise RuntimeError("--intermediate_points must be non-negative")
     if args.insert_eval_points <= 0:
         raise RuntimeError("--insert_eval_points must be positive")
+    if args.redistribute_interval <= 0:
+        raise RuntimeError("--redistribute_interval must be positive")
     if not 0.0 <= args.adam_beta1 < 1.0:
         raise RuntimeError("--adam_beta1 must be in [0, 1)")
     if not 0.0 <= args.adam_beta2 < 1.0:
@@ -377,7 +394,9 @@ if __name__ == "__main__":
     )
     logger.info(f"resolved model = {model_name}, dataset = {dataset_name}, device = {device}")
 
-    shared_model = current_ml_setup.model
+    shared_model = current_ml_setup.model.to(device)
+    model_tensors = build_model_tensor_map(shared_model)
+    trainable_parameters = build_trainable_parameter_map(shared_model)
     parameter_names = get_trainable_parameter_names(shared_model)
     if not parameter_names:
         raise RuntimeError("No trainable parameters found in the resolved model")
@@ -407,11 +426,11 @@ if __name__ == "__main__":
         os.path.join(output_folder_path, "autoneb_utils.py"),
     )
 
-    path_states = initialize_path(start_state, end_state, args.intermediate_points)
+    path_states = initialize_path(start_state, end_state, args.intermediate_points, device)
     cycle_rows: list[dict[str, object]] = []
 
     if args.intermediate_points == 0:
-        final_path = [clone_state_dict(start_state), clone_state_dict(end_state)]
+        final_path = [clone_state_dict(start_state, device=device), clone_state_dict(end_state, device=device)]
     else:
         final_path = path_states
         cycle_index = 0
@@ -430,6 +449,8 @@ if __name__ == "__main__":
             final_path = run_neb_cycle(
                 final_path,
                 shared_model,
+                model_tensors,
+                trainable_parameters,
                 train_loader,
                 current_ml_setup,
                 parameter_names,
@@ -443,12 +464,14 @@ if __name__ == "__main__":
                 args.amp,
                 logger,
                 args.log_interval,
+                args.redistribute_interval,
             )
 
-            insertion_batch = train_loader.next()
+            insertion_batch = cuda.to_device(train_loader.next(), device)
             pivot_losses, candidates, selected_candidates = evaluate_insertions(
                 final_path,
                 shared_model,
+                model_tensors,
                 insertion_batch,
                 current_ml_setup,
                 device,
@@ -500,3 +523,4 @@ if __name__ == "__main__":
         cycle_rows,
     )
     logger.info(f"saved final AutoNEB path with {len(final_path) - 2} intermediate pivots to {output_folder_path}")
+

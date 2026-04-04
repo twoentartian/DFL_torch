@@ -1,4 +1,4 @@
-import argparse
+﻿import argparse
 import logging
 import os
 import sys
@@ -10,6 +10,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(
 from py_src import util
 from tool.autoNEB.autoneb_utils import (
     build_loader,
+    build_model_tensor_map,
     evaluate_state_on_loader,
     get_trainable_parameter_names,
     interpolate_state_dict,
@@ -136,6 +137,7 @@ if __name__ == "__main__":
             util.assert_if_both_not_none(dataset_name, dataset_name_from_file)
 
     shared_model = current_ml_setup.model
+    model_tensors = build_model_tensor_map(shared_model)
     parameter_names = get_trainable_parameter_names(shared_model)
     if not parameter_names:
         raise RuntimeError("No trainable parameters found in the resolved model")
@@ -219,6 +221,7 @@ if __name__ == "__main__":
                 for split_name in split_names:
                     metrics = evaluate_state_on_loader(
                         shared_model,
+                        model_tensors,
                         sampled_state,
                         loaders[split_name],
                         current_ml_setup,
@@ -242,3 +245,4 @@ if __name__ == "__main__":
                 sample_index += 1
 
     logger.info(f"curve evaluation saved to {output_path}")
+

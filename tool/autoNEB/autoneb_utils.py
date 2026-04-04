@@ -1,4 +1,4 @@
-import contextlib
+﻿import contextlib
 import copy
 import json
 import math
@@ -26,11 +26,17 @@ def set_reproducibility(seed: int) -> None:
         torch.cuda.manual_seed_all(seed)
 
 
-def clone_state_dict(state_dict: dict[str, Any]) -> dict[str, Any]:
+def clone_state_dict(
+    state_dict: dict[str, Any],
+    device: torch.device | str | None = None,
+) -> dict[str, Any]:
     output: dict[str, Any] = {}
     for key, value in state_dict.items():
         if torch.is_tensor(value):
-            output[key] = value.detach().cpu().clone()
+            if device is None:
+                output[key] = value.detach().clone()
+            else:
+                output[key] = value.detach().to(device=device, non_blocking=True).clone()
         else:
             output[key] = copy.deepcopy(value)
     return output
@@ -52,9 +58,9 @@ def interpolate_state_dict(
         right_value = right_state[key]
         if torch.is_tensor(left_value) and torch.is_tensor(right_value):
             if left_value.dtype.is_floating_point and right_value.dtype.is_floating_point:
-                output[key] = ((1.0 - alpha) * left_value + alpha * right_value).detach().cpu()
+                output[key] = ((1.0 - alpha) * left_value + alpha * right_value).detach().clone()
             else:
-                output[key] = left_value.detach().cpu().clone() if alpha < 0.5 else right_value.detach().cpu().clone()
+                output[key] = left_value.detach().clone() if alpha < 0.5 else right_value.detach().clone()
         else:
             output[key] = copy.deepcopy(left_value if alpha < 0.5 else right_value)
     return output
@@ -64,16 +70,32 @@ def get_trainable_parameter_names(model: torch.nn.Module) -> tuple[str, ...]:
     return tuple(name for name, parameter in model.named_parameters() if parameter.requires_grad)
 
 
+def build_model_tensor_map(model: torch.nn.Module) -> dict[str, torch.Tensor]:
+    tensor_map: dict[str, torch.Tensor] = {}
+    for name, parameter in model.named_parameters():
+        tensor_map[name] = parameter
+    for name, buffer in model.named_buffers():
+        tensor_map[name] = buffer
+    return tensor_map
+
+
+def build_trainable_parameter_map(model: torch.nn.Module) -> dict[str, torch.nn.Parameter]:
+    return {name: parameter for name, parameter in model.named_parameters() if parameter.requires_grad}
+
+
 def path_distance(
     left_state: dict[str, Any],
     right_state: dict[str, Any],
     parameter_names: Sequence[str],
 ) -> float:
-    total = 0.0
+    accumulator: torch.Tensor | None = None
     for name in parameter_names:
         difference = left_state[name].detach().float() - right_state[name].detach().float()
-        total += float(torch.sum(difference * difference).item())
-    return math.sqrt(max(total, 0.0))
+        contribution = torch.sum(difference * difference)
+        accumulator = contribution if accumulator is None else accumulator + contribution
+    if accumulator is None:
+        return 0.0
+    return math.sqrt(max(float(accumulator.item()), 0.0))
 
 
 def redistribute_path(
@@ -133,17 +155,18 @@ def tangent_for_pivot(
     parameter_names: Sequence[str],
 ) -> dict[str, torch.Tensor]:
     if next_loss > previous_loss:
-        tangent = {name: (next_state[name] - current_state[name]).detach().cpu().float() for name in parameter_names}
+        tangent = {name: (next_state[name] - current_state[name]).detach().float() for name in parameter_names}
     else:
-        tangent = {name: (current_state[name] - previous_state[name]).detach().cpu().float() for name in parameter_names}
+        tangent = {name: (current_state[name] - previous_state[name]).detach().float() for name in parameter_names}
 
-    squared_norm = 0.0
+    squared_norm: torch.Tensor | None = None
     for value in tangent.values():
-        squared_norm += float(torch.sum(value * value).item())
-    if squared_norm <= 0.0:
+        contribution = torch.sum(value * value)
+        squared_norm = contribution if squared_norm is None else squared_norm + contribution
+    if squared_norm is None or float(squared_norm.item()) <= 0.0:
         return {name: torch.zeros_like(current_state[name], dtype=torch.float32) for name in parameter_names}
 
-    norm = math.sqrt(squared_norm)
+    norm = math.sqrt(float(squared_norm.item()))
     return {name: value / norm for name, value in tangent.items()}
 
 
@@ -165,14 +188,28 @@ def project_gradients(
         denominator = tangent_norm if denominator is None else denominator + tangent_norm
 
     if numerator is None or denominator is None or float(denominator.item()) <= 0.0:
-        return {name: value.detach().cpu().clone() for name, value in gradients.items()}
+        return {name: value.detach().clone() for name, value in gradients.items()}
 
     coefficient = numerator / denominator
     projected = {}
     for name, gradient in gradients.items():
         tangent_value = tangent[name].to(gradient.device, dtype=gradient.dtype)
-        projected[name] = (gradient - coefficient * tangent_value).detach().cpu().clone()
+        projected[name] = (gradient - coefficient * tangent_value).detach().clone()
     return projected
+
+
+def load_state_dict_inplace(model_tensors: dict[str, torch.Tensor], state_dict: dict[str, Any]) -> None:
+    with torch.no_grad():
+        missing_keys = set(model_tensors.keys()) - set(state_dict.keys())
+        extra_keys = set(state_dict.keys()) - set(model_tensors.keys())
+        if missing_keys or extra_keys:
+            raise RuntimeError(
+                f"State-dict key mismatch. Missing keys: {sorted(missing_keys)}. Extra keys: {sorted(extra_keys)}"
+            )
+        for key, current_value in model_tensors.items():
+            source_value = state_dict[key]
+            if torch.is_tensor(current_value):
+                current_value.copy_(source_value)
 
 
 def apply_projected_adam_update(
@@ -195,21 +232,21 @@ def apply_projected_adam_update(
             if name in previous_state:
                 old_state = previous_state[name]
                 next_state[name] = {
-                    "exp_avg": old_state["exp_avg"].detach().cpu().clone(),
-                    "exp_avg_sq": old_state["exp_avg_sq"].detach().cpu().clone(),
+                    "exp_avg": old_state["exp_avg"].detach().clone(),
+                    "exp_avg_sq": old_state["exp_avg_sq"].detach().clone(),
                     "step": int(old_state["step"]),
                 }
             continue
 
-        parameter_value = state[name].detach().cpu()
-        gradient = projected_gradients[name].detach().cpu().to(dtype=parameter_value.dtype)
+        parameter_value = state[name].detach()
+        gradient = projected_gradients[name].detach().to(dtype=parameter_value.dtype)
         if weight_decay != 0.0:
             gradient = gradient + weight_decay * parameter_value
 
         if name in previous_state:
             old_state = previous_state[name]
-            exp_avg = old_state["exp_avg"].detach().cpu().to(dtype=gradient.dtype)
-            exp_avg_sq = old_state["exp_avg_sq"].detach().cpu().to(dtype=gradient.dtype)
+            exp_avg = old_state["exp_avg"].detach().to(dtype=gradient.dtype)
+            exp_avg_sq = old_state["exp_avg_sq"].detach().to(dtype=gradient.dtype)
             step = int(old_state["step"])
         else:
             exp_avg = torch.zeros_like(gradient)
@@ -225,10 +262,10 @@ def apply_projected_adam_update(
         denom = exp_avg_sq.sqrt() / math.sqrt(bias_correction2) + adam_eps
         step_size = learning_rate / bias_correction1
 
-        updated_state[name] = (parameter_value - step_size * (exp_avg / denom)).detach().cpu()
+        updated_state[name] = (parameter_value - step_size * (exp_avg / denom)).detach().clone()
         next_state[name] = {
-            "exp_avg": exp_avg.detach().cpu().clone(),
-            "exp_avg_sq": exp_avg_sq.detach().cpu().clone(),
+            "exp_avg": exp_avg.detach().clone(),
+            "exp_avg_sq": exp_avg_sq.detach().clone(),
             "step": step,
         }
     return updated_state, next_state
@@ -346,6 +383,8 @@ def compute_accuracy(outputs: Any, targets: Any) -> int | None:
 
 def compute_loss_and_gradients(
     model: torch.nn.Module,
+    model_tensors: dict[str, torch.Tensor],
+    trainable_parameters: dict[str, torch.nn.Parameter],
     state_dict: dict[str, Any],
     batch: Any,
     current_ml_setup: MlSetup,
@@ -355,54 +394,51 @@ def compute_loss_and_gradients(
     if current_ml_setup.override_train_step_function is not None:
         raise NotImplementedError("AutoNEB path finding currently supports only standard train steps")
 
-    model.load_state_dict(state_dict)
-    model.to(device)
+    load_state_dict_inplace(model_tensors, state_dict)
     model.eval()
     model.zero_grad(set_to_none=True)
 
-    batch_on_device = cuda.to_device(batch, device)
     if isinstance(model, L.LightningModule):
         with autocast_context(device, enable_amp):
-            loss_tensor, _ = model.training_step(batch_on_device, 0)
+            loss_tensor, _ = model.training_step(batch, 0)
     else:
-        inputs, targets = extract_inputs_and_targets(batch_on_device)
+        inputs, targets = extract_inputs_and_targets(batch)
         with autocast_context(device, enable_amp):
             outputs = model(inputs)
             loss_tensor = compute_standard_loss(outputs, targets, current_ml_setup.criterion)
 
     loss_tensor.backward()
     gradients = {}
-    for name, parameter in model.named_parameters():
-        if parameter.requires_grad and parameter.grad is not None:
-            gradients[name] = parameter.grad.detach().cpu().clone()
+    for name, parameter in trainable_parameters.items():
+        if parameter.grad is not None:
+            gradients[name] = parameter.grad.detach().clone()
     return float(loss_tensor.detach().item()), gradients
 
 
 def compute_loss_only(
     model: torch.nn.Module,
+    model_tensors: dict[str, torch.Tensor],
     state_dict: dict[str, Any],
     batch: Any,
     current_ml_setup: MlSetup,
     device: torch.device,
     enable_amp: bool,
 ) -> float:
-    model.load_state_dict(state_dict)
-    model.to(device)
+    load_state_dict_inplace(model_tensors, state_dict)
     model.eval()
-    batch_on_device = cuda.to_device(batch, device)
 
     if current_ml_setup.override_evaluation_step_function is not None:
         with torch.no_grad():
-            output = current_ml_setup.override_evaluation_step_function(0, batch_on_device, model, current_ml_setup)
+            output = current_ml_setup.override_evaluation_step_function(0, batch, model, current_ml_setup)
         return float(output.loss_value)
 
     if isinstance(model, L.LightningModule):
         with torch.no_grad():
             with autocast_context(device, enable_amp):
-                loss_tensor, _ = model.training_step(batch_on_device, 0)
+                loss_tensor, _ = model.training_step(batch, 0)
         return float(loss_tensor.detach().item())
 
-    inputs, targets = extract_inputs_and_targets(batch_on_device)
+    inputs, targets = extract_inputs_and_targets(batch)
     with torch.no_grad():
         with autocast_context(device, enable_amp):
             outputs = model(inputs)
@@ -412,6 +448,7 @@ def compute_loss_only(
 
 def evaluate_state_on_loader(
     model: torch.nn.Module,
+    model_tensors: dict[str, torch.Tensor],
     state_dict: dict[str, Any],
     loader: Iterable[Any],
     current_ml_setup: MlSetup,
@@ -419,7 +456,7 @@ def evaluate_state_on_loader(
     enable_amp: bool,
     batch_limit: int | None = None,
 ) -> dict[str, float | int | None]:
-    model.load_state_dict(state_dict)
+    load_state_dict_inplace(model_tensors, state_dict)
     model.to(device)
     model.eval()
 
@@ -539,3 +576,4 @@ def load_point_paths(path_args: Sequence[str]) -> list[str]:
         return [os.path.join(folder_path, file_name) for file_name in pivot_candidates]
 
     return list(path_args)
+
