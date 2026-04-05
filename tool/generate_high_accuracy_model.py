@@ -308,12 +308,7 @@ if __name__ == "__main__":
     parser.add_argument("-e", "--epoch", type=int, default=None, help='override the epoch')
     parser.add_argument("-tl", "--transfer_learn", type=str, default=None, help='specify a model weight file to perform transfer learning from.')
     parser.add_argument("-init", "--initial_model", type=str, default=None, help='specify a model weight file to initialize model weights.')
-    parser.add_argument(
-        "--opposite_init_model",
-        type=str,
-        default=None,
-        help='specify a model weight file whose opposite direction should be used after re-initialization',
-    )
+    parser.add_argument("--opposite_init_model", type=str, default=None, help='specify a model weight file whose opposite direction should be used after re-initialization')
     parser.add_argument("--disable_reinit", action='store_true', help='disable reinitialization')
     parser.add_argument("--enable_eval", action='store_true', help='enable measuring loss and accuracy on validation set')
     parser.add_argument("--inverse_train_val", action='store_true', help='inverse train and validation set')
