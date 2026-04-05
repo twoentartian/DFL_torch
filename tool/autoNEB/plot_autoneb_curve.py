@@ -67,7 +67,7 @@ def build_default_output_path(csv_path: str) -> str:
     base_name = util.basename_without_extension(os.path.basename(csv_path))
     if base_name.endswith(".csv"):
         base_name = util.basename_without_extension(base_name)
-    return os.path.join(os.path.dirname(csv_path), f"{base_name}_plot.png")
+    return os.path.join(os.path.dirname(csv_path), f"{base_name}_plot.pdf")
 
 
 def make_title(args, csv_path: str) -> str:
@@ -173,7 +173,7 @@ def plot_curve(rows_by_split, pivot_rows, output_path: str, args) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Plot train/test loss and accuracy from an AutoNEB curve CSV.")
     parser.add_argument("csv_path", type=str, help="path to autoneb_curve.csv")
-    parser.add_argument("-o", "--output", default=None, help="output image path; defaults to <csv_name>_plot.png")
+    parser.add_argument("-o", "--output", default=None, help="output image path; defaults to <csv_name>_plot.pdf")
     parser.add_argument("--title", type=str, default=None, help="optional plot title")
     parser.add_argument("--dpi", type=int, default=150, help="output figure DPI")
     parser.add_argument("--show", action="store_true", help="display the figure after saving it")
