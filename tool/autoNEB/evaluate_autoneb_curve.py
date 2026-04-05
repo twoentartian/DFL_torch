@@ -78,7 +78,7 @@ if __name__ == "__main__":
     parser.add_argument("-d", "--dataset", type=str, default=None, help="override the dataset name stored in the checkpoints")
     parser.add_argument("-P", "--torch_preset_version", type=int, default=None, help="PyTorch preset version for ml_setup")
     parser.add_argument(
-        "--interpolation_points",
+        "-ip_points","--interpolation_points",
         type=int,
         default=9,
         help="number of sampled interpolation points between each neighboring pair, excluding endpoints",
