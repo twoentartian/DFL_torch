@@ -32,9 +32,66 @@ def manually_define_optimizer(arg_ml_setup: ml_setup.MlSetup, model):
 
     return None, None, None
 
+
+def initialize_model_to_opposite_direction(
+    model: torch.nn.Module,
+    reference_state: dict,
+    reference_model_name,
+    reference_dataset_name,
+    arg_ml_setup: ml_setup.MlSetup,
+    child_logger: logging.Logger,
+):
+    if reference_model_name is not None and reference_model_name != arg_ml_setup.model_name:
+        raise RuntimeError(
+            f"reference model type mismatch: current model is {arg_ml_setup.model_name}, "
+            f"but opposite-init checkpoint uses {reference_model_name}"
+        )
+    if reference_dataset_name is not None and reference_dataset_name != arg_ml_setup.dataset_name:
+        child_logger.warning(
+            "opposite-init checkpoint dataset %s differs from current dataset %s",
+            reference_dataset_name,
+            arg_ml_setup.dataset_name,
+        )
+
+    initialized_parameter_count = 0
+    skipped_zero_norm_count = 0
+    with torch.no_grad():
+        for name, parameter in model.named_parameters():
+            if name not in reference_state:
+                raise RuntimeError(f"reference model is missing parameter {name}")
+
+            reference_tensor = reference_state[name]
+            if not torch.is_tensor(reference_tensor):
+                raise RuntimeError(f"reference entry {name} is not a tensor")
+            if reference_tensor.shape != parameter.shape:
+                raise RuntimeError(
+                    f"shape mismatch for parameter {name}: "
+                    f"current {tuple(parameter.shape)} vs reference {tuple(reference_tensor.shape)}"
+                )
+            if not parameter.dtype.is_floating_point or not reference_tensor.dtype.is_floating_point:
+                continue
+
+            current_norm = parameter.detach().float().norm()
+            reference_norm = reference_tensor.detach().float().norm()
+            if float(current_norm.item()) <= 0.0 or float(reference_norm.item()) <= 0.0:
+                skipped_zero_norm_count += 1
+                continue
+
+            opposite_direction = -reference_tensor.detach().to(device=parameter.device, dtype=torch.float32) / reference_norm
+            parameter.copy_((opposite_direction * current_norm).to(dtype=parameter.dtype))
+            initialized_parameter_count += 1
+
+    child_logger.info(
+        "initialized %d floating-point parameter tensors toward the opposite direction of %s@%s; skipped %d zero-norm tensors",
+        initialized_parameter_count,
+        reference_model_name,
+        reference_dataset_name,
+        skipped_zero_norm_count,
+    )
+
 def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_setup.MlSetup, arg_use_cpu: bool, random_seed,
                    arg_worker_count, arg_total_cpu_count, arg_save_format, arg_save_interval, arg_amp, arg_preset, arg_epoch_override,
-                   transfer_learn_model_path, init_model_path, disable_reinit, enable_validation, inverse_train_val):
+                   transfer_learn_model_path, init_model_path, opposite_init_model_path, disable_reinit, enable_validation, inverse_train_val):
     thread_per_process = arg_total_cpu_count // arg_worker_count
     thread_per_process = 8 if thread_per_process > 8 else thread_per_process
     torch.set_num_threads(thread_per_process)
@@ -113,6 +170,20 @@ def training_model(output_folder, index, arg_number_of_models, arg_ml_setup: ml_
             else:
                 child_logger.info(f"re-initialize model")
                 arg_ml_setup.re_initialize_model(model)
+                if opposite_init_model_path is not None:
+                    reference_model_state, reference_model_name, reference_dataset_name = util.load_model_state_file(opposite_init_model_path)
+                    child_logger.info(
+                        f"rotate fresh initialization toward the opposite direction of {opposite_init_model_path}, "
+                        f"original model type: {reference_model_name}, dataset type: {reference_dataset_name}"
+                    )
+                    initialize_model_to_opposite_direction(
+                        model,
+                        reference_model_state,
+                        reference_model_name,
+                        reference_dataset_name,
+                        arg_ml_setup,
+                        child_logger,
+                    )
             model.to(device)
         if optimizer is None:
             child_logger.info(f"mode: ||||||||    TRAIN FROM INITIALIZATION    ||||||||")
@@ -237,6 +308,12 @@ if __name__ == "__main__":
     parser.add_argument("-e", "--epoch", type=int, default=None, help='override the epoch')
     parser.add_argument("-tl", "--transfer_learn", type=str, default=None, help='specify a model weight file to perform transfer learning from.')
     parser.add_argument("-init", "--initial_model", type=str, default=None, help='specify a model weight file to initialize model weights.')
+    parser.add_argument(
+        "--opposite_init_model",
+        type=str,
+        default=None,
+        help='specify a model weight file whose opposite direction should be used after re-initialization',
+    )
     parser.add_argument("--disable_reinit", action='store_true', help='disable reinitialization')
     parser.add_argument("--enable_eval", action='store_true', help='enable measuring loss and accuracy on validation set')
     parser.add_argument("--inverse_train_val", action='store_true', help='inverse train and validation set')
@@ -259,10 +336,21 @@ if __name__ == "__main__":
     epoch_override = args.epoch
     transfer_learn_model_path = args.transfer_learn
     init_model_path = args.initial_model
+    opposite_init_model_path = args.opposite_init_model
 
     # logger
     util.set_logging(logger, "main")
     logger.info("logging setup complete")
+
+    if opposite_init_model_path is not None:
+        if transfer_learn_model_path is not None:
+            raise RuntimeError("--opposite_init_model cannot be used together with --transfer_learn")
+        if init_model_path is not None:
+            raise RuntimeError("--opposite_init_model cannot be used together with --initial_model")
+        if args.disable_reinit:
+            raise RuntimeError("--opposite_init_model requires re-initialization, so it cannot be used with --disable_reinit")
+        if not os.path.exists(opposite_init_model_path):
+            raise FileNotFoundError(f"{opposite_init_model_path} does not exist")
 
     if use_cpu:
         device = torch.device("cpu")
@@ -287,6 +375,7 @@ if __name__ == "__main__":
     info_content['model_type'] = current_ml_setup.model_name
     info_content['model_count'] = number_of_models
     info_content['generated_by_cpu'] = use_cpu
+    info_content['opposite_init_model'] = opposite_init_model_path
     json_data = json.dumps(info_content)
     with open(os.path.join(output_folder_path, 'info.json'), 'w') as f:
         f.write(json_data)
@@ -296,7 +385,8 @@ if __name__ == "__main__":
         worker_count = number_of_models
     args = [(output_folder_path, i, number_of_models, current_ml_setup,
              use_cpu, random_seed, worker_count, total_cpu_cores, save_format, save_interval, amp,
-             preset, epoch_override, transfer_learn_model_path, init_model_path, args.disable_reinit, args.enable_eval, args.inverse_train_val) for i in range(start_index, start_index+number_of_models, 1)]
+             preset, epoch_override, transfer_learn_model_path, init_model_path, opposite_init_model_path,
+             args.disable_reinit, args.enable_eval, args.inverse_train_val) for i in range(start_index, start_index+number_of_models, 1)]
     if worker_count == 1:
         for arg in args:
             training_model(*arg)
