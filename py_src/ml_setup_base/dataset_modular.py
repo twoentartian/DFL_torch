@@ -700,8 +700,10 @@ class TestStringMethods(unittest.TestCase):
 
         for idx, batch in enumerate(iterator):
             tok = train_dataset.tokenizer
-            print(f"text: {tok.decode(batch["text"][0])}")
-            print(f"target: {tok.decode(batch["target"][0])}")
+            text = tok.decode(batch["text"][0])
+            print(f"text: {text}")
+            target = tok.decode(batch["target"][0])
+            print(f"target: {target}")
 
     def test_example_1_basic_with_tokenizer(self):
         test_data_folder_name = "test_data"
