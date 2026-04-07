@@ -16,7 +16,7 @@ import torch
 
 def extract_model_from_checkpoint(checkpoint_path: str, output_path: str):
     cpu_device = torch.device("cpu")
-    checkpoint = torch.load(checkpoint_path, map_location=cpu_device)
+    checkpoint = torch.load(checkpoint_path, map_location=cpu_device, weights_only=False)
 
     model_stat = checkpoint.current_model_stat
     runtime_params = checkpoint.current_runtime_parameter
