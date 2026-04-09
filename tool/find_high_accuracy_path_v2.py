@@ -19,6 +19,7 @@ from torch.utils.data.dataloader import default_collate
 from find_high_accuracy_path_v2.runtime_parameters import RuntimeParameters, WorkMode, Checkpoint
 from find_high_accuracy_path_v2.find_parameters import ParameterGeneral, ParameterMove, ParameterTrain, ParameterRebuildNorm
 from find_high_accuracy_path_v2.functions import rebuild_norm_layer_function
+from py_src.third_party.sam import sam
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from py_src.simulation_runtime_parameters import SimulationPhase
@@ -191,9 +192,11 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
         else:
             raise NotImplemented
         """assert start_model_state_dict != end_model_stat_dict"""
+        same = True
         for key in start_model_stat_dict.keys():
-            assert not torch.equal(start_model_stat_dict[key], end_model_stat_dict[key]), f'starting model({start_point}) is same as ending model({end_point})'
-            break
+            if not torch.equal(start_model_stat_dict[key], end_model_stat_dict[key]):
+                same = False
+        assert not same, f'starting model({start_point}) is same as ending model({end_point})'
     else:
         # load from checkpoint
         assert checkpoint_content is not None
