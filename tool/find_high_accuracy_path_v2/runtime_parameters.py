@@ -46,8 +46,11 @@ class RuntimeParameters(object):
     verbose = False
 
     """service args"""
+    service_test_accuracy_loss_disable = None    
     service_test_accuracy_loss_interval = None
     service_test_accuracy_loss_batch_size = None
+
+    service_cosine_similarity_disable = None
     service_cosine_similarity_ref_model = None
 
     def print(self):

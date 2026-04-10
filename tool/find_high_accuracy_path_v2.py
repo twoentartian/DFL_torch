@@ -3,6 +3,7 @@ import argparse
 import logging
 import shutil
 import sys
+from tkinter import N
 from typing import Optional
 
 import numpy
@@ -290,14 +291,16 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
     record_variance_service.initialize_without_runtime_parameters([0], [start_model_stat_dict], arg_output_folder_path, logger=child_logger)
     child_logger.info("setting service done: record_variance_service")
 
-    record_cosine_similarity_service = record_cosine_similarity.ServiceVarianceRecorder(1)
-    if runtime_parameter.service_cosine_similarity_ref_model is None:
-        ref_model = start_model_stat_dict
-    else:
-        ref_model, ref_model_name, _ = util.load_model_state_file(runtime_parameter.service_cosine_similarity_ref_model)
-        assert ref_model_name == runtime_parameter.model_name, f"ref_model_name({ref_model_name}) != runtime_parameter.model_name({runtime_parameter.model_name})"
-    record_cosine_similarity_service.initialize_without_runtime_parameters({0: ref_model}, arg_output_folder_path, logger=child_logger)
-    child_logger.info("setting service done: cosine_similarity_service")
+    record_cosine_similarity_service = None
+    if not runtime_parameter.service_cosine_similarity_disable:
+        record_cosine_similarity_service = record_cosine_similarity.ServiceVarianceRecorder(1)
+        if runtime_parameter.service_cosine_similarity_ref_model is None:
+            ref_model = start_model_stat_dict
+        else:
+            ref_model, ref_model_name, _ = util.load_model_state_file(runtime_parameter.service_cosine_similarity_ref_model)
+            assert ref_model_name == runtime_parameter.model_name, f"ref_model_name({ref_model_name}) != runtime_parameter.model_name({runtime_parameter.model_name})"
+        record_cosine_similarity_service.initialize_without_runtime_parameters({0: ref_model}, arg_output_folder_path, logger=child_logger)
+        child_logger.info("setting service done: cosine_similarity_service")
 
     if runtime_parameter.save_format != 'none':
         if not runtime_parameter.save_ticks:
@@ -312,7 +315,9 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
         record_model_service = None
     child_logger.info("setting service done: record_model_service")
 
-    record_test_accuracy_loss_service = record_test_accuracy_loss.ServiceTestAccuracyLossRecorder(runtime_parameter.service_test_accuracy_loss_interval,
+    record_test_accuracy_loss_service = None
+    if not runtime_parameter.service_test_accuracy_loss_disable:
+        record_test_accuracy_loss_service = record_test_accuracy_loss.ServiceTestAccuracyLossRecorder(runtime_parameter.service_test_accuracy_loss_interval,
                                                                                                   runtime_parameter.service_test_accuracy_loss_batch_size,
                                                                                                   current_ml_setup.model_name,
                                                                                                   current_ml_setup.dataset_name,
@@ -320,9 +325,9 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
                                                                                                   use_fixed_testing_dataset=True,
                                                                                                   test_whole_dataset=runtime_parameter.test_dataset_use_whole,
                                                                                                   test_val_split=general_parameter.split_test_val)
-    record_test_accuracy_loss_service.initialize_without_runtime_parameters(arg_output_folder_path, [0], target_model, criterion, current_ml_setup.testing_data, current_ml_setup,
+        record_test_accuracy_loss_service.initialize_without_runtime_parameters(arg_output_folder_path, [0], target_model, criterion, current_ml_setup.testing_data, current_ml_setup,
                                                                             existing_model_for_testing=target_model, gpu=gpu, num_workers=general_parameter.dataloader_worker)
-    child_logger.info("setting service done: record_test_accuracy_loss_service")
+        child_logger.info("setting service done: record_test_accuracy_loss_service")
 
     record_training_loss_service = record_training_loss_accuracy.ServiceTrainingLossAccuracyRecorder(1)
     record_training_loss_service.initialize_without_runtime_parameters(arg_output_folder_path, [0])
@@ -714,10 +719,12 @@ def process_file_func(index, runtime_parameter: RuntimeParameters, checkpoint_fi
                         record_flag = True
                 if record_flag:
                     record_model_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, [0], [target_model_stat_dict])
-            record_test_accuracy_loss_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, {0: target_model_stat_dict})
+            if record_test_accuracy_loss_service is not None:
+                record_test_accuracy_loss_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, {0: target_model_stat_dict})
             record_training_loss_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, {0: training_loss_val}, {0: training_accuracy_val})
             record_consecutive_points_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, SimulationPhase.END_OF_TICK, target_model_stat_dict)
-            record_cosine_similarity_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, {0: target_model_stat_dict} )
+            if record_cosine_similarity_service:
+                record_cosine_similarity_service.trigger_without_runtime_parameters(runtime_parameter.current_tick, {0: target_model_stat_dict} )
 
         # update tick
         runtime_parameter.current_tick += 1
@@ -770,6 +777,9 @@ if __name__ == '__main__':
     parser.add_argument("--linear_interpolation_points_size", type=int, default=0, help='specify the size of linear interpolation points between two consecutive points')
     parser.add_argument("--linear_interpolation_dataset_size", type=int, default=1000, help='specify the size of linear interpolation dataset size')
 
+    parser.add_argument("--disable_service_test", action="store_true", help='disable measuring test(validation) accuracy and loss')
+    parser.add_argument("--disable_service_cosine_similarity", action="store_true", help='disable measuring cosine similarity')
+
     args = parser.parse_args()
 
     if args.config is None:
@@ -803,6 +813,8 @@ if __name__ == '__main__':
     runtime_parameter.linear_interpolation_points_size = args.linear_interpolation_points_size
     runtime_parameter.linear_interpolation_dataset_size = args.linear_interpolation_dataset_size
     runtime_parameter.stop_when_training_loss_exceeds = args.stop_when_loss_exceeds
+    runtime_parameter.service_test_accuracy_loss_disable = args.disable_service_test
+    runtime_parameter.service_cosine_similarity_disable = args.disable_service_cosine_similarity
 
     # sanity check
     if runtime_parameter.across_vs_lr_policy == 'std':

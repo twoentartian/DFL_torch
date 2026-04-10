@@ -4,6 +4,9 @@ from py_src import special_torch_layers
 from py_src.model_variance_correct import VarianceCorrectionType, VarianceCorrector
 
 def move_tensor_toward(layer_name, src_tensor, dest_tensor, step, adoptive_step, random_scale=None):
+    if torch.equal(src_tensor, dest_tensor):
+        return src_tensor
+
     diff_tensor = dest_tensor - src_tensor
     norm = torch.norm(diff_tensor)
     step_from_adoptive_part = norm * adoptive_step
